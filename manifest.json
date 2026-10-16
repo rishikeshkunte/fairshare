@@ -4,8 +4,8 @@
   "description": "Split expenses with friends, simplify debts, and track group spending offline.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0284c7",
+  "background_color": "#171C19",
+  "theme_color": "#2F4E3F",
   "icons": [
     {
       "src": "./fairshare_logo.jpg",
