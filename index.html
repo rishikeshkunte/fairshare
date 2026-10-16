@@ -1032,7 +1032,7 @@
           const parsed = JSON.parse(saved);
           if (parsed.theme) appState.theme = parsed.theme;
           if (parsed.friends && Array.isArray(parsed.friends)) {
-            // Clean out sample template mock friends so users only see people they actually connected with
+            // Strip out template demo records
             appState.friends = parsed.friends.filter(f => f.id !== "f1" && f.id !== "f2" && (f.email || f.phone || (f.name !== "Aryan" && f.name !== "Rahul")));
           }
           if (parsed.directTransactions && Array.isArray(parsed.directTransactions)) appState.directTransactions = parsed.directTransactions;
@@ -1348,6 +1348,7 @@
       const oldName = friend.name;
       friend.name = newName.trim();
 
+      // Update name across active group if present
       const g = getGroup();
       if (g.members.includes(oldName)) {
         g.members = g.members.map(m => m === oldName ? friend.name : m);
@@ -1669,6 +1670,7 @@
         div.className = "friend-row";
         const cur = getGroup().currency;
         
+        // Compute 1-on-1 balance with this friend
         let friendBal = 0;
         (appState.directTransactions || []).forEach(t => {
           if (t.type === "expense" && t.friend === f.name) {
@@ -2785,10 +2787,12 @@
       let overallOwed = 0;
       let overallOwe = 0;
 
+      // 1. Group Standing
       const myGroupBal = balances["You"] !== undefined ? balances["You"] : 0;
       if (myGroupBal > 0.009) overallOwed += myGroupBal;
       else if (myGroupBal < -0.009) overallOwe += Math.abs(myGroupBal);
 
+      // 2. Direct 1-on-1 Standings
       (appState.friends || []).forEach(f => {
         let directBal = 0;
         (appState.directTransactions || []).forEach(t => {
@@ -3496,7 +3500,7 @@
           if (directBalances[t.friend] === undefined) directBalances[t.friend] = 0;
           if (t.payer === t.friend && t.receiver === "You") {
             directBalances[t.friend] -= t.amount;
-          } else if (t.payer === "You" && t.receiver === f.name) {
+          } else if (t.payer === "You" && t.receiver === t.friend) {
             directBalances[t.friend] += t.amount;
           }
         }
@@ -3841,10 +3845,12 @@
           snapshot.forEach(doc => {
             const d = doc.data();
             if (d.transactions && Array.isArray(d.transactions)) {
+              // Merge remote transactions without triggering infinite loops
               const otherEmail = (d.participants || []).find(e => e !== myEmailNorm);
               const matchingFriend = appState.friends.find(f => f.email && normalizeEmail(f.email) === otherEmail);
               
               if (matchingFriend) {
+                // Remove local entries for this friend and replace with cloud source of truth
                 appState.directTransactions = (appState.directTransactions || []).filter(t => t.friend !== matchingFriend.name);
                 d.transactions.forEach(t => {
                   t.friend = matchingFriend.name;
