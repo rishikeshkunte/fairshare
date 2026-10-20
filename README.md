@@ -23,7 +23,8 @@ The app is a progressive web app. `manifest.json` supplies the name and icon. `s
 | `sw.js` | Offline cache |
 | `manifest.json` | Installable app metadata |
 | `fairshare_logo.jpg` | Icon |
-| `friends_logic.js` | An unused earlier module. The live friend and group code is in `index.html` |
+| `js/` | Money, dialogs, receipt compression, and the lazy Firebase loader |
+| `firestore.rules`, `storage.rules` | Access rules for groups, friend requests, and receipt files |
 
 ## Screens
 
@@ -135,4 +136,24 @@ If Firebase cannot load, or the popup is blocked, the app stays fully usable off
 
 Light and dark themes are stored in the same state object. The first visit with no saved state follows the operating system.
 
-Some motion is adapted from [Rare UI](https://www.rareui.com/components): the phone tab bar, the rolling balance figures, the scroll jumper, the confirm-to-delete control, and the request bell. The footer links back there, which their license requires.
+Some motion is adapted from [Rare UI](https://www.rareui.com/components): the phone tab bar, the rolling balance figures, the scroll jumper, the confirm-to-delete control, and the request bell.
+
+## GitHub Pages
+
+This folder is the site root. It includes `.nojekyll` so `js/` is served as written. In the repository, open **Settings → Pages**, choose the branch, and set the folder to **`/ (root)`**. The public site is [https://rishikeshkunte.github.io/fairshare/](https://rishikeshkunte.github.io/fairshare/).
+
+## Firebase setup
+
+Sign-in is optional. The web config is in `index.html` and is loaded only when someone signs in, or when this browser has already chosen Google sync.
+
+1. Enable **Authentication → Google** and **Cloud Firestore** and **Storage** on the Firebase project.
+2. Deploy the rules in this repo:
+
+```bash
+npx firebase-tools deploy --only firestore:rules,storage --project fairshare-app-ba160
+```
+
+3. In **Firebase Console → Authentication → Settings → Authorized domains**, add `rishikeshkunte.github.io` and `localhost`.
+4. The API key is visible in the page. In **Google Cloud Console → APIs & Services → Credentials**, restrict that key by HTTP referrer to `https://rishikeshkunte.github.io/*`, `http://localhost:*`, and `http://127.0.0.1:*`.
+
+Groups can be read only by emails listed in `memberEmails`. Friend requests can be read by the sender or the recipient. Receipt images live in Storage; Firestore group documents keep the URL, not the photo bytes. Money is stored as integer paise after the one-time migration from older rupee amounts.
