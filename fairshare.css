@@ -931,3 +931,97 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     min-height: 46px;
   }
 }
+
+
+/* Balances and settlements: make the debt actions easy to scan on every screen */
+.home-balance-details {
+  scroll-margin-top: 20px;
+}
+.home-balance-details > .home-section-heading {
+  margin-bottom: 14px;
+}
+.home-balance-details .balances-layout {
+  align-items: start;
+  gap: 18px;
+}
+.home-balance-details .balances-side,
+.home-balance-details .settlement-card {
+  min-width: 0;
+}
+.home-balance-details .balances-side .summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.home-balance-details .balances-side .metric-box {
+  padding: 14px 16px;
+}
+.home-balance-details .balances-side .metric-val {
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+  overflow-wrap: anywhere;
+}
+.home-balance-details .settlement-card {
+  padding: 18px;
+}
+.home-balance-details #settlement-header-label {
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+.home-balance-details #settlement-list .settlement-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-solid);
+}
+.home-balance-details .settlement-item,
+.home-balance-details .home-debt-preview {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.home-balance-details #settle-up-box {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-solid);
+}
+.home-balance-details .toggle-row {
+  align-items: flex-start;
+}
+@media (min-width: 1200px) {
+  .home-balance-details .balances-layout {
+    grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+    gap: 22px;
+  }
+  .home-balance-details .settlement-card {
+    padding: 22px;
+  }
+}
+@media (max-width: 860px) {
+  .home-balance-details .balances-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home-balance-details .balances-side .summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .home-balance-details .balances-side .metric-box {
+    padding: 12px;
+  }
+  .home-balance-details .balances-side .metric-val {
+    font-size: 1.15rem;
+  }
+}
+@media (max-width: 600px) {
+  .home-balance-details .balances-side .summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home-balance-details .settlement-card {
+    padding: 14px;
+  }
+  .home-balance-details #settlement-list .settlement-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+  }
+  .home-balance-details .toggle-row {
+    padding: 12px;
+  }
+}
