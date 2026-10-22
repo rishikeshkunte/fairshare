@@ -73,6 +73,14 @@ test("friend management and group member picker require sign-in", () => {
   assert.match(html, /window\.quickStartDirectSettle = async function\(friendIdOrName, currentBal\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to view or settle 1-on-1 balances/);
 });
 
+test("signed-out summaries, details, trash, and exports exclude cached 1-on-1 data", () => {
+  assert.match(html, /function renderHomeAllDebts\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
+  assert.match(html, /function renderCategoryChart\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
+  assert.match(html, /function renderDeletedTransactions\(\)[\s\S]*?filter\(item => currentUser \|\| item\.location !== "direct"\)/);
+  assert.match(html, /window\.openDetailModal = function\(id\)[\s\S]*?found\.where === "direct" && !currentUser[\s\S]*?Sign in to view 1-on-1 transaction details/);
+  assert.match(html, /if \(btnExportCsv\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
+});
+
 test("group discovery rules restrict reads to signed-in group members", () => {
   assert.match(rules, /allow list:\s*if isMember\(resource\.data\);/);
   assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
