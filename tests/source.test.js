@@ -173,3 +173,20 @@ test("Firebase auth session is restored on every startup", () => {
   assert.match(html, /ensureCloud\(\)\.catch\(\(\) => \{/);
   assert.doesNotMatch(html, /if \(cloudIntent\(\)\) ensureCloud\(\)/);
 });
+
+
+test("friends roster displays existing contacts independently of auth rendering", () => {
+  const start = html.indexOf("function renderFriendsRoster()");
+  const end = html.indexOf("\n    function ", start + 10);
+  const roster = html.slice(start, end);
+  assert.match(roster, /const visibleFriends = currentUser \? appState\.friends : \[\]/);
+  assert.doesNotMatch(roster, /if \(!currentUser\)[\s\S]*?Sign in to see your saved friends/);
+  assert.match(roster, /No saved friends yet/);
+});
+
+test("simplify debts toggle persists its selected mode and re-renders settlements", () => {
+  assert.match(html, /toggleSimplify\.onchange = \(\) => \{[\s\S]*?g\.simplifyDebts = toggleSimplify\.checked;[\s\S]*?saveState\(\);[\s\S]*?renderAll\(\);/);
+  assert.match(html, /const simplified = g\.simplifyDebts !== false/);
+  assert.match(html, /if \(!simplified\)[\s\S]*?const edges = pairwiseDebts\(g\)/);
+  assert.match(html, /const debtors = \[\];[\s\S]*?const creditors = \[\];[\s\S]*?const debts = \[\]/);
+});
