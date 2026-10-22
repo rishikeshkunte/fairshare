@@ -4805,7 +4805,7 @@
             );
           }
           if (!matchingFriend) return;
-          const friendName = friendName;
+          const friendName = matchingFriend.name;
 
           const visibleTransactions = data.transactions.map(transaction => {
             const copy = { ...transaction };
