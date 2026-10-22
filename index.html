@@ -1214,7 +1214,12 @@
       const myEmailNorm = normalizeEmail(myEmail);
       const memberLinks = { ...(g.memberLinks || {}) };
       memberLinks[getMyGroupMemberName(g)] = myEmail;
-      const memberEmails = [myEmail, myEmailNorm];
+      // Retain linked members discovered from the shared group even if they are
+      // not in this browser's local friend roster.
+      const memberEmails = [myEmail, myEmailNorm, ...Object.values(memberLinks).flatMap(email => [
+        String(email || "").toLowerCase().trim(),
+        normalizeEmail(email)
+      ])];
       (appState.friends || []).forEach(friend => {
         if (!friend.email || !g.members.includes(friend.name)) return;
         const friendEmail = (friend.email || "").toLowerCase().trim();
@@ -1547,6 +1552,7 @@
         if (!(await askConfirm({ message: `Remove "${name}" from this group?` }))) return;
       }
       g.members = g.members.filter(m => m !== name);
+      if (g.memberLinks) delete g.memberLinks[name];
       saveState();
       renderAll();
     };
