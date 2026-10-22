@@ -115,3 +115,10 @@ test("design system includes visible keyboard focus and reduced-motion support",
   assert.match(css, /button:focus-visible, input:focus-visible, select:focus-visible/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
+
+
+test("responsive design has explicit compact-laptop and wide-desktop layouts", () => {
+  assert.match(css, /@media \(min-width: 1200px\)[\s\S]*?\.workspace \{ padding: 30px 32px 96px/);
+  assert.match(css, /@media \(min-width: 861px\) and \(max-width: 1100px\)[\s\S]*?\.app-shell \{ grid-template-columns: 216px minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(min-width: 861px\) and \(max-width: 980px\)[\s\S]*?\.chart-wrapper \{ grid-template-columns: minmax\(160px, \.8fr\) minmax\(0, 1fr\)/);
+});
