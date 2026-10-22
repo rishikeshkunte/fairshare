@@ -190,3 +190,14 @@ test("simplify debts toggle persists its selected mode and re-renders settlement
   assert.match(html, /if \(!simplified\)[\s\S]*?const edges = pairwiseDebts\(g\)/);
   assert.match(html, /const debtors = \[\];[\s\S]*?const creditors = \[\];[\s\S]*?const debts = \[\]/);
 });
+
+
+test("direct-pair listener restores transactions even if the other contact is not already saved", () => {
+  const start = html.indexOf("function listenToDirectPairs(myEmail)");
+  const end = html.indexOf("\n    function ", start + 20);
+  const listener = html.slice(start, end);
+  assert.match(listener, /const otherEmail = \(data\.participants \|\| \[\]\)\.find/);
+  assert.match(listener, /if \(!matchingFriend\)[\s\S]*?addApprovedFriend\(otherEmail, suggestedName\)/);
+  assert.doesNotMatch(listener, /if \(!matchingFriend\) return/);
+  assert.match(listener, /const friendName = matchingFriend\.name/);
+});
