@@ -2019,7 +2019,7 @@
     }
 
     function renderFriendsRoster() {
-      const visibleFriends = currentUser ? appState.friends : [];
+      const visibleFriends = appState.friends || [];
       if (globalFriendsCount) globalFriendsCount.textContent = visibleFriends.length;
       if (dashFriendsDesc) dashFriendsDesc.textContent = `${visibleFriends.length} friends`;
       if (!friendsListContainer) return;
