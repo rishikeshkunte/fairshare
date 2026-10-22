@@ -48,6 +48,16 @@ test("empty state prompts group creation and blocks group payments without a gro
   assert.match(html, /if \(noGroupsPrompt\) noGroupsPrompt\.hidden = groups\.length > 0/);
 });
 
+test("signed-out state hides cached friends and direct activity", () => {
+  assert.match(html, /const visibleFriends = currentUser \? appState\.friends : \[\]/);
+  assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see your saved friends/);
+  assert.match(html, /scope === "friend" && !currentUser[\s\S]*?Sign in to access your saved friends/);
+  assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see saved friends/);
+  assert.match(html, /currentUser \? \(appState\.directTransactions \|\| \[\]\)\.map/);
+  assert.match(html, /Sign in to view 1-on-1 balances/);
+  assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to add a 1-on-1 expense/);
+});
+
 test("group discovery rules restrict reads to signed-in group members", () => {
   assert.match(rules, /allow list:\s*if isMember\(resource\.data\);/);
   assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
