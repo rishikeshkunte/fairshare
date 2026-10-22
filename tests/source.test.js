@@ -219,3 +219,8 @@ test("direct expense deletion persists its tombstone before syncing the shared l
   assert.ok(deletion.indexOf('localStorage.setItem("fairshare_state_v9", JSON.stringify(appState))') < deletion.indexOf("saveState();"));
   assert.ok(deletion.indexOf("saveState();") < deletion.indexOf("syncDirectPairExpense(found.tx.friend)"));
 });
+
+test("shared expense merge prefers cloud versions over stale local duplicates", () => {
+  assert.match(html, /function mergeTransactionsWithDeletes\([\s\S]*?mergeById\(cloudTransactions \|\| \[\], localTransactions \|\| \[\]\)/);
+  assert.match(html, /deletedTransactionIds\.has\(String\(tx\.id\)\)/);
+});
