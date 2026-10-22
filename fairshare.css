@@ -750,3 +750,68 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .chart-donut { width: 160px; height: 160px; }
   .home-balance-card { grid-template-columns: minmax(0, 1fr) auto; }
 }
+
+
+/* Desktop-first refinement: keep task forms focused without wasting workspace */
+@media (min-width: 861px) {
+  #page-add-expense > .card {
+    max-width: 760px !important;
+    margin: 0 auto;
+    padding: 26px 30px;
+  }
+  #page-home.active {
+    align-content: start;
+  }
+  .home-balance-card {
+    min-height: 220px;
+  }
+  .home-balance-card .hero-actions .btn {
+    min-height: 42px;
+  }
+  .home-members-card, .home-recent-card {
+    align-self: stretch;
+  }
+  .transaction-item {
+    padding: 14px 16px;
+  }
+}
+@media (min-width: 1101px) {
+  #page-add-expense > .card {
+    max-width: 820px !important;
+  }
+  .home-members-card { grid-column: span 4; }
+  .home-recent-card { grid-column: span 8; }
+}
+@media (min-width: 861px) and (max-width: 980px) {
+  #page-add-expense > .card {
+    padding: 20px;
+  }
+  .home-balance-card {
+    gap: 14px;
+  }
+  .home-balance-card .metrics-split {
+    gap: 8px !important;
+  }
+  .home-balance-card .metric-tile {
+    padding: 11px !important;
+  }
+  .home-balance-card #home-owed-val,
+  .home-balance-card #home-owe-val {
+    font-size: 1.15rem !important;
+  }
+}
+@media (max-width: 860px) {
+  #page-add-expense > .card {
+    max-width: none !important;
+    padding: 16px;
+  }
+  #page-add-expense .section-header {
+    gap: 10px;
+  }
+  #page-add-expense .section-header h2 {
+    font-size: 1.25rem;
+  }
+  #page-home .home-balance-card {
+    min-height: 0;
+  }
+}
