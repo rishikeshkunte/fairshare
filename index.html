@@ -2,19 +2,27 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="FairShare splits group expenses, simplifies who owes whom, and tracks spending. It works offline, with optional Google sign-in.">
   <meta name="theme-color" content="#2F4E3F">
+  <link rel="canonical" href="https://rishikeshkunte.github.io/fairshare/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="FairShare — group expense tracker">
+  <meta property="og:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Google sync is optional.">
+  <meta property="og:url" content="https://rishikeshkunte.github.io/fairshare/">
+  <meta property="og:image" content="https://rishikeshkunte.github.io/fairshare/icons/icon-512.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="FairShare — group expense tracker">
+  <meta name="twitter:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Google sync is optional.">
+  <meta name="twitter:image" content="https://rishikeshkunte.github.io/fairshare/icons/icon-512.png">
   <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/jpeg" href="fairshare_logo.jpg">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <title>FairShare - Group Expense Tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="fairshare.css">
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -24,7 +32,7 @@
   <aside class="command-dock">
   <!-- App Header -->
   <header class="app-header">
-    <div class="brand-group" onclick="navigateTo('home')">
+    <button type="button" class="brand-group" data-call="navigateTo" data-arg="home">
       <div class="logo-container" title="FairShare">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="40" height="40">
           <rect width="100" height="100" rx="22" fill="#2F4E3F"/>
@@ -45,11 +53,11 @@
         <h1 class="brand-title">FairShare</h1>
         <p class="brand-tagline">Shared expenses, made simple.</p>
       </div>
-    </div>
+    </button>
 
     <!-- Action Buttons -->
     <div class="header-actions">
-      <button type="button" id="btn-google-auth" class="btn btn-secondary" onclick="handleAuthClick()">
+      <button type="button" id="btn-google-auth" class="btn btn-secondary" data-call="handleAuthClick">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>
         <span id="auth-btn-label">Sign in</span>
       </button>
@@ -67,28 +75,28 @@
   <div id="global-theme-toggle-slot" class="global-theme-toggle-slot" aria-label="Appearance"></div>
 
   <nav class="desktop-nav" aria-label="Primary">
-    <button type="button" class="nav-tab-btn active" data-page="home" onclick="navigateTo('home')">
+    <button type="button" class="nav-tab-btn active" data-page="home" data-call="navigateTo" data-arg="home">
       <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
       Home
     </button>
-    <button type="button" class="nav-tab-btn" data-page="groups" onclick="navigateTo('groups')">
+    <button type="button" class="nav-tab-btn" data-page="groups" data-call="navigateTo" data-arg="groups">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>
       Groups
     </button>
-    <button type="button" class="nav-tab-btn" data-page="friends" onclick="navigateTo('friends')">
+    <button type="button" class="nav-tab-btn" data-page="friends" data-call="navigateTo" data-arg="friends">
       <svg viewBox="0 0 24 24"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"/><circle cx="10" cy="8" r="3"/><path d="M20 19v-1a3 3 0 0 0-2.2-2.9M16 5.1a3 3 0 0 1 0 5.8"/></svg>
       Friends
       <span id="desktop-requests-badge" class="nav-badge" style="display:none;">0</span>
     </button>
-    <button type="button" class="nav-tab-btn" data-page="history" onclick="navigateTo('history')">
+    <button type="button" class="nav-tab-btn" data-page="history" data-call="navigateTo" data-arg="history">
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
       Activity
     </button>
-    <button type="button" class="nav-tab-btn" data-page="account" onclick="navigateTo('account')">
+    <button type="button" class="nav-tab-btn" data-page="account" data-call="navigateTo" data-arg="account">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
       Account
     </button>
-    <button type="button" class="nav-tab-btn" data-page="analytics" onclick="navigateTo('analytics')">
+    <button type="button" class="nav-tab-btn" data-page="analytics" data-call="navigateTo" data-arg="analytics">
       <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/></svg>
       Analytics
     </button>
@@ -119,8 +127,8 @@
         </div>
 
         <div class="hero-actions">
-          <button type="button" class="btn btn-secondary" onclick="navigateTo('balances')">Review balances & settle up</button>
-          <button type="button" class="btn btn-secondary" onclick="shareGroupInvite()">Invite link</button>
+          <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="balances">Review balances & settle up</button>
+          <button type="button" class="btn btn-secondary" data-call="shareGroupInvite">Invite link</button>
         </div>
       </div>
       <div>
@@ -132,30 +140,30 @@
 
     <!-- Quick Navigation Cards Grid -->
     <div class="dashboard-grid">
-      <div class="dash-card" onclick="navigateTo('balances')">
+      <button type="button" class="dash-card" data-call="navigateTo" data-arg="balances">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg></div>
         <div class="dash-card-title">Who pays whom</div>
         <div class="dash-card-desc" id="dash-settle-desc">Review balances</div>
         <div id="home-debt-preview"></div>
-      </div>
+      </button>
 
-      <div class="dash-card" onclick="navigateTo('history')">
+      <button type="button" class="dash-card" data-call="navigateTo" data-arg="history">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
         <div class="dash-card-title">Activity</div>
         <div class="dash-card-desc" id="dash-history-desc">0 transactions recorded</div>
-      </div>
+      </button>
 
-      <div class="dash-card" onclick="navigateTo('analytics')">
+      <button type="button" class="dash-card" data-call="navigateTo" data-arg="analytics">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/></svg></div>
         <div class="dash-card-title">Spending mix</div>
         <div class="dash-card-desc" id="dash-analytics-desc">Category insights</div>
-      </div>
+      </button>
 
-      <div class="dash-card" onclick="navigateTo('friends')">
+      <button type="button" class="dash-card" data-call="navigateTo" data-arg="friends">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"/><circle cx="10" cy="8" r="3"/></svg></div>
         <div class="dash-card-title">People & Groups</div>
         <div class="dash-card-desc" id="dash-friends-desc">Manage connections</div>
-      </div>
+      </button>
     </div>
 
     <!-- Active Group Card -->
@@ -165,7 +173,7 @@
           <h2 style="margin:0;">Members</h2>
           <span style="font-size:0.8rem; color:var(--muted);">In active group</span>
         </div>
-        <button type="button" class="btn btn-secondary" onclick="navigateTo('groups')">Manage group</button>
+        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="groups">Manage group</button>
       </div>
       <div id="home-members-chips" class="chip-container"></div>
     </div>
@@ -173,7 +181,7 @@
     <div class="card home-recent-card">
       <div class="card-header-row">
         <h2 style="margin:0;">Recent Activity</h2>
-        <button type="button" class="btn btn-secondary" onclick="navigateTo('history')" style="padding:6px 10px; font-size:0.8rem;">View All →</button>
+        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="history" style="padding:6px 10px; font-size:0.8rem;">View All →</button>
       </div>
       <div id="home-recent-empty" class="empty-state" style="padding:14px 0;">No expenses yet. Tap <strong>+ Add an expense</strong> to log your first bill.</div>
       <ul id="home-recent-list" class="transaction-list"></ul>
@@ -199,12 +207,12 @@
       <div style="margin-bottom: 14px;">
         <span class="eyebrow">Quick presets</span>
         <div class="preset-container" style="margin-top: 8px;">
-          <button type="button" class="preset-btn" onclick="applyPreset('Chai & Snacks', 'Food')">Chai</button>
-          <button type="button" class="preset-btn" onclick="applyPreset('Dinner', 'Food')">Dinner</button>
-          <button type="button" class="preset-btn" onclick="applyPreset('Uber / Auto Ride', 'Transport')">Cab</button>
-          <button type="button" class="preset-btn" onclick="applyPreset('Grocery Run', 'Groceries')">Groceries</button>
-          <button type="button" class="preset-btn" onclick="applyPreset('Movie Tickets', 'Entertainment')">Movie</button>
-          <button type="button" class="preset-btn" onclick="applyPreset('WiFi & Electricity', 'Utilities')">Bills</button>
+          <button type="button" class="preset-btn" data-call="applyPreset" data-arg="Chai & Snacks" data-arg2="Food">Chai</button>
+          <button type="button" class="preset-btn" data-call="applyPreset" data-arg="Dinner" data-arg2="Food">Dinner</button>
+          <button type="button" class="preset-btn" data-call="applyPreset" data-arg="Uber / Auto Ride" data-arg2="Transport">Cab</button>
+          <button type="button" class="preset-btn" data-call="applyPreset" data-arg="Grocery Run" data-arg2="Groceries">Groceries</button>
+          <button type="button" class="preset-btn" data-call="applyPreset" data-arg="Movie Tickets" data-arg2="Entertainment">Movie</button>
+          <button type="button" class="preset-btn" data-call="applyPreset" data-arg="WiFi & Electricity" data-arg2="Utilities">Bills</button>
         </div>
       </div>
 
@@ -212,8 +220,8 @@
       <div style="margin-bottom: 16px;">
         <label style="font-size:0.8rem; font-weight:700; color:var(--muted); text-transform:uppercase; margin-bottom:6px; display:block;">Who is this expense with?</label>
         <div class="scope-toggle">
-          <button type="button" id="btn-scope-group" class="btn is-on" onclick="setExpenseScope('group')">👥 A group</button>
-          <button type="button" id="btn-scope-friend" class="btn" onclick="setExpenseScope('friend')">👤 A friend</button>
+          <button type="button" id="btn-scope-group" class="btn is-on" data-call="setExpenseScope" data-arg="group">👥 A group</button>
+          <button type="button" id="btn-scope-friend" class="btn" data-call="setExpenseScope" data-arg="friend">👤 A friend</button>
         </div>
       </div>
 
@@ -224,7 +232,7 @@
         </label>
         <div style="display:flex; gap:8px; align-items:center;">
           <select id="direct-friend-select" style="flex:1; font-weight:600; padding:10px;" onchange="handleDirectFriendChange()"></select>
-          <button type="button" class="btn btn-secondary" onclick="promptQuickFriendForExpense()" style="white-space:nowrap; padding:9px 12px; font-size:0.82rem;">
+          <button type="button" class="btn btn-secondary" data-call="promptQuickFriendForExpense" style="white-space:nowrap; padding:9px 12px; font-size:0.82rem;">
             + Type name
           </button>
         </div>
@@ -267,6 +275,14 @@
             <label for="expense-date">Date</label>
             <input type="date" id="expense-date" required>
           </div>
+          <div class="form-group" style="flex: 1;">
+            <label for="recurring-select">Repeat</label>
+            <select id="recurring-select">
+              <option value="">Does not repeat</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
         </div>
 
         <div class="form-group">
@@ -276,7 +292,8 @@
 
         <!-- Smart Cloud Vision OCR Attachment -->
         <div class="form-group">
-          <label for="receipt-file">Scan bill receipt (Google Cloud Vision AI)</label>
+          <label for="receipt-file">Scan bill receipt <span class="auth-pill" id="receipt-auth-pill">Needs sign-in</span></label>
+          <p id="receipt-auth-note" class="auth-note">Scanning a receipt for the total needs Google sign-in. You can still attach a photo on this device.</p>
           <label class="dropzone" id="receipt-dropzone">
             <input type="file" id="receipt-file" accept="image/*">
             <span><strong>Drop bill image here</strong><br>or tap to photograph receipt. Google Vision will locate and set total.</span>
@@ -318,7 +335,7 @@
         <div id="expense-form-error" class="form-error" role="alert"></div>
 
         <div style="display: flex; gap: 8px; margin-top: 20px;">
-          <button type="button" id="btn-cancel-edit" class="btn btn-secondary" onclick="navigateTo('home')" style="flex:1;">Cancel</button>
+          <button type="button" id="btn-cancel-edit" class="btn btn-secondary" data-call="navigateTo" data-arg="home" style="flex:1;">Cancel</button>
           <button type="submit" id="btn-submit-expense" class="btn btn-primary" style="flex:2;">Save expense</button>
         </div>
       </form>
@@ -328,7 +345,7 @@
   <!-- ================= PAGE 3: BALANCES & SETTLE ================= -->
   <section id="page-balances" class="app-page">
     <div class="page-back-bar">
-      <button type="button" class="btn-back-home" onclick="navigateTo('home')">← Back to Home</button>
+      <button type="button" class="btn-back-home" data-call="navigateTo" data-arg="home">← Back to Home</button>
       <button type="button" id="btn-toggle-settle-form" class="btn btn-settle" style="padding:6px 12px; font-size:0.82rem;">+ Custom settlement</button>
     </div>
 
@@ -367,7 +384,8 @@
                 <input type="number" id="settle-amount" step="0.01" min="0.01" placeholder="0.00" required>
               </div>
             </div>
-            <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+              <button type="button" id="btn-upi" class="btn btn-secondary" style="padding:8px 14px;">UPI link and QR</button>
               <button type="button" id="btn-cancel-settle" class="btn btn-secondary" style="padding:8px 14px;">Cancel</button>
               <button type="submit" class="btn btn-settle" style="padding:8px 16px;">Save settlement</button>
             </div>
@@ -434,7 +452,7 @@
           <h2>Direct 1-on-1 friend balances</h2>
           <span style="font-size:0.82rem; color:var(--muted);">Non-group expenses and direct IOUs with individual friends</span>
         </div>
-        <button type="button" class="btn btn-secondary" onclick="navigateTo('friends')" style="padding:6px 12px; font-size:0.8rem;">Manage friends →</button>
+        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="friends" style="padding:6px 12px; font-size:0.8rem;">Manage friends →</button>
       </div>
       <div id="direct-balances-list" style="margin-top:12px;"></div>
     </div>
@@ -478,7 +496,7 @@
 
       <div id="empty-msg" class="empty-state">
         <p>No transactions in this view yet.</p>
-        <button type="button" class="btn btn-secondary" onclick="loadSampleDemoData()">Load sample demo data</button>
+        <button type="button" class="btn btn-secondary" data-call="loadSampleDemoData">Load sample demo data</button>
       </div>
       <ul id="transaction-list" class="transaction-list"></ul>
       <div id="deleted-transactions-panel" style="display:none; margin-top:18px;">
@@ -491,17 +509,23 @@
 
   <!-- ================= PAGE 5: SPENDING ANALYTICS ================= -->
   <section id="page-analytics" class="app-page">
+    <div class="section-header"><div><h1>Spending analytics</h1><p id="analytics-subtitle">Category, person, and time for the active group and 1-on-1 bills.</p></div></div>
     <div class="card">
+      <div class="tab-group" role="group" aria-label="Analytics view">
+        <button type="button" class="tab-btn active" data-analytics-view="category">By category</button>
+        <button type="button" class="tab-btn" data-analytics-view="person">Per person</button>
+        <button type="button" class="tab-btn" data-analytics-view="time">Over time</button>
+      </div>
       <div class="card-header-row">
-        <h2>Category spending breakdown</h2>
-        <div class="tab-group chart-switch" style="margin-bottom:0; width:140px;">
+        <h2>Spending breakdown</h2>
+        <div class="tab-group chart-switch" id="chart-style-tabs" style="margin-bottom:0; width:140px;">
           <button type="button" class="tab-btn active" id="btn-chart-pie">Pie</button>
           <button type="button" class="tab-btn" id="btn-chart-bar">Bar</button>
         </div>
       </div>
       <div id="chart-empty" class="empty-state">
         <p>No category spending yet.</p>
-        <button type="button" class="btn btn-secondary" onclick="loadSampleDemoData()">Load sample demo data</button>
+        <button type="button" class="btn btn-secondary" data-call="loadSampleDemoData">Load sample demo data</button>
       </div>
       <div id="chart-area" class="chart-container" style="display:none;">
         <div class="chart-wrapper">
@@ -545,7 +569,7 @@
   <section id="page-friends" class="app-page">
     <div class="section-header"><div><h1>Friends</h1><p>Manage your connections, requests, and 1-on-1 expense partners.</p></div></div>
     <div class="page-back-bar">
-      <button type="button" class="btn-back-home" onclick="navigateTo('home')">← Back to Home</button>
+      <button type="button" class="btn-back-home" data-call="navigateTo" data-arg="home">← Back to Home</button>
       <span></span>
     </div>
 
@@ -561,7 +585,7 @@
                 <strong id="my-display-account" style="font-size:1rem; color:var(--text);">Not signed in</strong>
               </div>
             </div>
-            <button type="button" id="btn-copy-my-email" class="btn btn-secondary" onclick="copyMyEmail()">
+            <button type="button" id="btn-copy-my-email" class="btn btn-secondary" data-call="copyMyEmail">
               Copy my email
             </button>
           </div>
@@ -583,10 +607,11 @@
           
           <div class="group-bar" style="margin-bottom:14px;">
             <div class="group-select-wrapper">
-              <span style="font-size:0.85rem; color:var(--muted);">Choose a group in the section above to manage it here.</span>
+              <p id="group-empty-hint" class="group-hint" hidden>Create a group to manage members and currency.</p>
+              <p id="group-choose-hint" class="group-hint" hidden>Choose a group above to manage members and currency.</p>
             </div>
             <div style="display:flex; gap:6px;">
-              <button type="button" id="btn-share-group-invite" class="btn btn-secondary" onclick="shareGroupInvite()" title="Share group invite link">Invite link</button>
+              <button type="button" id="btn-share-group-invite" class="btn btn-secondary" data-call="shareGroupInvite" title="Share group invite link">Invite link</button>
               <button type="button" id="btn-rename-group" class="btn btn-secondary" title="Rename active group">Rename</button>
               <button type="button" id="btn-delete-group" class="btn btn-secondary" title="Delete active group">Delete</button>
             </div>
@@ -601,8 +626,8 @@
                 <option value="€">€ (EUR)</option>
                 <option value="£">£ (GBP)</option>
                 <option value="¥">¥ (JPY/CNY)</option>
-                <option value="custom">Other...</option>
               </select>
+              <button type="button" id="btn-custom-currency" class="btn btn-secondary" style="margin-top:8px">Custom symbol</button>
             </div>
 
             <div class="form-group">
@@ -623,7 +648,7 @@
             </label>
             <div style="display:flex; gap:8px;">
               <input type="text" id="input-new-member-name" placeholder="Type name (e.g. Roommate, Priya)" style="flex:1;">
-              <button type="button" id="btn-add-custom-member" class="btn btn-primary" onclick="addMemberToActiveGroup()" style="white-space:nowrap;">+ Add member</button>
+              <button type="button" id="btn-add-custom-member" class="btn btn-primary" data-call="addMemberToActiveGroup" style="white-space:nowrap;">+ Add member</button>
             </div>
           </div>
 
@@ -638,7 +663,7 @@
       </div>
 
       <!-- Right Column: Friends & Contacts -->
-      <div class="friends-col">
+      <div class="friends-col" id="friends-stack">
         <!-- Incoming Cloud Requests -->
         <div class="card" id="incoming-requests-card" style="border:2px solid var(--primary);">
           <div class="card-header-row">
@@ -646,8 +671,8 @@
               <h2>Incoming friend requests <span id="incoming-badge-count" class="badge-count" style="display:none;">0</span></h2>
               <span style="font-size:0.8rem; color:var(--muted);">Approve or decline requests sent to your Google email</span>
             </div>
-            <button type="button" class="btn btn-secondary" onclick="checkIncomingRequestsManual()" style="padding:6px 12px; font-size:0.8rem;">
-              🔄 Check now
+            <button type="button" class="btn btn-secondary" id="btn-check-requests" data-call="checkIncomingRequestsManual" data-needs-auth disabled style="padding:6px 12px; font-size:0.8rem;">
+              <span aria-hidden="true">🔄</span> Check now <span class="auth-pill">Needs sign-in</span>
             </button>
           </div>
           <div id="incoming-requests-container" style="margin-top:10px;">
@@ -671,12 +696,12 @@
             <label for="input-friend-email">Connect by Google email (live cloud sync)</label>
             <div style="display:flex; gap:8px; margin-bottom:8px;">
               <input type="email" id="input-friend-email" placeholder="e.g. friend@gmail.com" style="flex:1;">
-              <button type="button" id="btn-send-friend-request" class="btn btn-primary" onclick="sendFriendRequest()" style="white-space:nowrap;">In-App request</button>
+              <button type="button" id="btn-send-friend-request" class="btn btn-primary" data-call="sendFriendRequest" data-needs-auth disabled style="white-space:nowrap;">In-App request <span class="auth-pill">Needs sign-in</span></button>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Direct messaging:</span>
-              <button type="button" class="btn btn-secondary" onclick="openInviteInGmail()">Open in Gmail</button>
-              <button type="button" class="btn btn-secondary" onclick="shareViaWhatsApp()">Share via WhatsApp</button>
+              <button type="button" class="btn btn-secondary" data-call="openInviteInGmail">Open in Gmail</button>
+              <button type="button" class="btn btn-secondary" data-call="shareViaWhatsApp">Share via WhatsApp</button>
             </div>
           </div>
 
@@ -697,7 +722,7 @@
             </div>
             <div style="display:flex; gap:8px;">
               <input type="text" id="input-mobile-name" placeholder="Display name (optional)" style="flex:1;">
-              <button type="button" class="btn btn-secondary" onclick="addFriendByMobile()" style="white-space:nowrap;">+ Save contact</button>
+              <button type="button" class="btn btn-secondary" data-call="addFriendByMobile" style="white-space:nowrap;">+ Save contact</button>
             </div>
           </div>
 
@@ -711,7 +736,7 @@
         </div>
 
         <!-- Friends Roster -->
-        <div class="card">
+        <div class="card" id="card-roster">
           <div class="card-header-row">
             <div>
               <h2>Connected friends roster (<span id="global-friends-count">0</span>)</h2>
@@ -723,7 +748,7 @@
             <label for="new-friend-name">Quick add name (local):</label>
             <div style="display:flex; gap:8px;">
               <input type="text" id="new-friend-name" placeholder="Type name (e.g. Vikram)" style="flex:1;">
-              <button type="button" class="btn btn-secondary" onclick="addNewFriendToRoster()" style="white-space:nowrap;">+ Add to roster</button>
+              <button type="button" class="btn btn-secondary" data-call="addNewFriendToRoster" style="white-space:nowrap;">+ Add to roster</button>
             </div>
           </div>
 
@@ -734,38 +759,38 @@
     </div>
   </section>
 
-  <p class="rare-credit" style="text-align:center; margin-top:32px; color:var(--muted); font-size:0.75rem;">
-    FairShare - Shared expenses made simple & fair. Motion adapted from <a href="https://www.rareui.com/components" style="color:inherit;">Rare UI</a>.
-  </p>
+  <footer class="app-footer">
+    <p>Privacy: FairShare stores your ledger in this browser. Google sign-in is optional and is used only to sync groups you belong to, friend requests, and receipt photos. Receipts stay on this device until you are signed in. Nothing here is sold or used for ads.</p>
+  </footer>
   </main>
   </div>
 
   <!-- Mobile Bottom Navigation Bar -->
   <nav class="mobile-bottom-nav" data-slot="gooey-nav" aria-label="Mobile">
-    <button type="button" class="mobile-nav-item active" data-page="home" onclick="navigateTo('home')">
+    <button type="button" class="mobile-nav-item active" data-page="home" data-call="navigateTo" data-arg="home">
       <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
       <span>Home</span>
     </button>
-    <button type="button" class="mobile-nav-item" data-page="groups" onclick="navigateTo('groups')">
+    <button type="button" class="mobile-nav-item" data-page="groups" data-call="navigateTo" data-arg="groups">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>
       <span>Groups</span>
     </button>
-    <button type="button" class="mobile-nav-item" data-page="friends" onclick="navigateTo('friends')">
+    <button type="button" class="mobile-nav-item" data-page="friends" data-call="navigateTo" data-arg="friends">
       <span style="position:relative; display:grid;">
         <svg viewBox="0 0 24 24"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"/><circle cx="10" cy="8" r="3"/><path d="M20 19v-1a3 3 0 0 0-2.2-2.9M16 5.1a3 3 0 0 1 0 5.8"/></svg>
         <span id="mobile-requests-badge" class="nav-badge-mobile" style="display:none;">0</span>
       </span>
       <span>Friends</span>
     </button>
-    <button type="button" class="mobile-nav-item" data-page="history" onclick="navigateTo('history')">
+    <button type="button" class="mobile-nav-item" data-page="history" data-call="navigateTo" data-arg="history">
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
       <span>Activity</span>
     </button>
-    <button type="button" class="mobile-nav-item" data-page="account" onclick="navigateTo('account')">
+    <button type="button" class="mobile-nav-item" data-page="account" data-call="navigateTo" data-arg="account">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
       <span>Account</span>
     </button>
-    <button type="button" class="mobile-nav-item" data-page="analytics" onclick="navigateTo('analytics')">
+    <button type="button" class="mobile-nav-item" data-page="analytics" data-call="navigateTo" data-arg="analytics">
       <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/></svg>
       <span>Analytics</span>
     </button>
@@ -776,7 +801,7 @@
       <button type="button" data-expense-scope="group">👥 Add a group expense</button>
       <button type="button" data-expense-scope="friend">👤 Add a friend expense</button>
     </div>
-    <button type="button" id="expense-fab" class="expense-fab" aria-expanded="false" aria-controls="expense-fab-menu">
+    <button type="button" id="expense-fab" class="expense-fab" aria-expanded="false" aria-controls="expense-fab-menu" aria-label="Add expense">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
       <span>Add expense</span>
     </button>
@@ -792,8 +817,8 @@
         A friend invited you to join their shared group.
       </p>
       <div style="display:flex; justify-content:center; gap:10px;">
-        <button type="button" class="btn btn-secondary" onclick="declineGroupInvite()" style="padding:8px 16px;">✕ Decline</button>
-        <button type="button" class="btn btn-primary" onclick="acceptGroupInvite()" style="padding:8px 20px; font-weight:700;">✓ Approve & join</button>
+        <button type="button" class="btn btn-secondary" data-call="declineGroupInvite" style="padding:8px 16px;">✕ Decline</button>
+        <button type="button" class="btn btn-primary" data-call="acceptGroupInvite" style="padding:8px 20px; font-weight:700;">✓ Approve & join</button>
       </div>
     </div>
   </div>
@@ -801,7 +826,7 @@
   <!-- Create New Group Modal -->
   <div id="new-group-modal" class="modal-backdrop">
     <div class="modal-content">
-      <button type="button" class="modal-close" onclick="closeNewGroupModal()">&times;</button>
+      <button type="button" class="modal-close" data-call="closeNewGroupModal">&times;</button>
       <h3 style="margin-top:0; font-size:1.25rem;">Create a new group</h3>
       <p style="font-size:0.85rem; color:var(--muted); margin-top:-4px; margin-bottom:16px;">
         Name your group and check off friends to include them.
@@ -830,7 +855,7 @@
         </div>
 
         <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
-          <button type="button" class="btn btn-secondary" onclick="closeNewGroupModal()">Cancel</button>
+          <button type="button" class="btn btn-secondary" data-call="closeNewGroupModal">Cancel</button>
           <button type="submit" class="btn btn-primary">Create group</button>
         </div>
       </form>
@@ -840,7 +865,7 @@
   <!-- Member Statement Drawer Modal -->
   <div id="member-modal" class="modal-backdrop">
     <div class="modal-content" style="max-width: 540px;">
-      <button type="button" class="modal-close" onclick="closeMemberModal()">&times;</button>
+      <button type="button" class="modal-close" data-call="closeMemberModal">&times;</button>
       <div id="member-modal-body"></div>
     </div>
   </div>
@@ -848,12 +873,40 @@
   <!-- Transaction Detail Modal -->
   <div id="detail-modal" class="modal-backdrop">
     <div class="modal-content">
-      <button type="button" class="modal-close" onclick="closeDetailModal()">&times;</button>
+      <button type="button" class="modal-close" data-call="closeDetailModal">&times;</button>
       <div id="modal-body"></div>
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, mergeById, stripReceiptBytes, newId } from "./js/money.js";
+    import { toast, askConfirm, askPrompt } from "./js/ui.js";
+    import { compressImage, safeImageSrc } from "./js/receipts.js";
+    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
+
+    document.body.addEventListener("click", (event) => {
+      const node = event.target.closest("[data-call]");
+      if (!node || node.disabled) return;
+      const fn = window[node.dataset.call];
+      if (typeof fn === "function") fn(node.dataset.arg, node.dataset.arg2);
+    });
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyByVkmNFtjMVB9esryWD5tx9SbHw1oAAVo",
+      authDomain: "fairshare-app-ba160.firebaseapp.com",
+      projectId: "fairshare-app-ba160",
+      storageBucket: "fairshare-app-ba160.firebasestorage.app",
+      messagingSenderId: "279219217084",
+      appId: "1:279219217084:web:9e473b6997573cf0f0a6b9",
+      measurementId: "G-ZHDZ28WDSL"
+    };
+    let fx = null;
+    let currentUser = null;
+
+    function requestsCol() {
+      return fx.storeMod.collection(fx.db, "friend_requests");
+    }
+
     // --- Application State ---
     let appState = {
       theme: "light",
@@ -955,7 +1008,7 @@
       if (!appState.groups[appState.activeGroupId]) {
         appState.activeGroupId = Object.keys(appState.groups)[0];
       }
-      return appState.groups[appState.activeGroupId] || { id: null, name: "No groups yet", currency: "INR ", members: ["You"], simplifyDebts: true, transactions: [] };
+      return appState.groups[appState.activeGroupId] || { id: null, name: "No groups yet", currency: "₹", members: ["You"], simplifyDebts: true, transactions: [] };
     }
 
     function getMyGroupMemberName(group) {
@@ -996,16 +1049,8 @@
       return safe.replace(new RegExp(needle, "ig"), (match) => `<mark>${match}</mark>`);
     }
 
-    function formatMoney(amount, currency) {
-      const n = Number(amount) || 0;
-      const sign = n < -0.004 ? "-" : "";
-      return sign + currency + Math.abs(n).toFixed(2);
-    }
-
-    function formatSignedMoney(amount, currency) {
-      const n = Number(amount) || 0;
-      if (Math.abs(n) < 0.005) return currency + "0.00";
-      return (n > 0 ? "+" : "-") + currency + Math.abs(n).toFixed(2);
+    function moneyNear(a, b, paise = 1) {
+      return Math.abs((Number(a) || 0) - (Number(b) || 0)) <= paise;
     }
 
     function todayISO() {
@@ -1043,14 +1088,13 @@
     }
 
     function findTransaction(id) {
-      const numericId = typeof id === "string" ? parseInt(id, 10) : id;
+      const key = String(id);
       for (const group of Object.values(appState.groups)) {
-        const tx = (group.transactions || []).find(t => t.id === numericId);
+        const tx = (group.transactions || []).find(t => String(t.id) === key);
         if (tx) return { tx, where: "group", group };
       }
       const g = getGroup();
-      let tx;
-      tx = (appState.directTransactions || []).find(t => t.id === numericId);
+      const tx = (appState.directTransactions || []).find(t => String(t.id) === key);
       if (tx) return { tx, where: "direct", group: g };
       return null;
     }
@@ -1119,6 +1163,7 @@
               }
             });
           }
+          if (parsed.schemaVersion) appState.schemaVersion = parsed.schemaVersion;
           if (parsed.activeGroupId && appState.groups[parsed.activeGroupId]) appState.activeGroupId = parsed.activeGroupId;
         } catch (e) {
           console.error("Could not parse saved state:", e);
@@ -1128,11 +1173,14 @@
           appState.theme = "dark";
         }
       }
+      appState = migrateMoney(appState);
+      localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+      ["fairshare_state_v6", "fairshare_state_v7", "fairshare_state_v8"].forEach((key) => localStorage.removeItem(key));
     }
 
     function saveState() {
       // Cloud sync active group
-      if (typeof db !== "undefined" && db && typeof currentUser !== "undefined" && currentUser && appState.groups[appState.activeGroupId]) {
+      if (fx && currentUser && appState.groups[appState.activeGroupId]) {
         const g = getGroup();
         const myEmailNorm = normalizeEmail(currentUser.email);
         const memberLinks = { ...(g.memberLinks || {}) };
@@ -1149,18 +1197,19 @@
         });
         g.memberLinks = memberLinks;
 
-        db.collection("groups").doc(g.id).set({
+        setMerge(fx, "groups", g.id, {
           id: g.id,
+          schemaVersion: 9,
           name: g.name,
           currency: g.currency,
           members: g.members,
           memberLinks,
           memberEmails: Array.from(new Set(memberEmails)),
-          transactions: g.transactions,
+          transactions: stripReceiptBytes(g.transactions),
           deletedTransactions: g.deletedTransactions || [],
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: serverTimestamp(fx),
           updatedBy: myEmailNorm
-        }, { merge: true }).catch((err) => console.warn("Cloud sync note:", err));
+        }).catch((err) => console.warn("Cloud sync note:", err));
       }
       localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
     }
@@ -1264,6 +1313,7 @@
     const chartVisual = document.getElementById("chart-visual");
     const chartLegend = document.getElementById("chart-legend");
     let chartType = "pie";
+    let analyticsView = "category";
 
     // History Filters
     let historyFilter = "all";
@@ -1394,11 +1444,11 @@
       const inputEl = document.getElementById("input-new-member-name");
       const name = (customName || (inputEl ? inputEl.value : "")).trim();
       if (!name) {
-        alert("Please enter a name.");
+        toast("Please enter a name.");
         return;
       }
       if (g.members.some(m => m.toLowerCase() === name.toLowerCase())) {
-        alert(`"${name}" is already in this group!`);
+        toast(`"${name}" is already in this group!`);
         return;
       }
       g.members.push(name);
@@ -1421,19 +1471,19 @@
       });
     }
 
-    window.removeMember = function(name) {
+    window.removeMember = async function(name) {
       const g = getGroup();
       if (g.members.length <= 1) {
-        alert("You must keep at least 1 member in the group.");
+        toast("You must keep at least 1 member in the group.");
         return;
       }
       const hasTransactions = g.transactions.some(t => t.payer === name || (t.shares && t.shares[name] > 0) || t.receiver === name);
       if (hasTransactions) {
-        if (!confirm(`"${name}" is part of existing expenses or settlements in this group. Remove anyway?`)) {
+        if (!(await askConfirm({ message: `"${name}" is part of existing expenses or settlements in this group. Remove anyway?` }))) {
           return;
         }
       } else {
-        if (!confirm(`Remove "${name}" from this group?`)) return;
+        if (!(await askConfirm({ message: `Remove "${name}" from this group?` }))) return;
       }
       g.members = g.members.filter(m => m !== name);
       saveState();
@@ -1444,11 +1494,11 @@
       const inputEl = document.getElementById("new-friend-name");
       const name = (inputEl ? inputEl.value : "").trim();
       if (!name) {
-        alert("Please enter a friend name.");
+        toast("Please enter a friend name.");
         return;
       }
       if (appState.friends.some(f => f.name.toLowerCase() === name.toLowerCase())) {
-        alert(`"${name}" is already in your friends roster.`);
+        toast(`"${name}" is already in your friends roster.`);
         return;
       }
       appState.friends.push({ id: "f_" + Date.now(), name: name, type: "custom" });
@@ -1469,7 +1519,7 @@
       const optionalName = nameEl ? nameEl.value.trim() : "";
 
       if (rawNum.length < 7 || rawNum.length > 15) {
-        alert("Please enter a valid mobile number (7 to 15 digits).");
+        toast("Please enter a valid mobile number (7 to 15 digits).");
         return;
       }
 
@@ -1477,7 +1527,7 @@
       const displayName = optionalName || formattedPhone;
 
       if (appState.friends.some(f => f.phone && f.phone.replace(/[^0-9]/g, "") === (code + rawNum).replace(/[^0-9]/g, ""))) {
-        alert(`Mobile number ${formattedPhone} is already in your friends roster.`);
+        toast(`Mobile number ${formattedPhone} is already in your friends roster.`);
         return;
       }
 
@@ -1494,13 +1544,13 @@
 
       if (numEl) numEl.value = "";
       if (nameEl) nameEl.value = "";
-      alert(`Saved ${displayName} to your friends roster!`);
+      toast(`Saved ${displayName} to your friends roster!`);
     };
 
-    window.renameFriendPrompt = function(friendId) {
+    window.renameFriendPrompt = async function(friendId) {
       const friend = appState.friends.find(f => f.id === friendId);
       if (!friend) return;
-      const newName = prompt(`Rename ${friend.name}:`, friend.name);
+      const newName = await askPrompt({ message: `Rename ${friend.name}:`, defaultValue: friend.name });
       if (!newName || !newName.trim() || newName.trim() === friend.name) return;
 
       const oldName = friend.name;
@@ -1516,10 +1566,10 @@
       renderAll();
     };
 
-    window.deleteFriendFromRoster = function(id) {
+    window.deleteFriendFromRoster = async function(id) {
       const f = appState.friends.find(x => x.id === id);
       if (!f) return;
-      if (confirm(`Remove "${f.name}" from your friends roster?`)) {
+      if (await askConfirm({ message: `Remove "${f.name}" from your friends roster?` })) {
         appState.friends = appState.friends.filter(x => x.id !== id);
         saveState();
         renderFriendsRoster();
@@ -1527,16 +1577,17 @@
       }
     };
 
-    window.copyMyEmail = function() {
+    window.copyMyEmail = async function() {
       if (!currentUser || !currentUser.email) {
-        alert("Please sign in with Google (top right) first to copy your verified account email.");
+        toast("Please sign in with Google (top right) first to copy your verified account email.");
         return;
       }
-      navigator.clipboard.writeText(currentUser.email).then(() => {
-        alert(`Copied! Share your email (${currentUser.email}) with friends to connect.`);
-      }).catch(() => {
-        prompt("Copy your email:", currentUser.email);
-      });
+      try {
+        await navigator.clipboard.writeText(currentUser.email);
+        toast(`Copied! Share your email (${currentUser.email}) with friends to connect.`);
+      } catch {
+        await askPrompt({ message: "Copy your email:", defaultValue: currentUser.email });
+      }
     };
 
     function normalizeEmail(email) {
@@ -1550,15 +1601,15 @@
     }
 
     window.checkIncomingRequestsManual = async function() {
-      if (!db || !currentUser) {
-        alert("Please sign in with Google first.");
+      if (!fx || !currentUser) {
+        toast("Please sign in with Google first.");
         return;
       }
       const myEmail = (currentUser.email || "").toLowerCase().trim();
       const myEmailNorm = normalizeEmail(myEmail);
       
       try {
-        const snap = await db.collection("friend_requests").where("toEmail", "==", myEmail).get();
+        const snap = await fx.storeMod.getDocs(fx.storeMod.query(requestsCol(), fx.storeMod.where("toEmail", "==", myEmail)));
         const matching = [];
         snap.forEach(doc => {
           const d = doc.data();
@@ -1573,13 +1624,13 @@
         renderFriendRequestsUI();
 
         if (matching.length > 0) {
-          alert(`Found ${matching.length} pending friend request(s)!`);
+          toast(`Found ${matching.length} pending friend request(s)!`);
         } else {
-          alert(`0 pending requests found for ${currentUser.email}.`);
+          toast(`0 pending requests found for ${currentUser.email}.`);
         }
       } catch (err) {
         console.error("Manual check error:", err);
-        alert("Cloud check error: " + err.message);
+        toast("Cloud check error: " + err.message);
       }
     };
 
@@ -1587,18 +1638,18 @@
       const inputEl = document.getElementById("input-friend-email");
       const rawInput = (inputEl ? inputEl.value : "").trim();
       if (!rawInput) {
-        alert("Please enter your friend's Google email address.");
+        toast("Please enter your friend's Google email address.");
         return;
       }
 
       const targetEmail = rawInput.toLowerCase();
       if (!targetEmail.includes("@") || !targetEmail.includes(".")) {
-        alert(`"${rawInput}" is not a valid email address.`);
+        toast(`"${rawInput}" is not a valid email address.`);
         return;
       }
 
       if (!currentUser || !currentUser.email) {
-        alert("Please sign in with Google first.");
+        toast("Please sign in with Google first.");
         return;
       }
 
@@ -1606,12 +1657,12 @@
       const myName = currentUser.displayName || myEmail.split("@")[0];
 
       if (targetEmail === myEmail) {
-        alert("You cannot send a friend request to your own email address.");
+        toast("You cannot send a friend request to your own email address.");
         return;
       }
 
       if (appState.friends.some(f => f.email && f.email.toLowerCase() === targetEmail)) {
-        alert(`${targetEmail} is already in your Connected Friends list.`);
+        toast(`${targetEmail} is already in your Connected Friends list.`);
         return;
       }
 
@@ -1619,7 +1670,7 @@
       if (existingIncoming) {
         await approveFriendRequest(existingIncoming.id, targetEmail, existingIncoming.fromName);
         if (inputEl) inputEl.value = "";
-        alert(`Mutual connection confirmed! You and ${targetEmail} are now connected friends.`);
+        toast(`Mutual connection confirmed! You and ${targetEmail} are now connected friends.`);
         return;
       }
 
@@ -1637,29 +1688,34 @@
         createdAt: Date.now()
       };
 
-      if (!db) {
-        alert("Firebase connection required to send cloud friend requests.");
+      if (!fx) {
+        toast("Firebase connection required to send cloud friend requests.");
         return;
       }
 
       try {
-        await db.collection("friend_requests").doc(reqId).set(reqData);
+        await fx.storeMod.setDoc(fx.storeMod.doc(requestsCol(), reqId), reqData);
         if (!localOutgoingRequests.some(r => r.id === reqId)) {
           localOutgoingRequests.push(reqData);
         }
         renderFriendRequestsUI();
         if (inputEl) inputEl.value = "";
-        alert(`Friend request sent to ${targetEmail}.`);
+        toast(`Friend request sent to ${targetEmail}.`);
       } catch (err) {
         console.error("Error sending friend request:", err);
         localOutgoingRequests = localOutgoingRequests.filter(r => r.id !== reqId);
         renderFriendRequestsUI();
-        alert("Could not send request: " + (err && err.message ? err.message : String(err)));
+        toast("Could not send request: " + (err && err.message ? err.message : String(err)));
       }
     };
 
     window.approveFriendRequest = async function(reqId, requesterEmail, requesterName) {
-      if (!currentUser || !currentUser.email) return;
+      const pending = localIncomingRequests.find(r => r.id === reqId);
+      if (!requesterEmail && pending) {
+        requesterEmail = pending.fromEmail;
+        requesterName = pending.fromName;
+      }
+      if (!currentUser || !currentUser.email || !requesterEmail) return;
       const myEmail = currentUser.email.toLowerCase().trim();
       const myName = currentUser.displayName || myEmail.split("@")[0];
       const reqEmail = requesterEmail.toLowerCase().trim();
@@ -1669,9 +1725,9 @@
       addApprovedFriend(reqEmail, reqName);
       renderFriendRequestsUI();
 
-      if (db) {
+      if (fx) {
         try {
-          await db.collection("friend_requests").doc(reqId).update({
+          await fx.storeMod.updateDoc(fx.storeMod.doc(requestsCol(), reqId), {
             status: "accepted",
             acceptedByEmail: myEmail,
             acceptedByName: myName,
@@ -1682,17 +1738,17 @@
         }
       }
 
-      alert(`Approved! ${reqName} (${reqEmail}) is now in your Connected Friends list.`);
+      toast(`Approved! ${reqName} (${reqEmail}) is now in your Connected Friends list.`);
     };
 
     window.declineFriendRequest = async function(reqId) {
-      if (!confirm("Decline this friend request?")) return;
+      if (!(await askConfirm({ message: "Decline this friend request?" }))) return;
       localIncomingRequests = localIncomingRequests.filter(r => r.id !== reqId);
       renderFriendRequestsUI();
 
-      if (db) {
+      if (fx) {
         try {
-          await db.collection("friend_requests").doc(reqId).update({
+          await fx.storeMod.updateDoc(fx.storeMod.doc(requestsCol(), reqId), {
             status: "declined",
             declinedAt: Date.now()
           });
@@ -1703,13 +1759,13 @@
     };
 
     window.cancelOutgoingRequest = async function(reqId) {
-      if (!confirm("Cancel this outgoing friend request?")) return;
+      if (!(await askConfirm({ message: "Cancel this outgoing friend request?" }))) return;
       localOutgoingRequests = localOutgoingRequests.filter(r => r.id !== reqId);
       renderFriendRequestsUI();
 
-      if (db) {
+      if (fx) {
         try {
-          await db.collection("friend_requests").doc(reqId).delete();
+          await fx.storeMod.deleteDoc(fx.storeMod.doc(requestsCol(), reqId));
         } catch (err) {
           console.error("Error canceling request:", err);
         }
@@ -1721,7 +1777,7 @@
       const nm = name || (em ? em.split("@")[0] : "Friend");
       if (!appState.friends.some(f => (em && f.email && f.email.toLowerCase() === em) || (f.name === nm))) {
         appState.friends.push({
-          id: "f_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+          id: newId(),
           name: nm,
           email: em,
           approved: true,
@@ -1782,8 +1838,8 @@
                 </div>
               </div>
               <div class="request-actions">
-                <button type="button" class="btn btn-approve" onclick="approveFriendRequest('${req.id}', '${req.fromEmail}', '${req.fromName}')">✓ Approve</button>
-                <button type="button" class="btn btn-decline" onclick="declineFriendRequest('${req.id}')">✕ Decline</button>
+                <button type="button" class="btn btn-approve" data-call="approveFriendRequest" data-arg="${escapeHtml(req.id)}">✓ Approve</button>
+                <button type="button" class="btn btn-decline" data-call="declineFriendRequest" data-arg="${escapeHtml(req.id)}">✕ Decline</button>
               </div>
             `;
             incomingRequestsContainer.appendChild(div);
@@ -1804,7 +1860,7 @@
                 <span style="font-size:0.85rem; font-weight:600;">Request to: ${escapeHtml(req.toEmail)}</span>
                 <span class="request-pending-pill" style="margin-left:8px;">Pending</span>
               </div>
-              <button type="button" class="btn btn-secondary" onclick="cancelOutgoingRequest('${req.id}')" style="padding:4px 8px; font-size:0.75rem;">Cancel</button>
+              <button type="button" class="btn btn-secondary" data-call="cancelOutgoingRequest" data-arg="${escapeHtml(req.id)}" style="padding:4px 8px; font-size:0.75rem;">Cancel</button>
             `;
             outgoingRequestsContainer.appendChild(div);
           });
@@ -1870,10 +1926,10 @@
             </span>
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn btn-secondary" onclick="renameFriendPrompt('${f.id}')" style="padding:4px 8px; font-size:0.75rem;" title="Rename contact">✏️</button>
-            <button type="button" class="btn btn-secondary" onclick="quickStartDirectExpense('${f.name}')" style="padding:4px 8px; font-size:0.75rem;">Split</button>
-            ${Math.abs(friendBal) > 0.01 ? `<button type="button" class="btn btn-settle" onclick="quickStartDirectSettle('${f.name}', ${friendBal})" style="padding:4px 8px; font-size:0.75rem;">Settle</button>` : ''}
-            <button type="button" class="btn-delete" onclick="deleteFriendFromRoster('${f.id}')" title="Remove friend">&times;</button>
+            <button type="button" class="btn btn-secondary" data-call="renameFriendPrompt" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;" aria-label="Rename contact">✏️</button>
+            <button type="button" class="btn btn-secondary" data-call="quickStartDirectExpense" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;">Split</button>
+            ${Math.abs(friendBal) >= 1 ? `<button type="button" class="btn btn-settle" data-call="quickStartDirectSettle" data-arg="${escapeHtml(f.id)}" data-arg2="${friendBal}" style="padding:4px 8px; font-size:0.75rem;">Settle</button>` : ''}
+            <button type="button" class="btn-delete" data-call="deleteFriendFromRoster" data-arg="${escapeHtml(f.id)}" aria-label="Remove friend">&times;</button>
           </div>
         `;
         friendsListContainer.appendChild(div);
@@ -1897,7 +1953,7 @@
       btnAddFriendToGroup.addEventListener("click", () => {
         const selectedName = friendPickerSelect.value;
         if (!selectedName) {
-          alert("Please select a friend from the dropdown.");
+          toast("Please select a friend from the dropdown.");
           return;
         }
         addMemberToActiveGroup(selectedName);
@@ -1975,9 +2031,9 @@
     }
 
     if (btnRenameGroup) {
-      btnRenameGroup.addEventListener("click", () => {
+      btnRenameGroup.addEventListener("click", async () => {
         const g = getGroup();
-        const newName = prompt("Rename active group:", g.name);
+        const newName = await askPrompt({ message: "Rename active group:", defaultValue: g.name });
         if (newName && newName.trim()) {
           g.name = newName.trim();
           saveState();
@@ -1987,10 +2043,10 @@
     }
 
     if (btnDeleteGroup) {
-      btnDeleteGroup.addEventListener("click", () => {
+      btnDeleteGroup.addEventListener("click", async () => {
         const g = getGroup();
         if (!g.id) return;
-        if (confirm(`Delete group "${g.name}" and its expenses?`)) {
+        if (await askConfirm({ message: `Delete group "${g.name}" and its expenses?` })) {
           delete appState.groups[g.id];
           appState.activeGroupId = Object.keys(appState.groups)[0] || null;
           saveState();
@@ -2061,19 +2117,15 @@
 
     // Currency Switcher
     if (currencySelect) {
-      currencySelect.addEventListener("change", (e) => {
+      currencySelect.addEventListener("change", async (e) => {
         const g = getGroup();
         const previous = g.currency;
         let next = e.target.value;
-        if (e.target.value === "custom") {
-          const custom = prompt("Enter currency symbol/code (e.g. AUD, CAD, AED):", previous || "₹");
-          next = custom ? custom.trim() : previous;
-        }
         if (!next || next === previous) {
           renderAll();
           return;
         }
-        const ok = confirm(`Show amounts with ${next}? Existing numbers stay the same without conversion.`);
+        const ok = await askConfirm({ message: `Show amounts with ${next}? Existing numbers stay the same without conversion.` });
         if (!ok) {
           renderAll();
           return;
@@ -2082,6 +2134,18 @@
         saveState();
         renderAll();
       });
+      const customCurrency = document.getElementById("btn-custom-currency");
+      if (customCurrency) {
+        customCurrency.addEventListener("click", async () => {
+          const g = getGroup();
+          if (!g.id) return toast("Create a group first.");
+          const custom = await askPrompt({ message: "Enter a currency symbol or code, such as AUD or AED.", defaultValue: g.currency || "₹" });
+          if (!custom || !custom.trim() || custom.trim() === g.currency) return;
+          g.currency = custom.trim();
+          saveState();
+          renderAll();
+        });
+      }
     }
 
     // --- 1-on-1 Direct Splitting ---
@@ -2154,8 +2218,8 @@
       renderSplitBreakdown();
     };
 
-    window.promptQuickFriendForExpense = function() {
-      const name = prompt("Enter friend's name to split with:");
+    window.promptQuickFriendForExpense = async function() {
+      const name = await askPrompt({ message: "Enter friend's name to split with:" });
       if (!name || !name.trim()) return;
       const cleanName = name.trim();
       if (!appState.friends.some(f => f.name.toLowerCase() === cleanName.toLowerCase())) {
@@ -2169,7 +2233,9 @@
       handleDirectFriendChange();
     };
 
-    window.quickStartDirectExpense = function(friendName) {
+    window.quickStartDirectExpense = function(friendIdOrName) {
+      const friend = appState.friends.find(f => f.id === friendIdOrName);
+      const friendName = friend ? friend.name : friendIdOrName;
       navigateTo("add-expense");
       selectedDirectFriend = friendName;
       setExpenseScope("friend");
@@ -2178,7 +2244,10 @@
       handleDirectFriendChange();
     };
 
-    window.quickStartDirectSettle = function(friendName, currentBal) {
+    window.quickStartDirectSettle = async function(friendIdOrName, currentBal) {
+      const friend = appState.friends.find(f => f.id === friendIdOrName);
+      const friendName = friend ? friend.name : friendIdOrName;
+      currentBal = Number(currentBal);
       const cur = getGroup().currency;
       const absBal = Math.abs(currentBal);
       const isOwedToMe = currentBal > 0;
@@ -2190,10 +2259,10 @@
         ? `Record settlement: ${friendName} paid you ${formatMoney(absBal, cur)}?`
         : `Record settlement: You paid ${friendName} ${formatMoney(absBal, cur)}?`;
 
-      if (confirm(confirmMsg)) {
+      if (await askConfirm({ message: confirmMsg })) {
         if (!appState.directTransactions) appState.directTransactions = [];
         const newTx = {
-          id: Date.now(),
+          id: newId(),
           type: "settlement",
           scope: "direct",
           friend: friendName,
@@ -2235,7 +2304,7 @@
 
     function renderSplitBreakdown() {
       const g = getGroup();
-      const total = parseFloat(amountInput.value) || 0;
+      const total = rupeesToPaise(amountInput.value) || 0;
       const cur = g.currency;
       let html = "";
 
@@ -2305,31 +2374,31 @@
     }
 
     window.updateEqualPreview = function() {
-      const total = parseFloat(amountInput.value) || 0;
+      const total = rupeesToPaise(amountInput.value) || 0;
       const checked = Array.from(document.querySelectorAll(".split-equal-check:checked"));
       const cur = getGroup().currency;
-      const share = checked.length > 0 ? (total / checked.length) : 0;
+      const shares = checked.length ? allocateEqual(total, checked.map((node) => node.value)) : {};
 
       document.querySelectorAll(".equal-share").forEach(el => {
         const isChecked = checked.some(c => c.value === el.dataset.member);
-        el.textContent = formatMoney(isChecked ? share : 0, cur);
+        el.textContent = formatMoney(isChecked ? (shares[el.dataset.member] || 0) : 0, cur);
         el.style.color = isChecked ? "var(--text)" : "var(--muted)";
       });
     };
 
     window.updateExactPreview = function() {
-      const total = parseFloat(amountInput.value) || 0;
+      const total = rupeesToPaise(amountInput.value) || 0;
       const inputs = Array.from(document.querySelectorAll(".split-exact-input"));
       let sum = 0;
-      inputs.forEach(inp => sum += (parseFloat(inp.value) || 0));
+      inputs.forEach(inp => sum += (rupeesToPaise(inp.value) || 0));
       const msg = document.getElementById("exact-diff-msg");
       if (!msg) return;
       const diff = total - sum;
-      if (Math.abs(diff) < 0.01) {
-        msg.textContent = "✓ Amounts match total bill perfectly!";
+      if (Math.abs(diff) < 1) {
+        msg.textContent = "Amounts match the total.";
         msg.style.color = "var(--positive)";
       } else {
-        msg.textContent = `Remaining to allocate: ${getGroup().currency}${diff.toFixed(2)}`;
+        msg.textContent = `Remaining to allocate: ${formatMoney(diff, getGroup().currency)}`;
         msg.style.color = "var(--negative)";
       }
     };
@@ -2350,7 +2419,7 @@
     };
 
     window.updateRatioPreview = function() {
-      const total = parseFloat(amountInput && amountInput.value) || 0;
+      const total = rupeesToPaise(amountInput && amountInput.value) || 0;
       const inputs = Array.from(document.querySelectorAll(".split-ratio-input"));
       if (inputs.length === 0) return;
       const cur = getGroup().currency;
@@ -2358,7 +2427,7 @@
       inputs.forEach(inp => sumShares += (parseFloat(inp.value) || 0));
       inputs.forEach(inp => {
         const weight = parseFloat(inp.value) || 0;
-        const amt = sumShares > 0 ? (total * weight) / sumShares : 0;
+        const amt = sumShares > 0 ? Math.round((total * weight) / sumShares) : 0;
         document.querySelectorAll(".ratio-share").forEach(label => {
           if (label.dataset.member === inp.dataset.member) label.textContent = formatMoney(amt, cur);
         });
@@ -2376,35 +2445,27 @@
       if (currentSplitMode === "equal") {
         const checked = Array.from(document.querySelectorAll(".split-equal-check:checked")).map(cb => cb.value);
         if (checked.length === 0) return null;
-        const perPerson = total / checked.length;
-        checked.forEach(m => shares[m] = perPerson);
+        return allocateEqual(total, checked);
       } else if (currentSplitMode === "exact") {
         const inputs = Array.from(document.querySelectorAll(".split-exact-input"));
         let sum = 0;
         inputs.forEach(inp => {
-          const val = parseFloat(inp.value) || 0;
+          const val = rupeesToPaise(inp.value) || 0;
           shares[inp.dataset.member] = val;
           sum += val;
         });
-        if (Math.abs(sum - total) > 0.05) return null;
+        if (Math.abs(sum - total) > 5) return null;
       } else if (currentSplitMode === "percent") {
         const inputs = Array.from(document.querySelectorAll(".split-percent-input"));
-        let sumPct = 0;
-        inputs.forEach(inp => {
-          const pct = parseFloat(inp.value) || 0;
-          sumPct += pct;
-          shares[inp.dataset.member] = (total * pct) / 100;
-        });
+        const weights = inputs.map(inp => ({ id: inp.dataset.member, weight: parseFloat(inp.value) || 0 }));
+        const sumPct = weights.reduce((sum, item) => sum + item.weight, 0);
         if (Math.abs(sumPct - 100) > 0.5) return null;
+        return allocateWeighted(total, weights);
       } else if (currentSplitMode === "ratio") {
         const inputs = Array.from(document.querySelectorAll(".split-ratio-input"));
-        let sumShares = 0;
-        inputs.forEach(inp => sumShares += (parseFloat(inp.value) || 0));
-        if (sumShares <= 0) return null;
-        inputs.forEach(inp => {
-          const weight = parseFloat(inp.value) || 0;
-          shares[inp.dataset.member] = (total * weight) / sumShares;
-        });
+        const weights = inputs.map(inp => ({ id: inp.dataset.member, weight: parseFloat(inp.value) || 0 }));
+        if (weights.reduce((sum, item) => sum + item.weight, 0) <= 0) return null;
+        return allocateWeighted(total, weights);
       }
       return shares;
     }
@@ -2662,8 +2723,8 @@
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = function(evt) {
-          activeReceiptBase64 = evt.target.result;
+        reader.onload = async function(evt) {
+          activeReceiptBase64 = await compressImage(evt.target.result);
           if (receiptThumb) receiptThumb.src = activeReceiptBase64;
           if (receiptUploadPreview) receiptUploadPreview.style.display = "block";
           if (btnClearReceipt) btnClearReceipt.style.display = "inline-block";
@@ -2687,11 +2748,11 @@
 
     // Expense Form Submission
     if (expenseForm) {
-      expenseForm.addEventListener("submit", (e) => {
+      expenseForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const g = getGroup();
         const desc = descInput.value.trim();
-        const amount = parseFloat(amountInput.value);
+        const amount = rupeesToPaise(amountInput.value);
         const payer = payerSelect.value;
         const category = categorySelect.value || "Other";
 
@@ -2706,6 +2767,20 @@
         }
 
         const shares = computeSplitShares(amount);
+        const repeat = document.getElementById("recurring-select")?.value || "";
+        const editId = editingTxId.value || null;
+        const receiptId = editId || newId();
+        let receiptUrl = null;
+        let receiptPath = null;
+        if (fx && currentUser && activeReceiptBase64 && String(activeReceiptBase64).startsWith("data:") && currentExpenseScope === "group" && g.id) {
+          try {
+            const uploaded = await uploadReceipt(fx, `receipts/${g.id}/${receiptId}.jpg`, activeReceiptBase64);
+            receiptUrl = uploaded.url;
+            receiptPath = uploaded.path;
+          } catch (err) {
+            toast("The photo stays on this device. Cloud upload did not finish.");
+          }
+        }
         if (!shares) {
           showExpenseError("The split does not add up to the total. Adjust shares, then save again.");
           return;
@@ -2713,7 +2788,6 @@
 
         const dateISO = (expenseDateInput && expenseDateInput.value) || todayISO();
         const notes = expenseNotesInput ? expenseNotesInput.value.trim() : "";
-        const editId = editingTxId.value ? parseInt(editingTxId.value) : null;
 
         if (editId) {
           const found = findTransaction(editId);
@@ -2731,6 +2805,9 @@
             tx.scope = currentExpenseScope;
             tx.friend = currentExpenseScope === "friend" ? selectedDirectFriend : null;
             if (activeReceiptBase64) tx.receipt = activeReceiptBase64;
+            if (receiptUrl) tx.receiptUrl = receiptUrl;
+            if (receiptPath) tx.receiptPath = receiptPath;
+            tx.recurring = repeat ? { freq: repeat, nextDue: Date.now() + (repeat === "weekly" ? 7 : 30) * 86400000 } : tx.recurring || null;
 
             const targetIsDirect = currentExpenseScope === "friend";
             if (found.where === "group" && targetIsDirect) {
@@ -2745,7 +2822,7 @@
           cancelEditMode();
         } else {
           const newTx = {
-            id: Date.now(),
+            id: receiptId,
             type: "expense",
             scope: currentExpenseScope,
             friend: currentExpenseScope === "friend" ? selectedDirectFriend : null,
@@ -2759,7 +2836,11 @@
             dateISO: dateISO,
             notes: notes,
             timestamp: Date.now(),
-            receipt: activeReceiptBase64
+            updatedAt: Date.now(),
+            receipt: activeReceiptBase64,
+            receiptUrl,
+            receiptPath,
+            recurring: repeat ? { freq: repeat, nextDue: Date.now() + (repeat === "weekly" ? 7 : 30) * 86400000 } : null
           };
 
           if (currentExpenseScope === "friend") {
@@ -2807,13 +2888,13 @@
       const shares = tx.shares || {};
       if (currentSplitMode === "equal") {
         document.querySelectorAll(".split-equal-check").forEach(cb => {
-          cb.checked = (Number(shares[cb.value]) || 0) > 0.001;
+          cb.checked = (Number(shares[cb.value]) || 0) >= 1;
         });
         updateEqualPreview();
       } else if (currentSplitMode === "exact") {
         document.querySelectorAll(".split-exact-input").forEach(inp => {
           const share = Number(shares[inp.dataset.member]) || 0;
-          inp.value = share ? share.toFixed(2) : "";
+          inp.value = share ? paiseToInput(share) : "";
         });
         updateExactPreview();
       } else if (currentSplitMode === "percent") {
@@ -2856,7 +2937,7 @@
       if (btnCancelEdit) btnCancelEdit.style.display = "inline-block";
 
       if (descInput) descInput.value = tx.desc;
-      if (amountInput) amountInput.value = tx.amount;
+      if (amountInput) amountInput.value = paiseToInput(tx.amount);
       if (expenseDateInput) expenseDateInput.value = tx.dateISO || todayISO();
       if (expenseNotesInput) expenseNotesInput.value = tx.notes || "";
       if (payerSelect) payerSelect.value = tx.payer;
@@ -2877,10 +2958,10 @@
       }
     };
 
-    window.deleteTransaction = function(id) {
+    window.deleteTransaction = async function(id) {
       const found = findTransaction(id);
       if (!found) return;
-      if (!confirm("Move this record to Recently deleted? You can restore it later.")) return;
+      if (!(await askConfirm({ message: "Move this record to Recently deleted? You can restore it later." }))) return;
       const deletedRecord = {
         id: `deleted-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         transaction: JSON.parse(JSON.stringify(found.tx)),
@@ -2904,6 +2985,10 @@
       }
       saveState();
       closeDetailModal();
+      toast("Record moved to Recently deleted", {
+        actionLabel: "Undo",
+        onAction: () => restoreDeletedTransaction(deletedRecord.id, deletedRecord.location, deletedRecord.groupId)
+      });
       renderAll();
     };
 
@@ -2911,7 +2996,7 @@
       let record;
       if (location === "group") {
         const group = appState.groups[groupId];
-        if (!group) return alert("The original group is not available on this device.");
+        if (!group) return toast("The original group is not available on this device.");
         appState.activeGroupId = groupId;
         if (typeof listenToCloudGroup === "function") listenToCloudGroup(groupId);
         group.deletedTransactions = group.deletedTransactions || [];
@@ -2950,25 +3035,56 @@
       });
     }
 
+    const btnUpi = document.getElementById("btn-upi");
+    if (btnUpi) {
+      btnUpi.addEventListener("click", async () => {
+        const pa = await askPrompt({ title: "Pay with UPI", message: "UPI ID of the person being paid", placeholder: "name@okbank" });
+        if (!pa || !pa.includes("@")) return toast("Enter a UPI ID such as name@okbank.");
+        const amount = document.getElementById("settle-amount")?.value || "0.00";
+        const href = `upi://pay?${new URLSearchParams({ pa: pa.trim(), pn: "FairShare", am: amount, cu: "INR", tn: "FairShare settlement" })}`;
+        const qrMod = await import("./js/vendor/qrcode.js");
+        const qrcode = qrMod.default;
+        qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
+        const qr = qrcode(0, "M");
+        qr.addData(href);
+        qr.make();
+        let modal = document.getElementById("upi-modal");
+        if (!modal) {
+          modal = document.createElement("div");
+          modal.id = "upi-modal";
+          modal.className = "modal-backdrop";
+          modal.innerHTML = `<div class="modal-content" style="max-width:420px;text-align:center;"><h3>Pay with UPI</h3><p id="upi-summary"></p><img id="upi-qr" alt="UPI payment QR code" width="220" height="220"><p><a id="upi-link" class="btn btn-secondary">Open in a UPI app</a></p><button type="button" class="btn btn-primary" id="upi-close">Close</button></div>`;
+          document.body.appendChild(modal);
+          modal.querySelector("#upi-close").addEventListener("click", () => { modal.classList.remove("active"); modal.hidden = true; });
+        }
+        modal.querySelector("#upi-summary").textContent = `${amount} INR to ${pa.trim()}`;
+        modal.querySelector("#upi-qr").src = qr.createDataURL(5, 2);
+        const link = modal.querySelector("#upi-link");
+        link.href = href;
+        modal.hidden = false;
+        modal.classList.add("active");
+      });
+    }
+
     if (settleForm) {
       settleForm.addEventListener("submit", (e) => {
         e.preventDefault();
         const g = getGroup();
         const payer = settlePayer.value;
         const receiver = settleReceiver.value;
-        const amount = parseFloat(settleAmount.value);
+        const amount = rupeesToPaise(settleAmount.value);
 
         if (!payer || !receiver || isNaN(amount) || amount <= 0) {
-          alert("Please specify valid settlement details.");
+          toast("Please specify valid settlement details.");
           return;
         }
         if (payer === receiver) {
-          alert("Payer and receiver cannot be the same person.");
+          toast("Payer and receiver cannot be the same person.");
           return;
         }
 
         const newTx = {
-          id: Date.now(),
+          id: newId(),
           type: "settlement",
           desc: `${payer} paid ${receiver}`,
           payer: payer,
@@ -3332,7 +3448,7 @@
         </div>
         ${listHtml}
         <div style="display:flex; justify-content:flex-end; margin-top:14px;">
-          <button type="button" class="btn btn-secondary" onclick="closeMemberModal()">Close</button>
+          <button type="button" class="btn btn-secondary" data-call="closeMemberModal">Close</button>
         </div>
       `;
       modal.classList.add("active");
@@ -3347,7 +3463,7 @@
       if (settleUpBox) settleUpBox.style.display = "block";
       if (settlePayer) settlePayer.value = from;
       if (settleReceiver) settleReceiver.value = to;
-      if (settleAmount) settleAmount.value = amount.toFixed(2);
+      if (settleAmount) settleAmount.value = paiseToInput(amount);
       if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
       settleUpBox.scrollIntoView({ behavior: "smooth" });
     };
@@ -3357,16 +3473,16 @@
       const g = getGroup();
       const cur = g.currency;
       const catTotals = {};
-
       const expenseSources = [
-        ...g.transactions,
+        ...(g.transactions || []),
         ...(appState.directTransactions || [])
       ];
       expenseSources.forEach(t => {
-        if (t.type === "expense") {
-          const cat = t.category || "Other";
-          catTotals[cat] = (catTotals[cat] || 0) + t.amount;
-        }
+        if (t.type !== "expense") return;
+        let key = t.category || "Other";
+        if (analyticsView === "person") key = t.payer || "Someone";
+        if (analyticsView === "time") key = t.dateISO || t.date || "Undated";
+        catTotals[key] = (catTotals[key] || 0) + (Number(t.amount) || 0);
       });
 
       const total = Object.values(catTotals).reduce((a, b) => a + b, 0);
@@ -3387,14 +3503,18 @@
 
       let grad = [];
       let curAngle = 0;
-      entries.forEach(([cat, val]) => {
-        const color = CATEGORY_COLORS[cat] || "#657267";
-        const pct = (val / total) * 360;
-        grad.push(`${color} ${curAngle}deg ${curAngle + pct}deg`);
-        curAngle += pct;
+      entries.forEach(([cat, val], index) => {
+        const color = CATEGORY_COLORS[cat] || "#3e4a42";
+        const sweep = (val / total) * 360;
+        const end = index === entries.length - 1 ? 360 : curAngle + sweep;
+        grad.push(`${color} ${curAngle}deg ${end}deg`);
+        curAngle = end;
       });
       if (chartVisual) {
-        chartVisual.innerHTML = `<div class="chart-donut" style="background: conic-gradient(${grad.join(", ")});"></div>`;
+        const background = entries.length === 1
+          ? (CATEGORY_COLORS[entries[0][0]] || "#3e4a42")
+          : `conic-gradient(${grad.join(", ")})`;
+        chartVisual.innerHTML = `<div class="chart-donut" style="background:${background};" role="img"></div>`;
       }
 
       if (chartLegend) {
@@ -3640,14 +3760,14 @@
     }
 
     if (btnClearAll) {
-      btnClearAll.addEventListener("click", () => {
+      btnClearAll.addEventListener("click", async () => {
         const g = getGroup();
         const directCount = (appState.directTransactions || []).length;
         if (g.transactions.length === 0 && directCount === 0) {
-          alert("No expenses or settlements to clear.");
+          toast("No expenses or settlements to clear.");
           return;
         }
-        const ok = confirm(`Clear every expense and settlement in "${g.name}", plus all 1-on-1 records on this device?`);
+        const ok = await askConfirm({ message: `Clear every expense and settlement in "${g.name}", plus all 1-on-1 records on this device?` });
         if (!ok) return;
         const deletedAt = Date.now();
         g.deletedTransactions = g.deletedTransactions || [];
@@ -3711,8 +3831,8 @@
             </div>
           </div>
           <div style="display:flex; justify-content:space-between; gap:8px;">
-            <button type="button" class="btn btn-secondary" onclick="deleteTransaction(${tx.id})" style="color:var(--danger); border-color:#fca5a5;">Delete</button>
-            <button type="button" class="btn btn-secondary" onclick="closeDetailModal()">Close</button>
+            <button type="button" class="btn btn-secondary" data-tx-action="delete" style="color:var(--danger); border-color:#fca5a5;">Delete</button>
+            <button type="button" class="btn btn-secondary" data-tx-action="close">Close</button>
           </div>
         `;
       } else {
@@ -3743,7 +3863,7 @@
             <div style="margin-bottom: 16px;">
               <h4 style="margin: 0 0 6px 0; font-size:0.9rem; color:var(--text);">Receipt photo:</h4>
               <div class="receipt-preview-box">
-                <img src="${tx.receipt}" alt="Bill Receipt" onclick="window.open('${tx.receipt}', '_blank')">
+                <img data-receipt="1" alt="Bill receipt">
               </div>
             </div>
           `;
@@ -3781,16 +3901,30 @@
           </div>
 
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; gap:8px;">
-            <button type="button" class="btn btn-secondary" onclick="deleteTransaction(${tx.id})" style="color:var(--danger); border-color:#fca5a5;">Delete</button>
+            <button type="button" class="btn btn-secondary" data-tx-action="delete" style="color:var(--danger); border-color:#fca5a5;">Delete</button>
             <div style="display:flex; gap:8px;">
-              <button type="button" class="btn btn-secondary" onclick="startEditTransaction(${tx.id})">Edit</button>
-              <button type="button" class="btn btn-secondary" onclick="closeDetailModal()">Close</button>
+              <button type="button" class="btn btn-secondary" data-tx-action="edit">Edit</button>
+              <button type="button" class="btn btn-secondary" data-tx-action="close">Close</button>
             </div>
           </div>
         `;
       }
 
       modalBody.innerHTML = html;
+      modalBody.querySelectorAll("[data-tx-action]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const action = button.dataset.txAction;
+          if (action === "delete") deleteTransaction(tx.id);
+          else if (action === "edit") startEditTransaction(tx.id);
+          else closeDetailModal();
+        });
+      });
+      const receiptImg = modalBody.querySelector("[data-receipt]");
+      const receiptSrc = safeImageSrc(tx.receiptUrl || tx.receipt);
+      if (receiptImg && receiptSrc) {
+        receiptImg.src = receiptSrc;
+        receiptImg.addEventListener("click", () => window.open(receiptSrc, "_blank", "noopener"));
+      }
       detailModal.classList.add("active");
     };
 
@@ -3820,7 +3954,7 @@
           ...(appState.directTransactions || []).map(t => ({ ...t, scopeLabel: `1-on-1: ${t.friend || ""}` }))
         ];
         if (rows.length === 0) {
-          alert("No transactions recorded yet to export.");
+          toast("No transactions recorded yet to export.");
           return;
         }
 
@@ -3919,8 +4053,8 @@
             </span>
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn btn-secondary" onclick="quickStartDirectExpense('${f.name}')" style="padding:6px 10px; font-size:0.78rem;">Split bill</button>
-            ${Math.abs(bal) >= 0.01 ? `<button type="button" class="btn btn-settle" onclick="quickStartDirectSettle('${f.name}', ${bal})" style="padding:6px 10px; font-size:0.78rem;">Settle</button>` : ''}
+            <button type="button" class="btn btn-secondary" data-call="quickStartDirectExpense" data-arg="${escapeHtml(f.id)}" style="padding:6px 10px; font-size:0.78rem;">Split bill</button>
+            ${Math.abs(bal) >= 1 ? `<button type="button" class="btn btn-settle" data-call="quickStartDirectSettle" data-arg="${escapeHtml(f.id)}" data-arg2="${bal}" style="padding:6px 10px; font-size:0.78rem;">Settle</button>` : ''}
           </div>
         `;
         container.appendChild(row);
@@ -4018,12 +4152,25 @@
       renderGroupSelector();
 
       const g = getGroup();
-      if (currencySelect) {
-        if (["₹", "$", "€", "£", "¥"].includes(g.currency)) {
-          currencySelect.value = g.currency;
-        } else {
-          currencySelect.value = "custom";
+      const groups = Object.values(appState.groups);
+      const chooseHint = document.getElementById("group-choose-hint");
+      const emptyHint = document.getElementById("group-empty-hint");
+      const manageCard = document.getElementById("group-management-card");
+      if (chooseHint) chooseHint.hidden = !(groups.length && !g.id);
+      if (emptyHint) emptyHint.hidden = groups.length > 0;
+      if (manageCard) manageCard.hidden = !g.id;
+      if (currencySelect && document.activeElement !== currencySelect) {
+        const known = ["₹", "$", "€", "£", "¥"];
+        [...currencySelect.options].forEach((option) => { if (option.dataset.extra === "1") option.remove(); });
+        const symbol = g.currency && g.currency !== "INR " ? g.currency : "₹";
+        if (symbol && !known.includes(symbol)) {
+          const option = document.createElement("option");
+          option.value = symbol;
+          option.textContent = symbol;
+          option.dataset.extra = "1";
+          currencySelect.appendChild(option);
         }
+        currencySelect.value = known.includes(symbol) || [...currencySelect.options].some((option) => option.value === symbol) ? symbol : "₹";
       }
       currencyLabels.forEach(el => el.textContent = g.currency);
 
@@ -4035,37 +4182,19 @@
       renderFriendsRoster();
     }
 
-    // --- Firebase Auth & Firestore Sync ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyByVkmNFtjMVB9esryWD5tx9SbHw1oAAVo",
-      authDomain: "fairshare-app-ba160.firebaseapp.com",
-      projectId: "fairshare-app-ba160",
-      storageBucket: "fairshare-app-ba160.firebasestorage.app",
-      messagingSenderId: "279219217084",
-      appId: "1:279219217084:web:9e473b6997573cf0f0a6b9",
-      measurementId: "G-ZHDZ28WDSL"
-    };
-
-    let db = null;
-    let auth = null;
-    let currentUser = null;
+    // --- Firebase Auth & Firestore Sync (loaded only for sign-in) ---
     let unsubscribeGroupListener = null;
     let unsubscribeDirectListener = null;
 
-    if (typeof firebase !== "undefined") {
-      try {
-        firebase.initializeApp(firebaseConfig);
-        auth = firebase.auth();
-        db = firebase.firestore();
-
-        auth.onAuthStateChanged((user) => {
-          currentUser = user;
-          updateAuthUI(user);
-          if (user) syncUserCloud(user);
-        });
-      } catch (err) {
-        console.warn("Firebase offline mode:", err);
-      }
+    async function ensureCloud() {
+      if (fx) return fx;
+      fx = await loadFirebase(firebaseConfig);
+      watchAuth(fx, (user) => {
+        currentUser = user;
+        updateAuthUI(user);
+        if (user) syncUserCloud(user);
+      });
+      return fx;
     }
 
     function updateAuthUI(user) {
@@ -4083,31 +4212,48 @@
           myDisplayAccount.textContent = "Not signed in (Operating offline & local)";
         }
       }
+      document.querySelectorAll("[data-needs-auth]").forEach((node) => {
+        node.disabled = !user;
+        node.querySelectorAll(".auth-pill").forEach((pill) => { pill.hidden = Boolean(user); });
+      });
+      const receiptPill = document.getElementById("receipt-auth-pill");
+      if (receiptPill) receiptPill.hidden = Boolean(user);
+      const receiptNote = document.getElementById("receipt-auth-note");
+      if (receiptNote) receiptNote.hidden = Boolean(user);
+      const friendsStack = document.getElementById("friends-stack");
+      if (friendsStack) friendsStack.classList.toggle("signed-out", !user);
     }
 
-    window.handleAuthClick = function() {
-      if (!auth) {
-        alert("Firebase is unreachable. Operating offline.");
+    window.handleAuthClick = async function() {
+      try {
+        await ensureCloud();
+      } catch (err) {
+        toast("Google is unreachable. FairShare still works on this device.");
         return;
       }
       if (currentUser) {
-        if (confirm(`Sign out of Google account (${currentUser.email})?`)) {
-          auth.signOut().then(() => {
-            currentUser = null;
-            updateAuthUI(null);
-          });
-        }
+        const ok = await askConfirm({ title: "Sign out", message: `Sign out of ${currentUser.email}? Local data stays on this device.`, confirmLabel: "Sign out" });
+        if (!ok) return;
+        setCloudIntent(false);
+        await signOutGoogle(fx);
+        currentUser = null;
+        updateAuthUI(null);
       } else {
-        const provider = new firebase.auth.GoogleAuthProvider();
-        auth.signInWithPopup(provider).catch((error) => {
+        setCloudIntent(true);
+        try {
+          await signInGoogle(fx);
+        } catch (error) {
           console.error("Auth error:", error);
-          alert("Sign-in note: " + error.message);
-        });
+          const code = error?.code || "";
+          if (code === "auth/unauthorized-domain") {
+            toast("Add this site under Firebase Authentication → Authorized domains, then try again.");
+          } else toast(error?.message || "Google sign-in did not finish.");
+        }
       }
     };
 
     function syncUserCloud(user) {
-      if (!db || !user) return;
+      if (!fx || !user) return;
       migrateDefaultGroupId();
       const myEmail = (user.email || "").toLowerCase().trim();
       const myEmailNorm = normalizeEmail(myEmail);
@@ -4120,9 +4266,7 @@
 
       // 1. Listen for incoming friend requests
       if (unsubIncomingRequests) unsubIncomingRequests();
-      unsubIncomingRequests = db.collection("friend_requests")
-        .where("toEmail", "==", myEmail)
-        .onSnapshot((snapshot) => {
+      unsubIncomingRequests = watchQuery(fx, "friend_requests", "toEmail", "==", myEmail, (snapshot) => {
           localIncomingRequests = [];
           snapshot.forEach(doc => {
             const data = doc.data();
@@ -4136,9 +4280,7 @@
 
       // 2. Listen for outgoing friend requests
       if (unsubOutgoingRequests) unsubOutgoingRequests();
-      unsubOutgoingRequests = db.collection("friend_requests")
-        .where("fromEmail", "==", myEmail)
-        .onSnapshot((snapshot) => {
+      unsubOutgoingRequests = watchQuery(fx, "friend_requests", "fromEmail", "==", myEmail, (snapshot) => {
           localOutgoingRequests = [];
           snapshot.forEach(doc => {
             const data = doc.data();
@@ -4161,16 +4303,17 @@
     }
 
     function listenToCloudGroup(groupId) {
-      if (!db || !currentUser) return;
+      if (!fx || !currentUser) return;
       if (unsubscribeGroupListener) unsubscribeGroupListener();
 
-      const docRef = db.collection("groups").doc(groupId);
-      unsubscribeGroupListener = docRef.onSnapshot((doc) => {
-        if (doc.exists) {
-          const cloudData = doc.data();
+      unsubscribeGroupListener = watchDoc(fx, "groups", groupId, (docSnap) => {
+        if (docSnap.exists()) {
+          const cloudData = docSnap.data();
           if (cloudData.transactions) {
             const g = getGroup();
-            g.transactions = cloudData.transactions;
+            const remote = cloudData.schemaVersion === 9 ? cloudData : migrateMoney({ schemaVersion: 0, groups: { [g.id]: cloudData }, directTransactions: [] }).groups[g.id];
+            const merged = mergeById(g.transactions, remote.transactions || cloudData.transactions);
+            if (JSON.stringify(merged) !== JSON.stringify(g.transactions)) g.transactions = merged;
             if (Array.isArray(cloudData.deletedTransactions)) g.deletedTransactions = cloudData.deletedTransactions;
             if (cloudData.members) g.members = cloudData.members;
             if (cloudData.memberLinks) g.memberLinks = cloudData.memberLinks;
@@ -4179,26 +4322,14 @@
             renderAll();
           }
         } else {
-          const g = getGroup();
-          docRef.set({
-            id: g.id,
-            name: g.name,
-            currency: g.currency,
-            members: g.members,
-            memberLinks: { [getMyGroupMemberName(g)]: normalizeEmail(currentUser.email) },
-            memberEmails: [normalizeEmail(currentUser.email)],
-            transactions: g.transactions,
-            deletedTransactions: g.deletedTransactions || [],
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedBy: currentUser.email
-          }, { merge: true }).catch(() => {});
+          saveState();
         }
       }, (err) => console.warn("Firestore group note:", err));
     }
 
     // Bilateral 1-on-1 Synchronization via direct_pairs collection
     function syncDirectPairExpense(friendName) {
-      if (!db || !currentUser) return;
+      if (!fx || !currentUser) return;
       const friend = appState.friends.find(f => f.name === friendName);
       if (!friend || !friend.email) return;
 
@@ -4209,23 +4340,22 @@
       const pairExpenses = (appState.directTransactions || []).filter(t => t.friend === friendName);
       const pairDeleted = (appState.deletedTransactions || []).filter(item => item.location === "direct" && item.transaction?.friend === friendName);
 
-      db.collection("direct_pairs").doc(pairId).set({
+      setMerge(fx, "direct_pairs", pairId, {
         pairId: pairId,
+        schemaVersion: 9,
         participants: [myEmail, friendEmail],
-        transactions: pairExpenses,
+        transactions: stripReceiptBytes(pairExpenses),
         deletedTransactions: pairDeleted,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(fx),
         updatedBy: myEmail
-      }, { merge: true }).catch((err) => console.warn("Direct pair sync note:", err));
+      }).catch((err) => console.warn("Direct pair sync note:", err));
     }
 
     function listenToDirectPairs(myEmailNorm) {
-      if (!db || !currentUser) return;
+      if (!fx || !currentUser) return;
       if (unsubscribeDirectListener) unsubscribeDirectListener();
 
-      unsubscribeDirectListener = db.collection("direct_pairs")
-        .where("participants", "array-contains", myEmailNorm)
-        .onSnapshot((snapshot) => {
+      unsubscribeDirectListener = watchQuery(fx, "direct_pairs", "participants", "array-contains", myEmailNorm, (snapshot) => {
           snapshot.forEach(doc => {
             const d = doc.data();
             if (d.transactions && Array.isArray(d.transactions)) {
@@ -4311,7 +4441,7 @@
       if (modal) modal.classList.remove("active");
 
       window.history.replaceState({}, document.title, window.location.pathname + "#friends");
-      alert(currentUser
+      toast(currentUser
         ? `Joined "${name}". Expenses sync with ${by} while you stay signed in.`
         : `Joined "${name}" on this device. Sign in with Google to sync live.`);
     };
@@ -4322,24 +4452,66 @@
       window.history.replaceState({}, document.title, window.location.pathname + "#friends");
     };
 
-    window.shareGroupInvite = function() {
+    window.shareGroupInvite = async function() {
       const g = getGroup();
       const myName = myInviteName();
       const myEmail = currentUser ? currentUser.email : "";
       const inviteUrl = `${window.location.origin}${window.location.pathname}?joinGroup=${encodeURIComponent(g.id)}&groupName=${encodeURIComponent(g.name)}&by=${encodeURIComponent(myName)}&byEmail=${encodeURIComponent(myEmail)}#friends`;
-      navigator.clipboard.writeText(inviteUrl).then(() => {
-        alert(`Group invite link copied.\n\nSend it to anyone you want in "${g.name}".`);
-      }).catch(() => {
-        prompt("Copy group invite link:", inviteUrl);
-      });
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+        toast(`Group invite link copied. Send it to anyone you want in "${g.name}".`);
+      } catch {
+        await askPrompt({ message: "Copy group invite link:", defaultValue: inviteUrl });
+      }
     };
+
+    function materializeRecurring() {
+      const now = Date.now();
+      const advance = (stamp, freq) => {
+        const date = new Date(stamp);
+        if (freq === "weekly") date.setDate(date.getDate() + 7);
+        else date.setMonth(date.getMonth() + 1);
+        return date.getTime();
+      };
+      const walk = (list) => {
+        if (!Array.isArray(list)) return;
+        for (const tx of [...list]) {
+          if (tx.type !== "expense" || !tx.recurring?.nextDue) continue;
+          let guard = 0;
+          while (tx.recurring.nextDue <= now && guard < 12) {
+            const copy = { ...tx, id: newId(), timestamp: tx.recurring.nextDue, updatedAt: now, recurring: null };
+            delete copy.receipt;
+            list.unshift(copy);
+            tx.recurring.nextDue = advance(tx.recurring.nextDue, tx.recurring.freq || "monthly");
+            guard += 1;
+          }
+        }
+      };
+      Object.values(appState.groups || {}).forEach((group) => walk(group.transactions));
+      walk(appState.directTransactions);
+    }
 
     // --- Startup Initialization ---
     organizeNavigationPages();
     loadSavedState();
+    materializeRecurring();
     migrateDefaultGroupId();
     if (expenseDateInput && !expenseDateInput.value) expenseDateInput.value = todayISO();
+    updateAuthUI(null);
     renderAll();
+    document.querySelectorAll("[data-analytics-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        analyticsView = button.dataset.analyticsView;
+        document.querySelectorAll("[data-analytics-view]").forEach((item) => item.classList.toggle("active", item === button));
+        const styleTabs = document.getElementById("chart-style-tabs");
+        if (styleTabs) styleTabs.hidden = analyticsView === "time";
+        renderCategoryChart();
+      });
+    });
+    if (cloudIntent()) ensureCloud().catch(() => toast("Google is unreachable. FairShare still works on this device."));
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+    }
 
     const initialPage = window.location.hash.replace("#", "") || "home";
     navigateTo(initialPage);

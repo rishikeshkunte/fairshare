@@ -1,41 +1,63 @@
-// sw.js - Service Worker for FairShare offline caching
-const CACHE_NAME = "fairshare-v18";
-const ASSETS_TO_CACHE = [
+// Bump CACHE when shipped assets change so old caches are deleted on activate.
+const CACHE = "fairshare-v19";
+const ASSETS = [
   "./",
   "./index.html",
   "./fairshare.css",
-  "./fairshare_logo.jpg",
-  "./manifest.json"
+  "./manifest.json",
+  "./js/money.js",
+  "./js/ui.js",
+  "./js/receipts.js",
+  "./js/firebase.js",
+  "./js/vendor/qrcode.js",
+  "./icons/favicon-32.png",
+  "./icons/apple-touch-icon.png",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/icon-maskable-192.png",
+  "./icons/icon-maskable-512.png"
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      await Promise.all(ASSETS_TO_CACHE.map((url) => cache.add(url).catch((err) => {
-        console.warn("Offline caching note:", url, err);
-      })));
-    })
-  );
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS).catch(() => {})));
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    })
-  );
+  event.waitUntil(caches.keys().then((keys) => Promise.all(
+    keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))
+  )));
   self.clients.claim();
 });
 
+function isHtml(request, url) {
+  return request.mode === "navigate" || url.pathname.endsWith("/") || url.pathname.endsWith(".html");
+}
+
 self.addEventListener("fetch", (event) => {
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      return cachedResponse || fetch(event.request).catch(() => {
-        return caches.match("./index.html");
-      });
-    })
-  );
+  const request = event.request;
+  if (request.method !== "GET") return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+  event.respondWith(isHtml(request, url) ? networkFirst(request) : cacheFirst(request));
 });
+
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE);
+  try {
+    const fresh = await fetch(request);
+    if (fresh && fresh.ok) cache.put("./index.html", fresh.clone());
+    return fresh;
+  } catch {
+    return (await cache.match(request)) || (await cache.match("./index.html")) || Response.error();
+  }
+}
+
+async function cacheFirst(request) {
+  const cache = await caches.open(CACHE);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const fresh = await fetch(request);
+  if (fresh && fresh.ok) cache.put(request, fresh.clone());
+  return fresh;
+}
