@@ -1185,28 +1185,55 @@
       ["fairshare_state_v6", "fairshare_state_v7", "fairshare_state_v8"].forEach((key) => localStorage.removeItem(key));
     }
 
-    function saveState() {
-      // Cloud sync active group
-      if (fx && currentUser && appState.groups[appState.activeGroupId]) {
-        const g = getGroup();
-        const myEmail = (currentUser.email || "").toLowerCase().trim();
-        const myEmailNorm = normalizeEmail(myEmail);
-        const memberLinks = { ...(g.memberLinks || {}) };
-        memberLinks[getMyGroupMemberName(g)] = myEmail;
-        
-        // Firestore rules compare against the exact lower-case Google email.
-        // Keep normalized aliases too for local friend matching and legacy data.
-        const memberEmails = [myEmail, myEmailNorm];
-        (appState.friends || []).forEach(f => {
-          if (f.email && g.members.includes(f.name)) {
-            const friendEmail = (f.email || "").toLowerCase().trim();
-            memberEmails.push(friendEmail, normalizeEmail(friendEmail));
-            memberLinks[f.name] = friendEmail;
-          }
-        });
-        g.memberLinks = memberLinks;
+    function mergeTransactionsWithDeletes(localTransactions, cloudTransactions, localDeleted, cloudDeleted) {
+      const deletedById = new Map();
+      [...(cloudDeleted || []), ...(localDeleted || [])].forEach(item => {
+        if (!item || item.id == null) return;
+        const previous = deletedById.get(String(item.id));
+        if (!previous || (Number(item.deletedAt) || 0) >= (Number(previous.deletedAt) || 0)) {
+          deletedById.set(String(item.id), item);
+        }
+      });
+      const deletedTransactionIds = new Set([...deletedById.values()]
+        .map(item => item.transaction?.id)
+        .filter(id => id != null)
+        .map(String));
+      const transactions = mergeById(localTransactions || [], cloudTransactions || [])
+        .filter(tx => !deletedTransactionIds.has(String(tx.id)));
+      return { transactions, deletedTransactions: [...deletedById.values()] };
+    }
 
-        setMerge(fx, "groups", g.id, {
+    function saveState() {
+      // Persist locally first, then merge cloud data transactionally so concurrent
+      // writes from connected users do not replace each other's expenses.
+      localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+      if (!(fx && currentUser && appState.groups[appState.activeGroupId])) return;
+
+      const g = getGroup();
+      const myEmail = (currentUser.email || "").toLowerCase().trim();
+      const myEmailNorm = normalizeEmail(myEmail);
+      const memberLinks = { ...(g.memberLinks || {}) };
+      memberLinks[getMyGroupMemberName(g)] = myEmail;
+      const memberEmails = [myEmail, myEmailNorm];
+      (appState.friends || []).forEach(friend => {
+        if (!friend.email || !g.members.includes(friend.name)) return;
+        const friendEmail = (friend.email || "").toLowerCase().trim();
+        memberEmails.push(friendEmail, normalizeEmail(friendEmail));
+        memberLinks[friend.name] = friendEmail;
+      });
+      g.memberLinks = memberLinks;
+
+      const groupRef = fx.storeMod.doc(fx.db, "groups", g.id);
+      fx.storeMod.runTransaction(fx.db, async transaction => {
+        const snapshot = await transaction.get(groupRef);
+        const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
+        const merged = mergeTransactionsWithDeletes(
+          stripReceiptBytes(g.transactions),
+          cloudData.transactions || [],
+          g.deletedTransactions || [],
+          cloudData.deletedTransactions || []
+        );
+        transaction.set(groupRef, {
           id: g.id,
           schemaVersion: 9,
           name: g.name,
@@ -1215,13 +1242,18 @@
           simplifyDebts: g.simplifyDebts !== false,
           memberLinks,
           memberEmails: Array.from(new Set(memberEmails)),
-          transactions: stripReceiptBytes(g.transactions),
-          deletedTransactions: g.deletedTransactions || [],
+          transactions: merged.transactions,
+          deletedTransactions: merged.deletedTransactions,
           updatedAt: serverTimestamp(fx),
-          updatedBy: myEmailNorm
-        }).catch((err) => console.warn("Cloud sync note:", err));
-      }
-      localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+          updatedBy: myEmail
+        }, { merge: true });
+        return merged;
+      }).then(merged => {
+        g.transactions = merged.transactions;
+        g.deletedTransactions = merged.deletedTransactions;
+        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+        if (appState.activeGroupId === g.id) renderAll();
+      }).catch(err => console.warn("Cloud sync note:", err));
     }
 
     // --- DOM Elements ---
@@ -4379,14 +4411,23 @@
               members: Array.isArray(cloudData.members) ? cloudData.members : ["You"],
               memberLinks: cloudData.memberLinks || {},
               simplifyDebts: cloudData.simplifyDebts !== false,
-              transactions: mergeById([], migrated.transactions || []),
+              transactions: mergeTransactionsWithDeletes([], migrated.transactions || [], [], cloudData.deletedTransactions || []).transactions,
               deletedTransactions: Array.isArray(cloudData.deletedTransactions) ? cloudData.deletedTransactions : []
             };
             changed = true;
           } else {
-            const mergedTransactions = mergeById(localGroup.transactions || [], migrated.transactions || []);
-            if (JSON.stringify(mergedTransactions) !== JSON.stringify(localGroup.transactions || [])) {
-              localGroup.transactions = mergedTransactions;
+            const merged = mergeTransactionsWithDeletes(
+              localGroup.transactions || [],
+              migrated.transactions || [],
+              localGroup.deletedTransactions || [],
+              cloudData.deletedTransactions || []
+            );
+            if (JSON.stringify(merged.transactions) !== JSON.stringify(localGroup.transactions || [])) {
+              localGroup.transactions = merged.transactions;
+              changed = true;
+            }
+            if (JSON.stringify(merged.deletedTransactions) !== JSON.stringify(localGroup.deletedTransactions || [])) {
+              localGroup.deletedTransactions = merged.deletedTransactions;
               changed = true;
             }
             if (cloudData.name && localGroup.name !== cloudData.name) { localGroup.name = cloudData.name; changed = true; }
