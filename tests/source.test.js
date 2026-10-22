@@ -179,7 +179,7 @@ test("friends roster displays existing contacts independently of auth rendering"
   const start = html.indexOf("function renderFriendsRoster()");
   const end = html.indexOf("\n    function ", start + 10);
   const roster = html.slice(start, end);
-  assert.match(roster, /const visibleFriends = appState\\.friends \\|\\| \\[\\]/);
+  assert.match(roster, /const visibleFriends = appState\.friends \|\| \[\]/);
   assert.doesNotMatch(roster, /if \(!currentUser\)[\s\S]*?Sign in to see your saved friends/);
   assert.match(roster, /No saved friends yet/);
 });
