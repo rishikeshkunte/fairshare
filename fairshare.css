@@ -718,3 +718,35 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+
+/* Responsive layout refinements for desktop, compact laptops, tablets, and phones */
+@media (min-width: 1200px) {
+  .app-shell { grid-template-columns: 244px minmax(0, 1fr); }
+  .workspace { padding: 30px 32px 96px; }
+  #page-home.active { gap: 18px; }
+  .card, .home-balance-card { padding: 22px 24px; }
+  .filter-search-container { gap: 10px; }
+}
+@media (min-width: 861px) and (max-width: 1100px) {
+  .app-shell { grid-template-columns: 216px minmax(0, 1fr); }
+  .command-dock { padding: 16px 10px; }
+  .workspace { padding: 22px 20px 88px; }
+  .brand-tagline { font-size: .68rem; }
+  .header-actions { gap: 6px; }
+  .header-actions .btn { padding-left: 10px; padding-right: 10px; }
+  .dock-group { padding: 8px; }
+  .nav-tab-btn { padding: 9px 10px; gap: 8px; font-size: .86rem; }
+  .card, .home-balance-card { padding: 16px; }
+  .section-header h1 { font-size: 1.65rem; }
+  .filter-search-container { flex-wrap: wrap; }
+  .filter-search-container > * { min-width: 180px; }
+}
+@media (min-width: 861px) and (max-width: 980px) {
+  .workspace { padding-left: 16px; padding-right: 16px; }
+  .dash-card { grid-column: span 6; }
+  .home-members-card, .home-recent-card { grid-column: 1 / -1; }
+  .chart-wrapper { grid-template-columns: minmax(160px, .8fr) minmax(0, 1fr); gap: 16px; }
+  .chart-donut { width: 160px; height: 160px; }
+  .home-balance-card { grid-template-columns: minmax(0, 1fr) auto; }
+}
