@@ -166,3 +166,10 @@ test("saved friends roster syncs to the signed-in account independently of group
   assert.match(html, /listenToFriendsRoster\(user\)/);
   assert.match(rules, /match \/user_profiles\/\{userId\}[\s\S]*?request\.auth\.uid == userId/);
 });
+
+
+test("Firebase auth session is restored on every startup", () => {
+  assert.match(html, /Always restore Firebase's persisted auth session on startup/);
+  assert.match(html, /ensureCloud\(\)\.catch\(\(\) => \{/);
+  assert.doesNotMatch(html, /if \(cloudIntent\(\)\) ensureCloud\(\)/);
+});
