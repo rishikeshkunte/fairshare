@@ -99,7 +99,7 @@ test("shared expense sync uses transactional merges and stable participant ident
 
 test("empty activity and analytics states do not show a nonfunctional demo-data action", () => {
   assert.doesNotMatch(html, /Load sample demo data|loadSampleDemoData/);
-  assert.match(html, /<div id="empty-msg" class="empty-state">\s*<p>No transactions in this view yet\.<\/p>\s*<\/div>/);
+  assert.match(html, /<div id="empty-msg" class="empty-state">\s*<p class="empty-state-title">Nothing here yet<\/p>\s*<p class="empty-state-description">Your expenses and settlements will appear here as you add them\.<\/p>\s*<\/div>/);
   assert.match(html, /<div id="chart-empty" class="empty-state">\s*<p>No category spending yet\.<\/p>\s*<\/div>/);
 });
 
