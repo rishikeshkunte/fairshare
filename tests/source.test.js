@@ -63,6 +63,12 @@ test("create-group modal never renders cached friends while signed out", () => {
   assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see your saved friends[\s\S]*?friendsForGroup\.forEach/);
 });
 
+test("friend management and group member picker require sign-in", () => {
+  assert.match(html, /window\.addNewFriendToRoster = function\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
+  assert.match(html, /window\.addFriendByMobile = function\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
+  assert.match(html, /function renderFriendPickerDropdown\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to see saved friends[\s\S]*?btnAddFriendToGroup\) btnAddFriendToGroup\.disabled = true/);
+});
+
 test("group discovery rules restrict reads to signed-in group members", () => {
   assert.match(rules, /allow list:\s*if isMember\(resource\.data\);/);
   assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
