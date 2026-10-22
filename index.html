@@ -1249,8 +1249,16 @@
         }, { merge: true });
         return merged;
       }).then(merged => {
-        g.transactions = merged.transactions;
-        g.deletedTransactions = merged.deletedTransactions;
+        // Reconcile the cloud result with the original local objects so local receipt
+        // data URLs remain available on this device while cloud copies stay lightweight.
+        const reconciled = mergeTransactionsWithDeletes(
+          g.transactions || [],
+          merged.transactions || [],
+          g.deletedTransactions || [],
+          merged.deletedTransactions || []
+        );
+        g.transactions = reconciled.transactions;
+        g.deletedTransactions = reconciled.deletedTransactions;
         localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
         if (appState.activeGroupId === g.id) renderAll();
       }).catch(err => console.warn("Cloud sync note:", err));
