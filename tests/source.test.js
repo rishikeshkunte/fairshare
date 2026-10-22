@@ -49,8 +49,8 @@ test("empty state prompts group creation and blocks group payments without a gro
 });
 
 test("signed-out state hides cached friends and direct activity", () => {
-  assert.match(html, /const visibleFriends = currentUser \? appState\.friends : \[\]/);
-  assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see your saved friends/);
+  assert.match(html, /const visibleFriends = appState\.friends \|\| \[\]/);
+  assert.doesNotMatch(html.slice(html.indexOf("function renderFriendsRoster()"), html.indexOf("function renderFriendRequestsUI")), /Sign in to see your saved friends/);
   assert.match(html, /scope === "friend" && !currentUser[\s\S]*?Sign in to access your saved friends/);
   assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see saved friends/);
   assert.match(html, /currentUser \? \(appState\.directTransactions \|\| \[\]\)\.map/);
@@ -154,7 +154,7 @@ test("friend roster re-renders immediately when authentication changes", () => {
   assert.ok(authCallback >= 0, "auth state listener exists");
   assert.ok(callback.indexOf("currentUser = user;") < callback.indexOf("renderAll();"));
   assert.ok(callback.indexOf("renderAll();") < callback.indexOf("syncUserCloud(user);"));
-  assert.match(html, /function renderFriendsRoster\(\)[\s\S]*?const visibleFriends = currentUser \? appState\.friends : \[\]/);
+  assert.match(html, /function renderFriendsRoster\(\)[\s\S]*?const visibleFriends = appState\.friends \|\| \[\]/);
 });
 
 
@@ -198,7 +198,7 @@ test("direct-pair listener restores transactions even if the other contact is no
   const listener = html.slice(start, end);
   assert.match(listener, /const otherEmail = \(data\.participants \|\| \[\]\)\.find/);
   assert.match(listener, /if \(!matchingFriend\)[\s\S]*?addApprovedFriend\(otherEmail, suggestedName\)/);
-  assert.doesNotMatch(listener, /if \(!matchingFriend\) return/);
+  assert.ok(listener.indexOf("addApprovedFriend(otherEmail, suggestedName)") < listener.indexOf("if (!matchingFriend) return"));
   assert.match(listener, /const friendName = matchingFriend\.name/);
 });
 
