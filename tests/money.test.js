@@ -65,8 +65,8 @@ test("legacy money migration converts amounts once and preserves group data", ()
 
 test("transaction merge prefers the newest version and does not duplicate IDs", () => {
   const merged = mergeById(
-    [{ id: "same", desc: "local older", updatedAt: 10 }, { id: "local", updatedAt: 20 }],
-    [{ id: "same", desc: "cloud newer", updatedAt: 11 }, { id: "remote", updatedAt: 15 }]
+    [{ id: "same", desc: "local older", updatedAt: 10, timestamp: 10 }, { id: "local", updatedAt: 20, timestamp: 20 }],
+    [{ id: "same", desc: "cloud newer", updatedAt: 11, timestamp: 11 }, { id: "remote", updatedAt: 15, timestamp: 15 }]
   );
   assert.equal(merged.length, 3);
   assert.equal(merged.find(tx => tx.id === "same").desc, "cloud newer");
