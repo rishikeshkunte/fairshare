@@ -30,12 +30,12 @@ The app is a progressive web app. `manifest.json` supplies the name and icon. `s
 
 The desktop sidebar and the phone tab bar both call `navigateTo(pageId)`, which shows one `.app-page`, updates the hash, and scrolls to the top.
 
-- **Home.** Net standing for the member named `You`, shortcuts to add an expense, review balances, or settle up, and live previews of debts, the ledger, category mix, and people.
+- **Home.** Overall standing across shared groups and friend ledgers, shortcuts to add an expense, review balances, or settle up, and live previews of debts, the ledger, category mix, and people.
 - **Add expense.** Amount, presets, group or 1-on-1 scope, payer, date, notes, optional receipt, and the split.
 - **Balances.** Total spend, expense count, settlement count, simplify toggle, who pays whom, the member sheet, and separate 1-on-1 balances.
 - **History.** Group and 1-on-1 rows, grouped by date, with search, type filters, and a member filter. Open a row to edit or delete it.
 - **Analytics.** Category donut and bars together on a wide screen. One chart at a time on a phone.
-- **Friends.** Group name, currency, members, and invites on the left. Google account, incoming requests, email or WhatsApp invites, and the friend roster on the right.
+- **Friends.** Group name, currency, and members. Google account, incoming requests, email or WhatsApp invites, and the friend roster on the right.
 
 On a phone the six destinations sit in the bottom bar. On a desktop a scroll pill at the bottom shows the current page and can jump to any of them.
 
@@ -83,7 +83,7 @@ Analytics sums expense amounts by category for the active group and for 1-on-1 b
 
 **Export CSV** downloads the active group's transactions plus 1-on-1 bills. Columns: ID, date, scope, type, description, notes, amount, currency, payer, receiver or split participants, and category.
 
-## Groups, friends, and invites
+## Groups and friends
 
 A new account starts with no groups and no friends. The active group is the one selected in the sidebar. Its id is unique. Group discovery is based on the signed-in Google email being present in `memberEmails`. The old shared id `group_default` is renamed the first time a signed-in user syncs, so two people do not accidentally write the same cloud document. An untouched seeded **My Group** with no expenses is removed on load.
 
