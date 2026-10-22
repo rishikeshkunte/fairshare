@@ -223,7 +223,7 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
 .home-section-heading { display:flex; justify-content:space-between; align-items:center; margin: 8px 0 12px; }
 .home-section-heading h2 { margin: 2px 0 0; }
 .account-settings-card .header-actions { max-width: 420px; }
-.expense-fab-wrap { position:fixed; right:28px; bottom:26px; z-index:45; display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+.expense-fab-wrap { position:fixed; left:28px; right:auto; bottom:26px; z-index:45; display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
 .expense-fab {
   display:inline-flex; align-items:center; justify-content:center; gap:9px; min-height:54px; padding:0 20px;
   border:0; border-radius:999px; background:var(--primary); color:#fff; box-shadow:0 10px 28px rgba(20,40,29,.28);
@@ -612,7 +612,7 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
   .group-tab { max-width:180px; flex:0 0 auto; }
   .workspace { padding: 16px 14px 108px; }
   .mobile-bottom-nav { display: flex; }
-  .expense-fab-wrap { right:16px; bottom:calc(84px + env(safe-area-inset-bottom)); }
+  .expense-fab-wrap { left:16px; right:auto; bottom:calc(84px + env(safe-area-inset-bottom)); }
   .expense-fab { min-height:50px; padding:0 17px; }
   .workspace { padding-bottom:150px; }
   .summary-grid { grid-template-columns: 1fr; }
