@@ -3521,7 +3521,7 @@
       });
 
       const directByFriend = {};
-      (appState.directTransactions || []).forEach(tx => {
+      (currentUser ? (appState.directTransactions || []) : []).forEach(tx => {
         if (!tx.friend) return;
         const friend = tx.friend;
         directByFriend[friend] = directByFriend[friend] || 0;
@@ -3665,7 +3665,7 @@
       const catTotals = {};
       const expenseSources = [
         ...(g.transactions || []),
-        ...(appState.directTransactions || [])
+        ...(currentUser ? (appState.directTransactions || []) : [])
       ];
       expenseSources.forEach(t => {
         if (t.type !== "expense") return;
@@ -3871,7 +3871,7 @@
     function renderDeletedTransactions() {
       if (!deletedTransactionsList) return;
       const records = [
-        ...(appState.deletedTransactions || []),
+        ...(appState.deletedTransactions || []).filter(item => currentUser || item.location !== "direct"),
         ...Object.values(appState.groups).flatMap(group => (group.deletedTransactions || []).map(item => ({ ...item, groupName: group.name, groupId: group.id })))
       ].sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
       deletedTransactionsList.innerHTML = "";
@@ -3993,6 +3993,10 @@
     window.openDetailModal = function(id) {
       const found = findTransaction(id);
       if (!found || !modalBody || !detailModal) return;
+      if (found.where === "direct" && !currentUser) {
+        toast("Sign in to view 1-on-1 transaction details.");
+        return;
+      }
       const tx = found.tx;
       const g = found.where === "group" ? found.group : getGroup();
       const cur = g.currency;
@@ -4141,7 +4145,7 @@
         const g = getGroup();
         const rows = [
           ...g.transactions.map(t => ({ ...t, scopeLabel: g.name })),
-          ...(appState.directTransactions || []).map(t => ({ ...t, scopeLabel: `1-on-1: ${t.friend || ""}` }))
+          ...(currentUser ? (appState.directTransactions || []) : []).map(t => ({ ...t, scopeLabel: `1-on-1: ${t.friend || ""}` }))
         ];
         if (rows.length === 0) {
           toast("No transactions recorded yet to export.");
