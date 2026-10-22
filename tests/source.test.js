@@ -95,3 +95,10 @@ test("shared expense sync uses transactional merges and stable participant ident
   assert.match(html, /sharesByEmail/);
   assert.match(html, /watchQuery\(fx, "groups", "memberEmails", "array-contains", myEmail/);
 });
+
+
+test("empty activity and analytics states do not show a nonfunctional demo-data action", () => {
+  assert.doesNotMatch(html, /Load sample demo data|loadSampleDemoData/);
+  assert.match(html, /<div id="empty-msg" class="empty-state">\s*<p>No transactions in this view yet\.<\/p>\s*<\/div>/);
+  assert.match(html, /<div id="chart-empty" class="empty-state">\s*<p>No category spending yet\.<\/p>\s*<\/div>/);
+});
