@@ -647,3 +647,5 @@ button.brand-group { background: none; border: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.hero-expense-menu { flex-basis: 100%; flex-direction: row; flex-wrap: wrap; min-width: 0; }
+.hero-expense-menu button { flex: 1 1 200px; }
