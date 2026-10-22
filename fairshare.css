@@ -649,3 +649,72 @@ button.brand-group { background: none; border: none; }
 }
 .hero-expense-menu { flex-basis: 100%; flex-direction: row; flex-wrap: wrap; min-width: 0; }
 .hero-expense-menu button { flex: 1 1 200px; }
+
+
+/* Design polish: consistent interaction states and quieter empty screens */
+:root {
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+  --radius: 16px;
+}
+button, input, select, textarea {
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.btn, .tab-btn, .nav-tab-btn, .group-tab, .group-tab-add {
+  min-height: 42px;
+}
+.card, .home-balance-card, .dash-card, .metric-box, .settlement-card, .settle-up-box {
+  box-shadow: 0 1px 2px rgba(35, 48, 39, .035), 0 8px 24px -18px rgba(35, 48, 39, .16);
+}
+.card-header-row { gap: 14px; }
+input, select, textarea {
+  border-radius: 12px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+.empty-state {
+  padding: clamp(28px, 5vw, 52px) 16px;
+  line-height: 1.6;
+}
+.empty-state p {
+  margin: 0;
+}
+.empty-state .empty-state-title {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 650;
+  margin-bottom: 5px;
+}
+.empty-state .empty-state-description {
+  max-width: 38ch;
+  margin: 0 auto;
+  font-size: .9rem;
+}
+#page-history.is-empty #filter-all,
+#page-history.is-empty #filter-expenses,
+#page-history.is-empty #filter-settlements,
+#page-history.is-empty .filter-search-container,
+#page-history.is-empty #btn-clear-all {
+  display: none;
+}
+#page-history.is-empty #empty-msg {
+  padding-top: 42px;
+  padding-bottom: 48px;
+}
+@media (max-width: 600px) {
+  .card, .home-balance-card { padding: 16px; }
+  .card-header-row { align-items: flex-start; }
+  .filter-search-container { flex-direction: column; }
+  .filter-search-container > * { width: 100%; flex: auto !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  button, input, select, textarea, .app-page, .dash-card, .expense-fab {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
