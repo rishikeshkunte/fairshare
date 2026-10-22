@@ -102,3 +102,16 @@ test("empty activity and analytics states do not show a nonfunctional demo-data 
   assert.match(html, /<div id="empty-msg" class="empty-state">\s*<p>No transactions in this view yet\.<\/p>\s*<\/div>/);
   assert.match(html, /<div id="chart-empty" class="empty-state">\s*<p>No category spending yet\.<\/p>\s*<\/div>/);
 });
+
+
+test("activity empty state is helpful and hides irrelevant controls when there are no transactions", () => {
+  assert.match(html, /class="empty-state-title">Nothing here yet<\/p>/);
+  assert.match(html, /empty-state-description">Your expenses and settlements will appear here as you add them\.<\/p>/);
+  assert.match(html, /historyPage\.classList\.toggle\("is-empty", allTx\.length === 0\)/);
+  assert.match(css, /#page-history\.is-empty #filter-all[\s\S]*?#page-history\.is-empty #btn-clear-all/);
+});
+
+test("design system includes visible keyboard focus and reduced-motion support", () => {
+  assert.match(css, /button:focus-visible, input:focus-visible, select:focus-visible/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+});
