@@ -122,3 +122,10 @@ test("responsive design has explicit compact-laptop and wide-desktop layouts", (
   assert.match(css, /@media \(min-width: 861px\) and \(max-width: 1100px\)[\s\S]*?\.app-shell \{ grid-template-columns: 216px minmax\(0, 1fr\)/);
   assert.match(css, /@media \(min-width: 861px\) and \(max-width: 980px\)[\s\S]*?\.chart-wrapper \{ grid-template-columns: minmax\(160px, \.8fr\) minmax\(0, 1fr\)/);
 });
+
+
+test("home and add-expense layouts have explicit desktop and mobile refinements", () => {
+  assert.match(css, /@media \(min-width: 861px\)[\s\S]*?#page-add-expense > \.card \{[\s\S]*?max-width: 760px !important/);
+  assert.match(css, /@media \(min-width: 1101px\)[\s\S]*?\.home-members-card \{ grid-column: span 4; \}[\s\S]*?\.home-recent-card \{ grid-column: span 8; \}/);
+  assert.match(css, /@media \(max-width: 860px\)[\s\S]*?#page-add-expense > \.card \{[\s\S]*?max-width: none !important/);
+});
