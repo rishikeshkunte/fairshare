@@ -40,8 +40,10 @@ test("floating expense action is anchored to the bottom-left on desktop and mobi
 });
 
 test("group discovery rules restrict reads to signed-in group members", () => {
-  assert.match(rules, /allow get, list:\s*if isMember\(resource\.data\);/);
+  assert.match(rules, /allow list:\s*if isMember\(resource\.data\);/);
   assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
+  assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?groups\/\$\(groupId\)[\s\S]*?isMember\(resource\.data\)/);
+  assert.match(rules, /direct_pairs[\s\S]*?allow get:\s*if signedIn\(\)[\s\S]*?direct_pairs\/\$\(pairId\)[\s\S]*?inPair\(resource\.data\)/);
 });
 
 test("shared expense sync uses transactional merges and stable participant identities", () => {
