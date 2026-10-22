@@ -210,3 +210,12 @@ test("direct-pair listener uses the resolved friend's name without a self-refere
   assert.match(listener, /const friendName = matchingFriend\.name;/);
   assert.doesNotMatch(listener, /const friendName = friendName;/);
 });
+
+
+test("direct expense deletion persists its tombstone before syncing the shared ledger", () => {
+  const start = html.indexOf("window.deleteTransaction = async function(id)");
+  const end = html.indexOf("\n    window.", start + 20);
+  const deletion = html.slice(start, end);
+  assert.ok(deletion.indexOf('localStorage.setItem("fairshare_state_v9", JSON.stringify(appState))') < deletion.indexOf("saveState();"));
+  assert.ok(deletion.indexOf("saveState();") < deletion.indexOf("syncDirectPairExpense(found.tx.friend)"));
+});
