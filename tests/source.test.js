@@ -156,3 +156,13 @@ test("friend roster re-renders immediately when authentication changes", () => {
   assert.ok(callback.indexOf("renderAll();") < callback.indexOf("syncUserCloud(user);"));
   assert.match(html, /function renderFriendsRoster\(\)[\s\S]*?const visibleFriends = currentUser \? appState\.friends : \[\]/);
 });
+
+
+test("saved friends roster syncs to the signed-in account independently of groups", () => {
+  assert.match(html, /function saveFriendsRosterToCloud\(\)/);
+  assert.match(html, /function listenToFriendsRoster\(user\)/);
+  assert.match(html, /watchDoc\(fx, "user_profiles", user\.uid/);
+  assert.match(html, /if \(fx && currentUser\) saveFriendsRosterToCloud\(\)/);
+  assert.match(html, /listenToFriendsRoster\(user\)/);
+  assert.match(rules, /match \/user_profiles\/\{userId\}[\s\S]*?request\.auth\.uid == userId/);
+});
