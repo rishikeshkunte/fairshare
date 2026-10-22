@@ -2025,10 +2025,8 @@
       if (!friendsListContainer) return;
 
       friendsListContainer.innerHTML = "";
-      if (!currentUser) {
-        friendsListContainer.innerHTML = `<div style="text-align:center; color:var(--muted); padding:16px;">Sign in to see your saved friends.</div>`;
-        return;
-      }
+      // The roster is a local contact list as well as a cloud-connected feature.
+      // Show contacts already available in appState regardless of auth state.
       if (visibleFriends.length === 0) {
         friendsListContainer.innerHTML = `<div style="text-align:center; color:var(--muted); padding:16px;">No saved friends yet. Add a contact or send an email request above.</div>`;
         return;
@@ -3380,7 +3378,14 @@
         ? `${g.members.length} members • ${expenseCount} expenses • ${formatMoney(totalGroupSpend, cur)}`
         : "Create a group to start tracking shared expenses.";
       if (dashHistoryDesc) dashHistoryDesc.textContent = `${expenseCount + settleCount} group records`;
-      if (toggleSimplify) toggleSimplify.checked = g.simplifyDebts !== false;
+      if (toggleSimplify) {
+        toggleSimplify.checked = g.simplifyDebts !== false;
+        toggleSimplify.onchange = () => {
+          g.simplifyDebts = toggleSimplify.checked;
+          saveState();
+          renderAll();
+        };
+      }
 
       // Executive Home Standings (incorporating Group + 1-on-1)
       let overallOwed = 0;
