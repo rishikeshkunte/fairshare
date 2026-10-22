@@ -14,8 +14,8 @@ service cloud.firestore {
     }
 
     match /groups/{groupId} {
-      allow get: if isMember(resource.data);
-      allow list: if false;
+      // Group discovery queries must constrain memberEmails to the signed-in email.
+      allow get, list: if isMember(resource.data);
       allow create: if signedIn()
         && request.resource.data.memberEmails is list
         && email() in request.resource.data.memberEmails;
