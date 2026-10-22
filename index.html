@@ -1571,6 +1571,10 @@
     };
 
     window.addNewFriendToRoster = function() {
+      if (!currentUser) {
+        toast("Sign in to manage your saved friends.");
+        return;
+      }
       const inputEl = document.getElementById("new-friend-name");
       const name = (inputEl ? inputEl.value : "").trim();
       if (!name) {
@@ -1590,6 +1594,10 @@
 
     // Mobile Number Feature
     window.addFriendByMobile = function() {
+      if (!currentUser) {
+        toast("Sign in to manage your saved friends.");
+        return;
+      }
       const codeEl = document.getElementById("input-country-code");
       const numEl = document.getElementById("input-mobile-number");
       const nameEl = document.getElementById("input-mobile-name");
@@ -2025,6 +2033,12 @@
       const g = getGroup();
       if (!friendPickerSelect) return;
       friendPickerSelect.innerHTML = `<option value="">-- Choose a friend --</option>`;
+      if (!currentUser) {
+        friendPickerSelect.innerHTML = `<option value="">Sign in to see saved friends</option>`;
+        if (btnAddFriendToGroup) btnAddFriendToGroup.disabled = true;
+        return;
+      }
+      if (btnAddFriendToGroup) btnAddFriendToGroup.disabled = false;
       const availableFriends = appState.friends.filter(f => !g.members.includes(f.name));
       availableFriends.forEach(f => {
         const opt = document.createElement("option");
