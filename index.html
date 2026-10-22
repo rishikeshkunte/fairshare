@@ -4788,45 +4788,60 @@
         snapshot.forEach(docSnap => {
           const data = docSnap.data() || {};
           if (!Array.isArray(data.transactions)) return;
-          const otherEmail = (data.participants || []).find(email => email !== myEmail);
-          const matchingFriend = appState.friends.find(friend => friend.email && normalizeEmail(friend.email) === normalizeEmail(otherEmail));
+          const otherEmail = (data.participants || []).find(email => normalizeEmail(email) !== normalizeEmail(myEmail));
+          if (!otherEmail) return;
+
+          // A direct-pair ledger is shared by both accounts. The other participant
+          // may not have manually saved/approved the first user's contact yet, so
+          // don't discard the entire ledger just because their local roster is missing it.
+          let matchingFriend = appState.friends.find(friend =>
+            friend.email && normalizeEmail(friend.email) === normalizeEmail(otherEmail)
+          );
+          if (!matchingFriend) {
+            const suggestedName = String(otherEmail).split("@")[0] || "Friend";
+            addApprovedFriend(otherEmail, suggestedName);
+            matchingFriend = appState.friends.find(friend =>
+              friend.email && normalizeEmail(friend.email) === normalizeEmail(otherEmail)
+            );
+          }
           if (!matchingFriend) return;
+          const friendName = friendName;
 
           const visibleTransactions = data.transactions.map(transaction => {
             const copy = { ...transaction };
             const ownerEmail = copy.ownerEmail || data.updatedBy || otherEmail;
             const ownerIsMe = normalizeEmail(ownerEmail) === normalizeEmail(myEmail);
-            const flipLegacy = value => value === "You" ? (ownerIsMe ? "You" : matchingFriend.name) : (ownerIsMe ? matchingFriend.name : "You");
+            const flipLegacy = value => value === "You" ? (ownerIsMe ? "You" : friendName) : (ownerIsMe ? friendName : "You");
             if (copy.payerEmail) {
-              copy.payer = normalizeEmail(copy.payerEmail) === normalizeEmail(myEmail) ? "You" : matchingFriend.name;
+              copy.payer = normalizeEmail(copy.payerEmail) === normalizeEmail(myEmail) ? "You" : friendName;
             } else {
               copy.payer = flipLegacy(copy.payer);
             }
             if (copy.receiverEmail) {
-              copy.receiver = normalizeEmail(copy.receiverEmail) === normalizeEmail(myEmail) ? "You" : matchingFriend.name;
+              copy.receiver = normalizeEmail(copy.receiverEmail) === normalizeEmail(myEmail) ? "You" : friendName;
             } else if (copy.receiver) {
               copy.receiver = flipLegacy(copy.receiver);
             }
             if (copy.sharesByEmail) {
               copy.shares = Object.fromEntries(Object.entries(copy.sharesByEmail).map(([email, share]) => [
                 normalizeEmail(email) === normalizeEmail(myEmail) ? "You" :
-                  (normalizeEmail(email) === normalizeEmail(otherEmail) ? matchingFriend.name : email),
+                  (normalizeEmail(email) === normalizeEmail(otherEmail) ? friendName : email),
                 share
               ]));
             } else if (copy.shares) {
               copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flipLegacy(member), share]));
             }
-            copy.friend = matchingFriend.name;
+            copy.friend = friendName;
             copy.scope = "direct";
             copy.ownerEmail = ownerEmail;
             return copy;
           });
 
-          appState.directTransactions = (appState.directTransactions || []).filter(tx => tx.friend !== matchingFriend.name).concat(visibleTransactions);
+          appState.directTransactions = (appState.directTransactions || []).filter(tx => tx.friend !== friendName).concat(visibleTransactions);
           if (Array.isArray(data.deletedTransactions)) {
-            appState.deletedTransactions = (appState.deletedTransactions || []).filter(item => !(item.location === "direct" && item.transaction?.friend === matchingFriend.name));
+            appState.deletedTransactions = (appState.deletedTransactions || []).filter(item => !(item.location === "direct" && item.transaction?.friend === friendName));
             data.deletedTransactions.forEach(item => {
-              const copy = { ...item, transaction: item.transaction ? { ...item.transaction, friend: matchingFriend.name } : item.transaction };
+              const copy = { ...item, transaction: item.transaction ? { ...item.transaction, friend: friendName } : item.transaction };
               appState.deletedTransactions.push(copy);
             });
           }
