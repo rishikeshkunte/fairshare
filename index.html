@@ -1949,17 +1949,22 @@
     }
 
     function renderFriendsRoster() {
-      if (globalFriendsCount) globalFriendsCount.textContent = appState.friends.length;
-      if (dashFriendsDesc) dashFriendsDesc.textContent = `${appState.friends.length} friends`;
+      const visibleFriends = currentUser ? appState.friends : [];
+      if (globalFriendsCount) globalFriendsCount.textContent = visibleFriends.length;
+      if (dashFriendsDesc) dashFriendsDesc.textContent = `${visibleFriends.length} friends`;
       if (!friendsListContainer) return;
 
       friendsListContainer.innerHTML = "";
-      if (appState.friends.length === 0) {
+      if (!currentUser) {
+        friendsListContainer.innerHTML = `<div style="text-align:center; color:var(--muted); padding:16px;">Sign in to see your saved friends.</div>`;
+        return;
+      }
+      if (visibleFriends.length === 0) {
         friendsListContainer.innerHTML = `<div style="text-align:center; color:var(--muted); padding:16px;">No saved friends yet. Add a contact or send an email request above.</div>`;
         return;
       }
 
-      appState.friends.forEach(f => {
+      visibleFriends.forEach(f => {
         const div = document.createElement("div");
         div.className = "friend-row";
         const cur = getGroup().currency;
@@ -2239,6 +2244,10 @@
 
     // --- 1-on-1 Direct Splitting ---
     window.setExpenseScope = function(scope) {
+      if (scope === "friend" && !currentUser) {
+        toast("Sign in to access your saved friends and add a 1-on-1 expense.");
+        return;
+      }
       if (scope === "group" && Object.keys(appState.groups).length === 0) {
         toast("Create a group first to add a group expense.");
         window.openNewGroupPrompt();
@@ -2273,8 +2282,13 @@
       if (!selectEl) return;
       selectEl.innerHTML = "";
 
+      if (!currentUser) {
+        selectEl.innerHTML = `<option value="">Sign in to see saved friends</option>`;
+        selectedDirectFriend = "";
+        return;
+      }
       if (appState.friends.length === 0) {
-        selectEl.innerHTML = `<option value="">(No friends added yet — click + Type name)</option>`;
+        selectEl.innerHTML = `<option value="">No saved friends yet</option>`;
         selectedDirectFriend = "";
         return;
       }
@@ -2292,6 +2306,12 @@
     }
 
     window.handleDirectFriendChange = function() {
+      if (!currentUser) {
+        selectedDirectFriend = "";
+        if (payerSelect) payerSelect.innerHTML = `<option value="You">You</option>`;
+        renderSplitBreakdown();
+        return;
+      }
       const selectEl = document.getElementById("direct-friend-select");
       if (selectEl && selectEl.value) {
         selectedDirectFriend = selectEl.value;
@@ -2313,6 +2333,10 @@
     };
 
     window.promptQuickFriendForExpense = async function() {
+      if (!currentUser) {
+        toast("Sign in to add a 1-on-1 expense with a saved friend.");
+        return;
+      }
       const name = await askPrompt({ message: "Enter friend's name to split with:" });
       if (!name || !name.trim()) return;
       const cleanName = name.trim();
@@ -3715,7 +3739,7 @@
 
       let allTx = [
         ...Object.values(appState.groups).flatMap(group => (group.transactions || []).map(t => ({ ...t, sourceGroup: group.name, groupId: group.id, sourceCurrency: group.currency }))),
-        ...(appState.directTransactions || []).map(t => ({ ...t, sourceGroup: `1-on-1: ${t.friend}` }))
+        ...(currentUser ? (appState.directTransactions || []).map(t => ({ ...t, sourceGroup: `1-on-1: ${t.friend}` })) : [])
       ];
       allTx.sort((a, b) => (b.timestamp || b.id) - (a.timestamp || a.id));
 
@@ -4126,6 +4150,11 @@
       if (!container) return;
       container.innerHTML = "";
 
+      if (!currentUser) {
+        container.innerHTML = `<div style="text-align:center; padding:16px; color:var(--muted); font-size:0.85rem;">Sign in to view 1-on-1 balances.</div>`;
+        return;
+      }
+
       const cur = getGroup().currency;
       const directBalances = {};
       appState.friends.forEach(f => directBalances[f.name] = 0);
@@ -4280,6 +4309,7 @@
     }
 
     function renderAll() {
+      renderDirectFriendDropdown();
       renderDirectBalances();
       applyTheme();
       renderGroupSelector();
@@ -4342,6 +4372,8 @@
           unsubscribeGroupListener = null;
           unsubscribeDirectListener = null;
           unsubscribeUserGroupsListener = null;
+          selectedDirectFriend = "";
+          renderAll();
         }
       });
       return fx;
