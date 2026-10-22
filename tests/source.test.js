@@ -67,6 +67,10 @@ test("friend management and group member picker require sign-in", () => {
   assert.match(html, /window\.addNewFriendToRoster = function\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
   assert.match(html, /window\.addFriendByMobile = function\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
   assert.match(html, /function renderFriendPickerDropdown\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to see saved friends[\s\S]*?btnAddFriendToGroup\) btnAddFriendToGroup\.disabled = true/);
+  assert.match(html, /window\.renameFriendPrompt = async function\(friendId\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
+  assert.match(html, /window\.deleteFriendFromRoster = async function\(id\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
+  assert.match(html, /window\.quickStartDirectExpense = function\(friendIdOrName\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to access your saved friends/);
+  assert.match(html, /window\.quickStartDirectSettle = async function\(friendIdOrName, currentBal\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to view or settle 1-on-1 balances/);
 });
 
 test("group discovery rules restrict reads to signed-in group members", () => {
