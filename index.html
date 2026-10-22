@@ -128,7 +128,15 @@
 
         <div class="hero-actions">
           <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="balances">Review balances & settle up</button>
+          <button type="button" id="hero-add-expense" class="btn btn-primary" aria-expanded="false" aria-controls="hero-expense-menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Add expense
+          </button>
           <button type="button" class="btn btn-secondary" data-call="shareGroupInvite">Invite link</button>
+          <div id="hero-expense-menu" class="expense-fab-menu hero-expense-menu" hidden>
+            <button type="button" data-expense-scope="group">👥 Add a group expense</button>
+            <button type="button" data-expense-scope="friend">👤 Add a friend expense</button>
+          </div>
         </div>
       </div>
       <div>
@@ -1387,21 +1395,33 @@
       if (themeToggleSlot && themeToggle) themeToggleSlot.appendChild(themeToggle);
     }
 
-    const expenseFab = document.getElementById("expense-fab");
-    const expenseFabMenu = document.getElementById("expense-fab-menu");
-    if (expenseFab && expenseFabMenu) {
-      expenseFab.addEventListener("click", () => {
-        const willOpen = expenseFabMenu.hidden;
-        expenseFabMenu.hidden = !willOpen;
-        expenseFab.setAttribute("aria-expanded", String(willOpen));
+    // The floating button and the home hero button each open their own scope menu.
+    const expenseMenus = [
+      { trigger: document.getElementById("expense-fab"), menu: document.getElementById("expense-fab-menu"), wrap: ".expense-fab-wrap" },
+      { trigger: document.getElementById("hero-add-expense"), menu: document.getElementById("hero-expense-menu"), wrap: ".hero-actions" }
+    ].filter(item => item.trigger && item.menu);
+
+    function closeExpenseMenu(item) {
+      item.menu.hidden = true;
+      item.trigger.setAttribute("aria-expanded", "false");
+    }
+
+    expenseMenus.forEach(item => {
+      item.trigger.addEventListener("click", () => {
+        const willOpen = item.menu.hidden;
+        expenseMenus.forEach(closeExpenseMenu);
+        item.menu.hidden = !willOpen;
+        item.trigger.setAttribute("aria-expanded", String(willOpen));
       });
-      expenseFabMenu.querySelectorAll("[data-expense-scope]").forEach(option => {
+      item.menu.querySelectorAll("[data-expense-scope]").forEach(option => {
         option.addEventListener("click", () => {
           const scope = option.dataset.expenseScope;
-          expenseFabMenu.hidden = true;
-          expenseFab.setAttribute("aria-expanded", "false");
+          closeExpenseMenu(item);
+          // A fresh expense must never reuse an edit that was left open.
+          if (editingTxId && editingTxId.value) cancelEditMode();
           if (scope === "group" && Object.keys(appState.groups).length === 0) {
             navigateTo("groups");
+            toast("Create a group first, then add group expenses to it.");
             document.getElementById("btn-new-group-inline")?.focus();
             return;
           }
@@ -1409,13 +1429,12 @@
           setExpenseScope(scope);
         });
       });
-      document.addEventListener("click", event => {
-        if (!event.target.closest(".expense-fab-wrap")) {
-          expenseFabMenu.hidden = true;
-          expenseFab.setAttribute("aria-expanded", "false");
-        }
+    });
+    document.addEventListener("click", event => {
+      expenseMenus.forEach(item => {
+        if (!event.target.closest(item.wrap)) closeExpenseMenu(item);
       });
-    }
+    });
 
     function applyTheme() {
       document.documentElement.setAttribute("data-theme", appState.theme);
@@ -2273,9 +2292,11 @@
           category: "Settlement",
           date: formatDisplayDate(todayISO()),
           dateISO: todayISO(),
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          updatedAt: Date.now()
         };
         appState.directTransactions.unshift(newTx);
+        syncDirectPairExpense(friendName);
         saveState();
         triggerConfetti();
         renderAll();
@@ -2765,6 +2786,10 @@
           showExpenseError("Choose the friend you are splitting this bill with.");
           return;
         }
+        if (currentExpenseScope === "group" && !appState.groups[g.id]) {
+          showExpenseError("Create a group first, or switch to a 1-on-1 expense with a friend.");
+          return;
+        }
 
         const shares = computeSplitShares(amount);
         const repeat = document.getElementById("recurring-select")?.value || "";
@@ -2803,10 +2828,18 @@
             tx.dateISO = dateISO;
             tx.notes = notes;
             tx.scope = currentExpenseScope;
+            const previousFriend = tx.friend;
             tx.friend = currentExpenseScope === "friend" ? selectedDirectFriend : null;
-            if (activeReceiptBase64) tx.receipt = activeReceiptBase64;
-            if (receiptUrl) tx.receiptUrl = receiptUrl;
-            if (receiptPath) tx.receiptPath = receiptPath;
+            tx.updatedAt = Date.now();
+            if (activeReceiptBase64) {
+              tx.receipt = activeReceiptBase64;
+              if (receiptUrl) tx.receiptUrl = receiptUrl;
+              if (receiptPath) tx.receiptPath = receiptPath;
+            } else {
+              delete tx.receipt;
+              delete tx.receiptUrl;
+              delete tx.receiptPath;
+            }
             tx.recurring = repeat ? { freq: repeat, nextDue: Date.now() + (repeat === "weekly" ? 7 : 30) * 86400000 } : tx.recurring || null;
 
             const targetIsDirect = currentExpenseScope === "friend";
@@ -2818,6 +2851,7 @@
               appState.directTransactions = (appState.directTransactions || []).filter(t => t.id !== editId);
               g.transactions.unshift(tx);
             }
+            [previousFriend, tx.friend].filter(Boolean).forEach(name => syncDirectPairExpense(name));
           }
           cancelEditMode();
         } else {
@@ -2950,8 +2984,8 @@
       renderSplitBreakdown();
       restoreSplitInputs(tx);
 
-      if (tx.receipt) {
-        activeReceiptBase64 = tx.receipt;
+      if (tx.receipt || tx.receiptUrl) {
+        activeReceiptBase64 = tx.receipt || tx.receiptUrl;
         if (receiptThumb) receiptThumb.src = activeReceiptBase64;
         if (receiptUploadPreview) receiptUploadPreview.style.display = "block";
         if (btnClearReceipt) btnClearReceipt.style.display = "inline-block";
@@ -3022,7 +3056,7 @@
     if (btnToggleSettleForm) {
       btnToggleSettleForm.addEventListener("click", () => {
         if (!settleUpBox) return;
-        const isHidden = settleUpBox.style.display === "none";
+        const isHidden = getComputedStyle(settleUpBox).display === "none";
         settleUpBox.style.display = isHidden ? "block" : "none";
         btnToggleSettleForm.textContent = isHidden ? "Hide settle up" : "+ Custom settlement";
       });
@@ -3082,6 +3116,10 @@
           toast("Payer and receiver cannot be the same person.");
           return;
         }
+        if (!appState.groups[g.id]) {
+          toast("Create a group first.");
+          return;
+        }
 
         const newTx = {
           id: newId(),
@@ -3093,7 +3131,8 @@
           category: "Settlement",
           date: formatDisplayDate(todayISO()),
           dateISO: todayISO(),
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          updatedAt: Date.now()
         };
 
         g.transactions.unshift(newTx);
@@ -3630,7 +3669,7 @@
               <div class="cat-badge-icon">${letter}</div>
               <div>
                 <strong>${highlight(tx.desc, searchQuery)}</strong>
-                ${tx.receipt ? '<span class="cat-badge">Receipt</span>' : ""}
+                ${tx.receipt || tx.receiptUrl ? '<span class="cat-badge">Receipt</span>' : ""}
                 <span class="transaction-meta">
                   ${escapeHtml(tx.sourceGroup || "")} • ${tx.type === "settlement" ? `${highlight(tx.payer, searchQuery)} paid ${highlight(tx.receiver, searchQuery)}` : `Paid by <strong>${highlight(tx.payer, searchQuery)}</strong>`}
                   ${tx.notes ? " • " + highlight(tx.notes, searchQuery) : ""}
@@ -3858,7 +3897,7 @@
           </div>
         `;
 
-        if (tx.receipt) {
+        if (tx.receipt || tx.receiptUrl) {
           html += `
             <div style="margin-bottom: 16px;">
               <h4 style="margin: 0 0 6px 0; font-size:0.9rem; color:var(--text);">Receipt photo:</h4>
@@ -3969,7 +4008,7 @@
             t.type,
             csvCell(t.desc),
             csvCell(t.notes),
-            Number(t.amount).toFixed(2),
+            paiseToInput(t.amount),
             g.currency,
             csvCell(t.payer),
             csvCell(other),
