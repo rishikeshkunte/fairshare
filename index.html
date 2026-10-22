@@ -4954,7 +4954,13 @@
         renderCategoryChart();
       });
     });
-    if (cloudIntent()) ensureCloud().catch(() => toast("Google is unreachable. FairShare still works on this device."));
+    // Always restore Firebase's persisted auth session on startup. The UI must
+    // not depend on a separate local cloud-intent flag to recognise a signed-in user.
+    ensureCloud().catch(() => {
+      updateAuthUI(null);
+      renderAll();
+      console.warn("Firebase session restore failed; continuing in local mode.");
+    });
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
     }
