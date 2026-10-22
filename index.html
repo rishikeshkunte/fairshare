@@ -1210,7 +1210,9 @@
         .map(item => item.transaction?.id)
         .filter(id => id != null)
         .map(String));
-      const transactions = mergeById(localTransactions || [], cloudTransactions || [])
+      // Keep cloud versions authoritative when the same transaction exists in both places.
+      // Local-only transactions are still retained so a newly created/offline expense can sync later.
+      const transactions = mergeById(cloudTransactions || [], localTransactions || [])
         .filter(tx => !deletedTransactionIds.has(String(tx.id)));
       return { transactions, deletedTransactions: [...deletedById.values()] };
     }
