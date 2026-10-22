@@ -227,10 +227,10 @@ test("shared expense merge prefers cloud versions over stale local duplicates", 
 
 test("Gmail linking upgrades a same-name local friend without an email", () => {
   const start = html.indexOf("function addApprovedFriend(email, name)");
-  const end = html.indexOf("\\n    function renderFriendRequestsUI()", start);
+  const end = html.indexOf("function renderFriendRequestsUI()", start);
   const fn = html.slice(start, end);
   assert.ok(fn.includes("existing.email = em"));
-  assert.ok(fn.includes("!normalizeEmail(friend.email || \"\" )") || fn.includes('!normalizeEmail(friend.email || "")'));
+  assert.ok(fn.includes('!normalizeEmail(friend.email || "")'));
   assert.ok(fn.includes("renderDirectFriendDropdown()"));
-  assert.ok(fn.includes("normalizeEmail(friend.email || \"\") === em"));
+  assert.ok(fn.includes('normalizeEmail(friend.email || "") === em'));
 });
