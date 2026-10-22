@@ -129,3 +129,12 @@ test("home and add-expense layouts have explicit desktop and mobile refinements"
   assert.match(css, /@media \(min-width: 1101px\)[\s\S]*?\.home-members-card \{ grid-column: span 4; \}[\s\S]*?\.home-recent-card \{ grid-column: span 8; \}/);
   assert.match(css, /@media \(max-width: 860px\)[\s\S]*?#page-add-expense > \.card \{[\s\S]*?max-width: none !important/);
 });
+
+
+test("add-expense form has a clear amount focus, accessible scope choices, and responsive split controls", () => {
+  assert.match(css, /#page-add-expense \.amount-stage[\s\S]*?border-radius: 16px/);
+  assert.match(css, /#page-add-expense #amount[\s\S]*?font-size: clamp\(1\.8rem, 4vw, 2\.3rem\)/);
+  assert.match(css, /#page-add-expense \.scope-toggle[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?#page-add-expense \.tab-group \.tab-btn[\s\S]*?flex: 1 1 42%/);
+  assert.match(html, /id="btn-submit-expense"/);
+});
