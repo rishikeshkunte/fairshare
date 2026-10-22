@@ -4536,37 +4536,50 @@
       fx.storeMod.runTransaction(fx.db, async transaction => {
         const snapshot = await transaction.get(pairRef);
         const cloudData = snapshot.exists() ? snapshot.data() : {};
-        const mergedTransactions = mergeById(localCanonical, cloudData.transactions || []);
-        const deletedById = new Map();
-        [...(cloudData.deletedTransactions || []), ...localDeleted].forEach(item => {
-          if (!item || item.id == null) return;
-          const previous = deletedById.get(String(item.id));
-          if (!previous || (Number(item.deletedAt) || 0) >= (Number(previous.deletedAt) || 0)) {
-            deletedById.set(String(item.id), item);
-          }
-        });
+        const merged = mergeTransactionsWithDeletes(
+          localCanonical,
+          cloudData.transactions || [],
+          localDeleted,
+          cloudData.deletedTransactions || []
+        );
         transaction.set(pairRef, {
           pairId,
           schemaVersion: 9,
           // Raw lower-case emails must match request.auth.token.email in firestore.rules.
           participants: [myEmail, friendEmail],
-          transactions: stripReceiptBytes(mergedTransactions),
-          deletedTransactions: [...deletedById.values()],
+          transactions: stripReceiptBytes(merged.transactions),
+          deletedTransactions: merged.deletedTransactions,
           updatedAt: serverTimestamp(fx),
           updatedBy: myEmail
         }, { merge: true });
-        return mergedTransactions;
+        return merged;
       }).then(merged => {
         // Keep any transactions recovered from the cloud visible locally too.
-        const byId = new Map(merged.map(tx => [String(tx.id), tx]));
-        const visible = merged.map(tx => {
+        const visible = merged.transactions.map(tx => {
           const copy = { ...tx };
-          const ownerIsMe = normalizeEmail(copy.ownerEmail || myEmail) === normalizeEmail(myEmail);
-          const flip = value => value === "You" ? (ownerIsMe ? "You" : friendName) : (ownerIsMe ? friendName : "You");
-          copy.payer = flip(copy.payer);
-          if (copy.receiver) copy.receiver = flip(copy.receiver);
-          if (copy.shares) copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flip(member), share]));
+          const ownerEmail = copy.ownerEmail || myEmail;
+          const ownerIsMe = normalizeEmail(ownerEmail) === normalizeEmail(myEmail);
+          const flipLegacy = value => value === "You" ? (ownerIsMe ? "You" : friendName) : (ownerIsMe ? friendName : "You");
+          copy.payer = copy.payerEmail
+            ? (normalizeEmail(copy.payerEmail) === normalizeEmail(myEmail) ? "You" : friendName)
+            : flipLegacy(copy.payer);
+          if (copy.receiverEmail) {
+            copy.receiver = normalizeEmail(copy.receiverEmail) === normalizeEmail(myEmail) ? "You" : friendName;
+          } else if (copy.receiver) {
+            copy.receiver = flipLegacy(copy.receiver);
+          }
+          if (copy.sharesByEmail) {
+            copy.shares = Object.fromEntries(Object.entries(copy.sharesByEmail).map(([email, share]) => [
+              normalizeEmail(email) === normalizeEmail(myEmail) ? "You" :
+                (normalizeEmail(email) === normalizeEmail(friendEmail) ? friendName : email),
+              share
+            ]));
+          } else if (copy.shares) {
+            copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flipLegacy(member), share]));
+          }
           copy.friend = friendName;
+          copy.scope = "direct";
+          copy.ownerEmail = ownerEmail;
           return copy;
         });
         appState.directTransactions = (appState.directTransactions || []).filter(t => t.friend !== friendName).concat(visible);
