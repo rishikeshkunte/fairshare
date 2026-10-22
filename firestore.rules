@@ -14,8 +14,12 @@ service cloud.firestore {
     }
 
     match /groups/{groupId} {
+      // A transaction may check whether a new group document exists before creating it.
+      // Existing documents remain readable only by listed members.
+      allow get: if signedIn()
+        && (!exists(/databases/$(database)/documents/groups/$(groupId)) || isMember(resource.data));
       // Group discovery queries must constrain memberEmails to the signed-in email.
-      allow get, list: if isMember(resource.data);
+      allow list: if isMember(resource.data);
       allow create: if signedIn()
         && request.resource.data.memberEmails is list
         && email() in request.resource.data.memberEmails;
@@ -28,7 +32,10 @@ service cloud.firestore {
           && data.participants is list
           && email() in data.participants;
       }
-      allow read: if inPair(resource.data);
+      // Permit checking a not-yet-created pair document before a transactional create.
+      allow get: if signedIn()
+        && (!exists(/databases/$(database)/documents/direct_pairs/$(pairId)) || inPair(resource.data));
+      allow list: if inPair(resource.data);
       allow create: if signedIn()
         && request.resource.data.participants is list
         && email() in request.resource.data.participants
