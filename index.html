@@ -127,12 +127,12 @@
         </div>
 
         <div class="hero-actions">
-          <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="balances">Review balances & settle up</button>
+          <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="balances">Review balances</button>
+          <button type="button" class="btn btn-settle" data-call="openSettleUp">Settle up</button>
           <button type="button" id="hero-add-expense" class="btn btn-primary" aria-expanded="false" aria-controls="hero-expense-menu">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             Add expense
           </button>
-          <button type="button" class="btn btn-secondary" data-call="shareGroupInvite">Invite link</button>
           <div id="hero-expense-menu" class="expense-fab-menu hero-expense-menu" hidden>
             <button type="button" data-expense-scope="group">👥 Add a group expense</button>
             <button type="button" data-expense-scope="friend">👤 Add a friend expense</button>
@@ -619,7 +619,6 @@
               <p id="group-choose-hint" class="group-hint" hidden>Choose a group above to manage members and currency.</p>
             </div>
             <div style="display:flex; gap:6px;">
-              <button type="button" id="btn-share-group-invite" class="btn btn-secondary" data-call="shareGroupInvite" title="Share group invite link">Invite link</button>
               <button type="button" id="btn-rename-group" class="btn btn-secondary" title="Rename active group">Rename</button>
               <button type="button" id="btn-delete-group" class="btn btn-secondary" title="Delete active group">Delete</button>
             </div>
@@ -1190,16 +1189,18 @@
       // Cloud sync active group
       if (fx && currentUser && appState.groups[appState.activeGroupId]) {
         const g = getGroup();
-        const myEmailNorm = normalizeEmail(currentUser.email);
+        const myEmail = (currentUser.email || "").toLowerCase().trim();
+        const myEmailNorm = normalizeEmail(myEmail);
         const memberLinks = { ...(g.memberLinks || {}) };
-        memberLinks[getMyGroupMemberName(g)] = myEmailNorm;
+        memberLinks[getMyGroupMemberName(g)] = myEmail;
         
-        // Collect verified member emails for group access security
-        const memberEmails = [myEmailNorm];
+        // Firestore rules compare against the exact lower-case Google email.
+        // Keep normalized aliases too for local friend matching and legacy data.
+        const memberEmails = [myEmail, myEmailNorm];
         (appState.friends || []).forEach(f => {
           if (f.email && g.members.includes(f.name)) {
-            const friendEmail = normalizeEmail(f.email);
-            memberEmails.push(friendEmail);
+            const friendEmail = (f.email || "").toLowerCase().trim();
+            memberEmails.push(friendEmail, normalizeEmail(friendEmail));
             memberLinks[f.name] = friendEmail;
           }
         });
@@ -1211,6 +1212,7 @@
           name: g.name,
           currency: g.currency,
           members: g.members,
+          simplifyDebts: g.simplifyDebts !== false,
           memberLinks,
           memberEmails: Array.from(new Set(memberEmails)),
           transactions: stripReceiptBytes(g.transactions),
@@ -2285,6 +2287,7 @@
           type: "settlement",
           scope: "direct",
           friend: friendName,
+          ownerEmail: currentUser?.email ? currentUser.email.toLowerCase().trim() : null,
           desc: `${payer} paid ${receiver} (1-on-1 Settlement)`,
           payer: payer,
           receiver: receiver,
@@ -2830,6 +2833,9 @@
             tx.scope = currentExpenseScope;
             const previousFriend = tx.friend;
             tx.friend = currentExpenseScope === "friend" ? selectedDirectFriend : null;
+            if (currentExpenseScope === "friend" && !tx.ownerEmail && currentUser?.email) {
+              tx.ownerEmail = currentUser.email.toLowerCase().trim();
+            }
             tx.updatedAt = Date.now();
             if (activeReceiptBase64) {
               tx.receipt = activeReceiptBase64;
@@ -2860,6 +2866,7 @@
             type: "expense",
             scope: currentExpenseScope,
             friend: currentExpenseScope === "friend" ? selectedDirectFriend : null,
+            ownerEmail: currentExpenseScope === "friend" && currentUser?.email ? currentUser.email.toLowerCase().trim() : null,
             desc: desc,
             amount: amount,
             payer: payer,
@@ -3498,13 +3505,21 @@
       if (modal) modal.classList.remove("active");
     };
 
+    window.openSettleUp = function() {
+      if (!settleUpBox) return;
+      settleUpBox.style.display = "block";
+      if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
+      settleUpBox.scrollIntoView({ behavior: "smooth", block: "center" });
+      settlePayer?.focus({ preventScroll: true });
+    };
+
     window.quickSettlePrompt = function(from, to, amount) {
       if (settleUpBox) settleUpBox.style.display = "block";
       if (settlePayer) settlePayer.value = from;
       if (settleReceiver) settleReceiver.value = to;
       if (settleAmount) settleAmount.value = paiseToInput(amount);
       if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
-      settleUpBox.scrollIntoView({ behavior: "smooth" });
+      settleUpBox?.scrollIntoView({ behavior: "smooth", block: "center" });
     };
 
     // Category Analytics
@@ -4224,6 +4239,7 @@
     // --- Firebase Auth & Firestore Sync (loaded only for sign-in) ---
     let unsubscribeGroupListener = null;
     let unsubscribeDirectListener = null;
+    let unsubscribeUserGroupsListener = null;
 
     async function ensureCloud() {
       if (fx) return fx;
@@ -4231,7 +4247,17 @@
       watchAuth(fx, (user) => {
         currentUser = user;
         updateAuthUI(user);
-        if (user) syncUserCloud(user);
+        if (user) {
+          syncUserCloud(user);
+        } else {
+          [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener]
+            .forEach(unsubscribe => { if (typeof unsubscribe === "function") unsubscribe(); });
+          unsubIncomingRequests = null;
+          unsubOutgoingRequests = null;
+          unsubscribeGroupListener = null;
+          unsubscribeDirectListener = null;
+          unsubscribeUserGroupsListener = null;
+        }
       });
       return fx;
     }
@@ -4334,33 +4360,92 @@
           renderFriendRequestsUI();
         }, (err) => console.warn("Outgoing requests note:", err));
 
-      // 3. Listen to active group when one exists
+      // 3. Discover and live-sync every group this Google account belongs to.
+      if (unsubscribeUserGroupsListener) unsubscribeUserGroupsListener();
+      unsubscribeUserGroupsListener = watchQuery(fx, "groups", "memberEmails", "array-contains", myEmail, (snapshot) => {
+        let changed = false;
+        snapshot.forEach(docSnap => {
+          const groupId = docSnap.id;
+          const cloudData = docSnap.data() || {};
+          const migrated = cloudData.schemaVersion === 9
+            ? cloudData
+            : migrateMoney({ schemaVersion: 0, groups: { [groupId]: { ...cloudData, id: groupId } }, directTransactions: [] }).groups[groupId];
+          const localGroup = appState.groups[groupId];
+          if (!localGroup) {
+            appState.groups[groupId] = {
+              id: groupId,
+              name: cloudData.name || "Shared group",
+              currency: cloudData.currency || "₹",
+              members: Array.isArray(cloudData.members) ? cloudData.members : ["You"],
+              memberLinks: cloudData.memberLinks || {},
+              simplifyDebts: cloudData.simplifyDebts !== false,
+              transactions: mergeById([], migrated.transactions || []),
+              deletedTransactions: Array.isArray(cloudData.deletedTransactions) ? cloudData.deletedTransactions : []
+            };
+            changed = true;
+          } else {
+            const mergedTransactions = mergeById(localGroup.transactions || [], migrated.transactions || []);
+            if (JSON.stringify(mergedTransactions) !== JSON.stringify(localGroup.transactions || [])) {
+              localGroup.transactions = mergedTransactions;
+              changed = true;
+            }
+            if (cloudData.name && localGroup.name !== cloudData.name) { localGroup.name = cloudData.name; changed = true; }
+            if (cloudData.currency && localGroup.currency !== cloudData.currency) { localGroup.currency = cloudData.currency; changed = true; }
+            if (Array.isArray(cloudData.members) && JSON.stringify(localGroup.members) !== JSON.stringify(cloudData.members)) {
+              localGroup.members = cloudData.members;
+              changed = true;
+            }
+            if (cloudData.memberLinks && JSON.stringify(localGroup.memberLinks || {}) !== JSON.stringify(cloudData.memberLinks)) {
+              localGroup.memberLinks = cloudData.memberLinks;
+              changed = true;
+            }
+            if (Array.isArray(cloudData.deletedTransactions)) localGroup.deletedTransactions = cloudData.deletedTransactions;
+            if (typeof cloudData.simplifyDebts === "boolean" && localGroup.simplifyDebts !== cloudData.simplifyDebts) {
+              localGroup.simplifyDebts = cloudData.simplifyDebts;
+              changed = true;
+            }
+          }
+        });
+        if (changed) {
+          localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+          renderAll();
+        }
+      }, (err) => console.warn("Cloud group discovery note:", err));
+
+      // 4. Listen to the active group for live updates.
       if (g.id) listenToCloudGroup(g.id);
 
-      // 4. Bilateral 1-on-1 direct pair listeners
-      listenToDirectPairs(myEmailNorm);
+      // 5. Bilateral 1-on-1 direct pair listeners use the exact lower-case auth email,
+      // because Firestore rules compare against that value without Gmail alias normalization.
+      listenToDirectPairs(myEmail);
     }
 
     function listenToCloudGroup(groupId) {
-      if (!fx || !currentUser) return;
+      if (!fx || !currentUser || !groupId) return;
       if (unsubscribeGroupListener) unsubscribeGroupListener();
 
       unsubscribeGroupListener = watchDoc(fx, "groups", groupId, (docSnap) => {
+        const group = appState.groups[groupId];
+        if (!group) return;
+
         if (docSnap.exists()) {
-          const cloudData = docSnap.data();
-          if (cloudData.transactions) {
-            const g = getGroup();
-            const remote = cloudData.schemaVersion === 9 ? cloudData : migrateMoney({ schemaVersion: 0, groups: { [g.id]: cloudData }, directTransactions: [] }).groups[g.id];
-            const merged = mergeById(g.transactions, remote.transactions || cloudData.transactions);
-            if (JSON.stringify(merged) !== JSON.stringify(g.transactions)) g.transactions = merged;
-            if (Array.isArray(cloudData.deletedTransactions)) g.deletedTransactions = cloudData.deletedTransactions;
-            if (cloudData.members) g.members = cloudData.members;
-            if (cloudData.memberLinks) g.memberLinks = cloudData.memberLinks;
-            if (cloudData.currency) g.currency = cloudData.currency;
-            localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
-            renderAll();
-          }
-        } else {
+          const cloudData = docSnap.data() || {};
+          const remote = cloudData.schemaVersion === 9
+            ? cloudData
+            : migrateMoney({ schemaVersion: 0, groups: { [groupId]: { ...cloudData, id: groupId } }, directTransactions: [] }).groups[groupId];
+          const merged = mergeById(group.transactions || [], remote.transactions || cloudData.transactions || []);
+          group.transactions = merged;
+          if (Array.isArray(cloudData.deletedTransactions)) group.deletedTransactions = cloudData.deletedTransactions;
+          if (Array.isArray(cloudData.members)) group.members = cloudData.members;
+          if (cloudData.memberLinks) group.memberLinks = cloudData.memberLinks;
+          if (cloudData.currency) group.currency = cloudData.currency;
+          if (cloudData.name) group.name = cloudData.name;
+          if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
+          localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+          if (appState.activeGroupId === groupId) renderAll();
+        } else if (appState.activeGroupId === groupId) {
+          // Only initialise the currently selected group. Never save whichever group
+          // happens to be active from a callback for a different group.
           saveState();
         }
       }, (err) => console.warn("Firestore group note:", err));
@@ -4372,56 +4457,112 @@
       const friend = appState.friends.find(f => f.name === friendName);
       if (!friend || !friend.email) return;
 
-      const myEmail = normalizeEmail(currentUser.email);
-      const friendEmail = normalizeEmail(friend.email);
-      const pairId = [myEmail, friendEmail].sort().join("_").replace(/[^a-zA-Z0-9_]/g, "_");
+      const myEmail = (currentUser.email || "").toLowerCase().trim();
+      const friendEmail = (friend.email || "").toLowerCase().trim();
+      if (!myEmail || !friendEmail || normalizeEmail(myEmail) === normalizeEmail(friendEmail)) return;
+      const pairId = [normalizeEmail(myEmail), normalizeEmail(friendEmail)].sort().join("_").replace(/[^a-zA-Z0-9_]/g, "_");
 
       const pairExpenses = (appState.directTransactions || []).filter(t => t.friend === friendName);
-      const pairDeleted = (appState.deletedTransactions || []).filter(item => item.location === "direct" && item.transaction?.friend === friendName);
+      const canonicalize = (transaction) => {
+        const copy = { ...transaction, ownerEmail: (transaction.ownerEmail || myEmail).toLowerCase().trim() };
+        if (normalizeEmail(copy.ownerEmail) !== normalizeEmail(myEmail)) {
+          const flip = value => value === "You" ? friendName : (value === friendName ? "You" : value);
+          copy.payer = flip(copy.payer);
+          if (copy.receiver) copy.receiver = flip(copy.receiver);
+          if (copy.shares) {
+            copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flip(member), share]));
+          }
+        }
+        return copy;
+      };
+      const localCanonical = pairExpenses.map(canonicalize);
+      const localDeleted = (appState.deletedTransactions || [])
+        .filter(item => item.location === "direct" && item.transaction?.friend === friendName)
+        .map(item => ({ ...item, transaction: item.transaction ? canonicalize(item.transaction) : item.transaction }));
 
-      setMerge(fx, "direct_pairs", pairId, {
-        pairId: pairId,
-        schemaVersion: 9,
-        participants: [myEmail, friendEmail],
-        transactions: stripReceiptBytes(pairExpenses),
-        deletedTransactions: pairDeleted,
-        updatedAt: serverTimestamp(fx),
-        updatedBy: myEmail
+      // Merge inside a Firestore transaction so a new write from either person cannot
+      // immediately replace the other person's existing ledger.
+      const pairRef = fx.storeMod.doc(fx.db, "direct_pairs", pairId);
+      fx.storeMod.runTransaction(fx.db, async transaction => {
+        const snapshot = await transaction.get(pairRef);
+        const cloudData = snapshot.exists() ? snapshot.data() : {};
+        const mergedTransactions = mergeById(localCanonical, cloudData.transactions || []);
+        const deletedById = new Map();
+        [...(cloudData.deletedTransactions || []), ...localDeleted].forEach(item => {
+          if (!item || item.id == null) return;
+          const previous = deletedById.get(String(item.id));
+          if (!previous || (Number(item.deletedAt) || 0) >= (Number(previous.deletedAt) || 0)) {
+            deletedById.set(String(item.id), item);
+          }
+        });
+        transaction.set(pairRef, {
+          pairId,
+          schemaVersion: 9,
+          // Raw lower-case emails must match request.auth.token.email in firestore.rules.
+          participants: [myEmail, friendEmail],
+          transactions: stripReceiptBytes(mergedTransactions),
+          deletedTransactions: [...deletedById.values()],
+          updatedAt: serverTimestamp(fx),
+          updatedBy: myEmail
+        }, { merge: true });
+        return mergedTransactions;
+      }).then(merged => {
+        // Keep any transactions recovered from the cloud visible locally too.
+        const byId = new Map(merged.map(tx => [String(tx.id), tx]));
+        const visible = merged.map(tx => {
+          const copy = { ...tx };
+          const ownerIsMe = normalizeEmail(copy.ownerEmail || myEmail) === normalizeEmail(myEmail);
+          const flip = value => value === "You" ? (ownerIsMe ? "You" : friendName) : (ownerIsMe ? friendName : "You");
+          copy.payer = flip(copy.payer);
+          if (copy.receiver) copy.receiver = flip(copy.receiver);
+          if (copy.shares) copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flip(member), share]));
+          copy.friend = friendName;
+          return copy;
+        });
+        appState.directTransactions = (appState.directTransactions || []).filter(t => t.friend !== friendName).concat(visible);
+        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+        renderAll();
       }).catch((err) => console.warn("Direct pair sync note:", err));
     }
 
-    function listenToDirectPairs(myEmailNorm) {
+    function listenToDirectPairs(myEmail) {
       if (!fx || !currentUser) return;
       if (unsubscribeDirectListener) unsubscribeDirectListener();
 
-      unsubscribeDirectListener = watchQuery(fx, "direct_pairs", "participants", "array-contains", myEmailNorm, (snapshot) => {
-          snapshot.forEach(doc => {
-            const d = doc.data();
-            if (d.transactions && Array.isArray(d.transactions)) {
-              // Merge remote transactions without triggering infinite loops
-              const otherEmail = (d.participants || []).find(e => e !== myEmailNorm);
-              const matchingFriend = appState.friends.find(f => f.email && normalizeEmail(f.email) === otherEmail);
-              
-              if (matchingFriend) {
-                // Remove local entries for this friend and replace with cloud source of truth
-                appState.directTransactions = (appState.directTransactions || []).filter(t => t.friend !== matchingFriend.name);
-                d.transactions.forEach(t => {
-                  t.friend = matchingFriend.name;
-                  appState.directTransactions.push(t);
-                });
-                if (Array.isArray(d.deletedTransactions)) {
-                  appState.deletedTransactions = (appState.deletedTransactions || []).filter(item => !(item.location === "direct" && item.transaction?.friend === matchingFriend.name));
-                  d.deletedTransactions.forEach(item => {
-                    if (item.transaction) item.transaction.friend = matchingFriend.name;
-                    appState.deletedTransactions.push(item);
-                  });
-                }
-                localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
-                renderAll();
-              }
-            }
+      unsubscribeDirectListener = watchQuery(fx, "direct_pairs", "participants", "array-contains", myEmail, (snapshot) => {
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data() || {};
+          if (!Array.isArray(data.transactions)) return;
+          const otherEmail = (data.participants || []).find(email => email !== myEmail);
+          const matchingFriend = appState.friends.find(friend => friend.email && normalizeEmail(friend.email) === normalizeEmail(otherEmail));
+          if (!matchingFriend) return;
+
+          const visibleTransactions = data.transactions.map(transaction => {
+            const copy = { ...transaction };
+            const ownerEmail = copy.ownerEmail || data.updatedBy || otherEmail;
+            const ownerIsMe = normalizeEmail(ownerEmail) === normalizeEmail(myEmail);
+            const flip = value => value === "You" ? (ownerIsMe ? "You" : matchingFriend.name) : (ownerIsMe ? matchingFriend.name : "You");
+            copy.payer = flip(copy.payer);
+            if (copy.receiver) copy.receiver = flip(copy.receiver);
+            if (copy.shares) copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flip(member), share]));
+            copy.friend = matchingFriend.name;
+            copy.scope = "direct";
+            copy.ownerEmail = ownerEmail;
+            return copy;
           });
-        }, (err) => console.warn("Direct pairs listener note:", err));
+
+          appState.directTransactions = (appState.directTransactions || []).filter(tx => tx.friend !== matchingFriend.name).concat(visibleTransactions);
+          if (Array.isArray(data.deletedTransactions)) {
+            appState.deletedTransactions = (appState.deletedTransactions || []).filter(item => !(item.location === "direct" && item.transaction?.friend === matchingFriend.name));
+            data.deletedTransactions.forEach(item => {
+              const copy = { ...item, transaction: item.transaction ? { ...item.transaction, friend: matchingFriend.name } : item.transaction };
+              appState.deletedTransactions.push(copy);
+            });
+          }
+          localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+          renderAll();
+        });
+      }, (err) => console.warn("Direct pairs listener note:", err));
     }
 
     // URL Group Invites
