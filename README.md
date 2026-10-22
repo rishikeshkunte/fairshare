@@ -1,6 +1,6 @@
 # FairShare
 
-Shared expenses made simple and fair. FairShare is a single-page expense splitter that runs in the browser. You can use it with no account. Sign in with Google only when you want live group sync, friend requests, or an invite link that other people can open.
+Shared expenses made simple and fair. FairShare is a single-page expense splitter that runs in the browser. You can use it with no account. Sign in with Google to sync shared groups and friend ledgers across connected accounts.
 
 ## Run it
 
@@ -30,7 +30,7 @@ The app is a progressive web app. `manifest.json` supplies the name and icon. `s
 
 The desktop sidebar and the phone tab bar both call `navigateTo(pageId)`, which shows one `.app-page`, updates the hash, and scrolls to the top.
 
-- **Home.** Net standing for the member named `You`, shortcuts to add an expense, settle, or copy an invite link, and live previews of debts, the ledger, category mix, and people.
+- **Home.** Net standing for the member named `You`, shortcuts to add an expense, review balances, or settle up, and live previews of debts, the ledger, category mix, and people.
 - **Add expense.** Amount, presets, group or 1-on-1 scope, payer, date, notes, optional receipt, and the split.
 - **Balances.** Total spend, expense count, settlement count, simplify toggle, who pays whom, the member sheet, and separate 1-on-1 balances.
 - **History.** Group and 1-on-1 rows, grouped by date, with search, type filters, and a member filter. Open a row to edit or delete it.
@@ -71,7 +71,7 @@ For each group member, start at zero and walk the group's transactions:
 
 **Simplify debts** is on by default. On, FairShare collapses the net balances into the fewest payments (if A owes B and B owes C, A can pay C). Off, it lists each pair from the raw expenses and settlements without routing money through a third person. Either way, a **Settle** button records a settlement for that suggested amount. **Custom settlement** records any payment you type.
 
-The home line "You are all settled up" looks only at the member named `You` in the active group. 1-on-1 debts are shown on their own card.
+The home standing aggregates balances across groups and direct 1-on-1 ledgers. Group and direct friend balances are also available in the balance details.
 
 Changing the currency symbol does not convert existing numbers. A dinner of 900 stays 900 if you switch from ₹ to $.
 
@@ -85,14 +85,13 @@ Analytics sums expense amounts by category for the active group and for 1-on-1 b
 
 ## Groups, friends, and invites
 
-A new account starts with no groups and no friends. The active group is the one selected in the sidebar. Its id is unique. The old shared id `group_default` is renamed the first time a signed-in user syncs, so two people do not accidentally write the same cloud document. An untouched seeded **My Group** with no expenses is removed on load.
+A new account starts with no groups and no friends. The active group is the one selected in the sidebar. Its id is unique. Group discovery is based on the signed-in Google email being present in `memberEmails`. The old shared id `group_default` is renamed the first time a signed-in user syncs, so two people do not accidentally write the same cloud document. An untouched seeded **My Group** with no expenses is removed on load.
 
 - **New group** asks for a name, a currency, and which friends to include. `You` is always a member. The last group can be deleted.
 - **Google friends** are the ones who sync. Adding one to a group writes their email onto the group. When they are signed in, FairShare loads every group whose member list contains their email, and they see the same expenses.
 - **Local friends** and **mobile numbers** stay on this device. They are labeled that way in the roster, the group picker, and the 1-on-1 split. A mobile number is shown as the name until you rename it. The web app does not read phone contacts.
 - **1-on-1 bills with a Google friend** are stored in a shared ledger for that pair of emails. Local and phone 1-on-1 bills never leave the device.
 - **In-app request** needs both people to be signed in. It writes a `friend_requests` document addressed to the other person's Google email. They approve or decline on Friends. **Open in Gmail** and **Share via WhatsApp** only open those apps with a prefilled message.
-- **Invite link** copies a URL shaped like `?joinGroup=<group id>&groupName=<name>&by=<your name>&byEmail=<email>`. Opening it shows a join dialog. Approving adds you as `You` and keeps the existing cloud expenses.
 
 Direct 1-on-1 balances are the net of bills and settlements with one saved friend, outside any group.
 
