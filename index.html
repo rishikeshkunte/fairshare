@@ -4400,6 +4400,10 @@
       watchAuth(fx, (user) => {
         currentUser = user;
         updateAuthUI(user);
+        // Re-render immediately on auth changes so locally saved friends and
+        // auth-gated controls don't remain stuck in their signed-out state while
+        // Firestore listeners are still starting up.
+        renderAll();
         if (user) {
           syncUserCloud(user);
         } else {
