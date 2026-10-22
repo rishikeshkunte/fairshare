@@ -9,7 +9,7 @@
   --line: #E0E4DA;
   --line-strong: rgba(48, 54, 49, 0.1);
   --text: #303631;
-  --muted: #657267;
+  --muted: #3e4a42;
   --primary: #365747;
   --primary-hover: #294536;
   --accent: #D4A83F;
@@ -238,9 +238,9 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
 .section-header { margin-bottom:16px; }
 .section-header h1 { margin:0; font-size:1.8rem; }
 .section-header p { margin:4px 0 0; color:var(--muted); }
-.app-page { display: none; animation: rise 0.28s ease; }
+.app-page { display: none; animation: rise 0.12s ease; }
 .app-page.active { display: block; }
-@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes rise { from { opacity: 0.86; } to { opacity: 1; } }
 
 #page-home.active {
   display: grid;
@@ -618,4 +618,32 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
   .summary-grid { grid-template-columns: 1fr; }
   #chart-area[data-chart="bar"] .chart-donut { display: none; }
   #chart-area[data-chart="pie"] .chart-bars { display: none; }
+}
+
+button.brand-group, button.dash-card {
+  font: inherit; color: inherit; text-align: left; width: 100%;
+}
+button.brand-group { background: none; border: none; }
+#friends-stack { display: flex; flex-direction: column; }
+#friends-stack.signed-out #card-roster { order: -1; }
+.auth-pill {
+  display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+  background: #dbeafe; color: #1e3a8a; font-size: 0.68rem; font-weight: 800;
+}
+.auth-note { font-size: 0.78rem; color: #1e3a8a; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 10px; }
+.group-hint { font-size: 0.85rem; color: var(--muted); margin: 0 0 8px; }
+.toast {
+  position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
+  width: min(520px, calc(100% - 24px)); background: #171c19; color: #f7f6f0;
+  padding: 12px 14px; border-radius: 12px; z-index: 1200; display: flex; gap: 12px;
+  align-items: center; justify-content: space-between;
+}
+.toast-action { background: #d4a83f; color: #171c19; border: none; border-radius: 8px; font-weight: 800; padding: 6px 10px; cursor: pointer; }
+.app-footer { margin: 18px 0 8px; color: var(--muted); font-size: 0.78rem; }
+.app-footer p { margin: 0; }
+[hidden] { display: none !important; }
+.metric-tile strong, #home-owed-val, #home-owe-val { overflow-wrap: anywhere; }
+.settlement-item, .home-debt-preview { overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
