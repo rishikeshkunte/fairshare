@@ -39,6 +39,15 @@ test("floating expense action is anchored to the bottom-left on desktop and mobi
   assert.match(css, /\.expense-fab-wrap\s*\{[^}]*left:\s*16px;\s*right:\s*auto;/);
 });
 
+test("empty state prompts group creation and blocks group payments without a group", () => {
+  assert.match(html, /id="home-no-groups-prompt"[^>]*hidden/);
+  assert.match(html, /data-call="openNewGroupPrompt">Create your first group<\/button>/);
+  assert.match(html, /scope === "group" && Object\.keys\(appState\.groups\)\.length === 0/);
+  assert.match(html, /window\.openSettleUp = function\(\)[\s\S]*?Object\.keys\(appState\.groups\)\.length === 0/);
+  assert.match(html, /isEmptyTemplate[\s\S]*?delete appState\.groups\["group_default"\]/);
+  assert.match(html, /if \(noGroupsPrompt\) noGroupsPrompt\.hidden = groups\.length > 0/);
+});
+
 test("group discovery rules restrict reads to signed-in group members", () => {
   assert.match(rules, /allow list:\s*if isMember\(resource\.data\);/);
   assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
