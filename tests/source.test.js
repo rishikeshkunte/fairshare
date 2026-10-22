@@ -58,6 +58,11 @@ test("signed-out state hides cached friends and direct activity", () => {
   assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to add a 1-on-1 expense/);
 });
 
+test("create-group modal never renders cached friends while signed out", () => {
+  assert.match(html, /const friendsForGroup = currentUser \? appState\.friends : \[\]/);
+  assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see your saved friends[\s\S]*?friendsForGroup\.forEach/);
+});
+
 test("group discovery rules restrict reads to signed-in group members", () => {
   assert.match(rules, /allow list:\s*if isMember\(resource\.data\);/);
   assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
