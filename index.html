@@ -1636,6 +1636,10 @@
     };
 
     window.renameFriendPrompt = async function(friendId) {
+      if (!currentUser) {
+        toast("Sign in to manage your saved friends.");
+        return;
+      }
       const friend = appState.friends.find(f => f.id === friendId);
       if (!friend) return;
       const newName = await askPrompt({ message: `Rename ${friend.name}:`, defaultValue: friend.name });
@@ -1655,6 +1659,10 @@
     };
 
     window.deleteFriendFromRoster = async function(id) {
+      if (!currentUser) {
+        toast("Sign in to manage your saved friends.");
+        return;
+      }
       const f = appState.friends.find(x => x.id === id);
       if (!f) return;
       if (await askConfirm({ message: `Remove "${f.name}" from your friends roster?` })) {
@@ -2369,6 +2377,10 @@
     };
 
     window.quickStartDirectExpense = function(friendIdOrName) {
+      if (!currentUser) {
+        toast("Sign in to access your saved friends and add a 1-on-1 expense.");
+        return;
+      }
       const friend = appState.friends.find(f => f.id === friendIdOrName);
       const friendName = friend ? friend.name : friendIdOrName;
       navigateTo("add-expense");
@@ -2380,6 +2392,10 @@
     };
 
     window.quickStartDirectSettle = async function(friendIdOrName, currentBal) {
+      if (!currentUser) {
+        toast("Sign in to view or settle 1-on-1 balances.");
+        return;
+      }
       const friend = appState.friends.find(f => f.id === friendIdOrName);
       const friendName = friend ? friend.name : friendIdOrName;
       currentBal = Number(currentBal);
