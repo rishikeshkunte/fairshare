@@ -12,7 +12,7 @@ python -m http.server 8765
 
 Then open `http://127.0.0.1:8765/`.
 
-The app is a progressive web app. `manifest.json` supplies the name and icon. `sw.js` caches `index.html`, `fairshare.css`, the logo, and the manifest (`fairshare-v18`) so a later visit can load without a network. Firebase, Google fonts, and the receipt reader still need a connection the first time they are used.
+The app is a progressive web app. `manifest.json` supplies the name and icon. `sw.js` caches `index.html`, `fairshare.css`, the logo, and the manifest (`fairshare-v20`) so a later visit can load without a network. Firebase, Google fonts, and the receipt reader still need a connection the first time they are used.
 
 ## Files
 
