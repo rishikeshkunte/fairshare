@@ -4474,9 +4474,14 @@
           const remote = cloudData.schemaVersion === 9
             ? cloudData
             : migrateMoney({ schemaVersion: 0, groups: { [groupId]: { ...cloudData, id: groupId } }, directTransactions: [] }).groups[groupId];
-          const merged = mergeById(group.transactions || [], remote.transactions || cloudData.transactions || []);
-          group.transactions = merged;
-          if (Array.isArray(cloudData.deletedTransactions)) group.deletedTransactions = cloudData.deletedTransactions;
+          const merged = mergeTransactionsWithDeletes(
+            group.transactions || [],
+            remote.transactions || cloudData.transactions || [],
+            group.deletedTransactions || [],
+            cloudData.deletedTransactions || []
+          );
+          group.transactions = merged.transactions;
+          group.deletedTransactions = merged.deletedTransactions;
           if (Array.isArray(cloudData.members)) group.members = cloudData.members;
           if (cloudData.memberLinks) group.memberLinks = cloudData.memberLinks;
           if (cloudData.currency) group.currency = cloudData.currency;
@@ -4505,14 +4510,18 @@
 
       const pairExpenses = (appState.directTransactions || []).filter(t => t.friend === friendName);
       const canonicalize = (transaction) => {
-        const copy = { ...transaction, ownerEmail: (transaction.ownerEmail || myEmail).toLowerCase().trim() };
-        if (normalizeEmail(copy.ownerEmail) !== normalizeEmail(myEmail)) {
-          const flip = value => value === "You" ? friendName : (value === friendName ? "You" : value);
-          copy.payer = flip(copy.payer);
-          if (copy.receiver) copy.receiver = flip(copy.receiver);
-          if (copy.shares) {
-            copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flip(member), share]));
-          }
+        const ownerEmail = (transaction.ownerEmail || myEmail).toLowerCase().trim();
+        const ownerIsMe = normalizeEmail(ownerEmail) === normalizeEmail(myEmail);
+        const copy = { ...transaction, ownerEmail };
+        const emailForMember = member => member === "You"
+          ? (ownerIsMe ? myEmail : friendEmail)
+          : (member === friendName ? (ownerIsMe ? friendEmail : myEmail) : null);
+        copy.payerEmail = transaction.payerEmail || emailForMember(transaction.payer);
+        if (transaction.receiver) copy.receiverEmail = transaction.receiverEmail || emailForMember(transaction.receiver);
+        if (transaction.shares) {
+          copy.sharesByEmail = transaction.sharesByEmail || Object.fromEntries(
+            Object.entries(transaction.shares).map(([member, share]) => [emailForMember(member) || member, share])
+          );
         }
         return copy;
       };
@@ -4582,10 +4591,26 @@
             const copy = { ...transaction };
             const ownerEmail = copy.ownerEmail || data.updatedBy || otherEmail;
             const ownerIsMe = normalizeEmail(ownerEmail) === normalizeEmail(myEmail);
-            const flip = value => value === "You" ? (ownerIsMe ? "You" : matchingFriend.name) : (ownerIsMe ? matchingFriend.name : "You");
-            copy.payer = flip(copy.payer);
-            if (copy.receiver) copy.receiver = flip(copy.receiver);
-            if (copy.shares) copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flip(member), share]));
+            const flipLegacy = value => value === "You" ? (ownerIsMe ? "You" : matchingFriend.name) : (ownerIsMe ? matchingFriend.name : "You");
+            if (copy.payerEmail) {
+              copy.payer = normalizeEmail(copy.payerEmail) === normalizeEmail(myEmail) ? "You" : matchingFriend.name;
+            } else {
+              copy.payer = flipLegacy(copy.payer);
+            }
+            if (copy.receiverEmail) {
+              copy.receiver = normalizeEmail(copy.receiverEmail) === normalizeEmail(myEmail) ? "You" : matchingFriend.name;
+            } else if (copy.receiver) {
+              copy.receiver = flipLegacy(copy.receiver);
+            }
+            if (copy.sharesByEmail) {
+              copy.shares = Object.fromEntries(Object.entries(copy.sharesByEmail).map(([email, share]) => [
+                normalizeEmail(email) === normalizeEmail(myEmail) ? "You" :
+                  (normalizeEmail(email) === normalizeEmail(otherEmail) ? matchingFriend.name : email),
+                share
+              ]));
+            } else if (copy.shares) {
+              copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flipLegacy(member), share]));
+            }
             copy.friend = matchingFriend.name;
             copy.scope = "direct";
             copy.ownerEmail = ownerEmail;
