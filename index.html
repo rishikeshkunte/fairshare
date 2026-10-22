@@ -3353,9 +3353,9 @@
       });
 
       // 2. Direct 1-on-1 Standings
-      (appState.friends || []).forEach(f => {
+      (currentUser ? (appState.friends || []) : []).forEach(f => {
         let directBal = 0;
-        (appState.directTransactions || []).forEach(t => {
+        (currentUser ? (appState.directTransactions || []) : []).forEach(t => {
           if (t.type === "expense" && t.friend === f.name) {
             const myShare = (t.shares && t.shares["You"]) || 0;
             const theirShare = (t.shares && t.shares[f.name]) || 0;
