@@ -201,3 +201,12 @@ test("direct-pair listener restores transactions even if the other contact is no
   assert.doesNotMatch(listener, /if \(!matchingFriend\) return/);
   assert.match(listener, /const friendName = matchingFriend\.name/);
 });
+
+
+test("direct-pair listener uses the resolved friend's name without a self-reference", () => {
+  const start = html.indexOf("function listenToDirectPairs(myEmail)");
+  const end = html.indexOf("\n    function ", start + 20);
+  const listener = html.slice(start, end);
+  assert.match(listener, /const friendName = matchingFriend\.name;/);
+  assert.doesNotMatch(listener, /const friendName = friendName;/);
+});
