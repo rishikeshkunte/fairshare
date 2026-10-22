@@ -138,3 +138,21 @@ test("add-expense form has a clear amount focus, accessible scope choices, and r
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?#page-add-expense \.tab-group \.tab-btn[\s\S]*?flex: 1 1 42%/);
   assert.match(html, /id="btn-submit-expense"/);
 });
+
+
+test("balances and settlement layout adapts across desktop, tablet, and mobile", () => {
+  assert.match(css, /\.home-balance-details \.balances-layout[\s\S]*?align-items: start/);
+  assert.match(css, /@media \(min-width: 1200px\)[\s\S]*?\.home-balance-details \.balances-layout[\s\S]*?grid-template-columns/);
+  assert.match(css, /@media \(max-width: 860px\)[\s\S]*?\.home-balance-details \.balances-layout[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.home-balance-details #settlement-list \.settlement-card[\s\S]*?flex-wrap: wrap/);
+});
+
+test("friend roster re-renders immediately when authentication changes", () => {
+  const authCallback = html.indexOf("watchAuth(fx, (user) =>");
+  const callbackEnd = html.indexOf("});", authCallback);
+  const callback = html.slice(authCallback, callbackEnd);
+  assert.ok(authCallback >= 0, "auth state listener exists");
+  assert.ok(callback.indexOf("currentUser = user;") < callback.indexOf("renderAll();"));
+  assert.ok(callback.indexOf("renderAll();") < callback.indexOf("syncUserCloud(user);"));
+  assert.match(html, /function renderFriendsRoster\(\)[\s\S]*?const visibleFriends = currentUser \? appState\.friends : \[\]/);
+});
