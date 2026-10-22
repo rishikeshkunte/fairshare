@@ -507,7 +507,8 @@
       </div>
 
       <div id="empty-msg" class="empty-state">
-        <p>No transactions in this view yet.</p>
+        <p class="empty-state-title">Nothing here yet</p>
+        <p class="empty-state-description">Your expenses and settlements will appear here as you add them.</p>
       </div>
       <ul id="transaction-list" class="transaction-list"></ul>
       <div id="deleted-transactions-panel" style="display:none; margin-top:18px;">
@@ -3772,6 +3773,8 @@
         ...Object.values(appState.groups).flatMap(group => (group.transactions || []).map(t => ({ ...t, sourceGroup: group.name, groupId: group.id, sourceCurrency: group.currency }))),
         ...(currentUser ? (appState.directTransactions || []).map(t => ({ ...t, sourceGroup: `1-on-1: ${t.friend}` })) : [])
       ];
+      const historyPage = document.getElementById("page-history");
+      if (historyPage) historyPage.classList.toggle("is-empty", allTx.length === 0);
       allTx.sort((a, b) => (b.timestamp || b.id) - (a.timestamp || a.id));
 
       let filtered = allTx;
