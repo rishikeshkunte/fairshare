@@ -143,6 +143,10 @@
         <span class="eyebrow">Active group</span>
         <h2 style="margin:6px 0 4px;"><span id="home-group-name">My Group</span></h2>
         <div id="home-group-stats" style="color:var(--muted); font-size:0.85rem;">0 expenses</div>
+        <div id="home-no-groups-prompt" class="empty-state" hidden>
+          You haven’t created a group yet.
+          <button type="button" class="btn btn-primary" data-call="openNewGroupPrompt">Create your first group</button>
+        </div>
       </div>
     </div>
 
@@ -1109,6 +1113,15 @@
     function migrateDefaultGroupId() {
       const legacy = appState.groups["group_default"];
       if (!legacy) return;
+      const isEmptyTemplate = (!legacy.transactions || legacy.transactions.length === 0)
+        && (!legacy.name || ["my group", "default group"].includes(String(legacy.name).trim().toLowerCase()));
+      if (isEmptyTemplate) {
+        delete appState.groups["group_default"];
+        if (appState.activeGroupId === "group_default") appState.activeGroupId = null;
+        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+        return;
+      }
+      // Preserve any existing group that contains user-created data.
       const newId = "group_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       legacy.id = newId;
       appState.groups[newId] = legacy;
@@ -2150,6 +2163,15 @@
       });
     }
 
+    window.openNewGroupPrompt = function() {
+      if (Object.keys(appState.groups).length > 0) {
+        navigateTo("groups");
+        return;
+      }
+      if (btnNewGroupModal) btnNewGroupModal.click();
+      else if (newGroupModal) newGroupModal.classList.add("active");
+    };
+
     window.closeNewGroupModal = function() {
       if (newGroupModal) newGroupModal.classList.remove("active");
     };
@@ -2217,6 +2239,11 @@
 
     // --- 1-on-1 Direct Splitting ---
     window.setExpenseScope = function(scope) {
+      if (scope === "group" && Object.keys(appState.groups).length === 0) {
+        toast("Create a group first to add a group expense.");
+        window.openNewGroupPrompt();
+        return;
+      }
       currentExpenseScope = scope;
       const btnGroup = document.getElementById("btn-scope-group");
       const btnFriend = document.getElementById("btn-scope-friend");
@@ -3170,7 +3197,8 @@
           return;
         }
         if (!appState.groups[g.id]) {
-          toast("Create a group first.");
+          toast("Create a group before recording a group payment.");
+          window.openNewGroupPrompt();
           return;
         }
 
@@ -3552,6 +3580,11 @@
     };
 
     window.openSettleUp = function() {
+      if (Object.keys(appState.groups).length === 0) {
+        toast("Create a group before recording a group payment.");
+        window.openNewGroupPrompt();
+        return;
+      }
       if (!settleUpBox) return;
       settleUpBox.style.display = "block";
       if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
@@ -4251,8 +4284,14 @@
       applyTheme();
       renderGroupSelector();
 
-      const g = getGroup();
       const groups = Object.values(appState.groups);
+      const g = getGroup();
+      const noGroupsPrompt = document.getElementById("home-no-groups-prompt");
+      if (noGroupsPrompt) noGroupsPrompt.hidden = groups.length > 0;
+      const homeGroupStats = document.getElementById("home-group-stats");
+      if (homeGroupStats) homeGroupStats.textContent = groups.length
+        ? `${(g.transactions || []).filter(tx => tx.type === "expense").length} expenses`
+        : "No groups yet";
       const chooseHint = document.getElementById("group-choose-hint");
       const emptyHint = document.getElementById("group-empty-hint");
       const manageCard = document.getElementById("group-management-card");
