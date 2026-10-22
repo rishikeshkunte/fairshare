@@ -1925,9 +1925,32 @@
     };
 
     function addApprovedFriend(email, name) {
-      const em = email ? email.toLowerCase().trim() : "";
-      const nm = name || (em ? em.split("@")[0] : "Friend");
-      if (!appState.friends.some(f => (em && f.email && f.email.toLowerCase() === em) || (f.name === nm))) {
+      const em = normalizeEmail(email || "");
+      const nm = String(name || (em ? em.split("@")[0] : "Friend")).trim() || "Friend";
+      // Match by email first. If a local contact with this name was created
+      // before Gmail linking, enrich that record so direct-ledger sync can find it.
+      let existing = em
+        ? appState.friends.find(friend => normalizeEmail(friend.email || "") === em)
+        : null;
+      if (!existing) {
+        existing = appState.friends.find(friend =>
+          String(friend.name || "").trim().toLowerCase() === nm.toLowerCase()
+          && !normalizeEmail(friend.email || "")
+        );
+      }
+      let changed = false;
+      if (existing) {
+        if (em && !normalizeEmail(existing.email || "")) {
+          existing.email = em;
+          existing.approved = true;
+          existing.type = "google";
+          changed = true;
+        }
+        if ((!existing.name || !existing.name.trim()) && nm) {
+          existing.name = nm;
+          changed = true;
+        }
+      } else {
         appState.friends.push({
           id: newId(),
           name: nm,
@@ -1935,9 +1958,13 @@
           approved: true,
           type: "google"
         });
+        changed = true;
+      }
+      if (changed) {
         saveState();
         renderFriendsRoster();
         renderFriendPickerDropdown();
+        renderDirectFriendDropdown();
       }
     }
 
