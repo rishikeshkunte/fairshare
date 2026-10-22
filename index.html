@@ -1216,9 +1216,10 @@
     }
 
     function saveState() {
-      // Persist locally first, then merge cloud data transactionally so concurrent
-      // writes from connected users do not replace each other's expenses.
+      // Persist locally first, then sync the signed-in user's own friend roster
+      // independently of groups. A roster must work even before a group exists.
       localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+      if (fx && currentUser) saveFriendsRosterToCloud();
       if (!(fx && currentUser && appState.groups[appState.activeGroupId])) return;
 
       const g = getGroup();
@@ -1279,6 +1280,60 @@
         localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
         if (appState.activeGroupId === g.id) renderAll();
       }).catch(err => console.warn("Cloud sync note:", err));
+    }
+
+    let unsubscribeFriendsRosterListener = null;
+    let friendsRosterWriteInFlight = false;
+
+    function mergeFriendRecords(...lists) {
+      const merged = new Map();
+      lists.flat().forEach(friend => {
+        if (!friend || !friend.name) return;
+        const key = friend.email
+          ? "email:" + normalizeEmail(friend.email)
+          : friend.phone
+            ? "phone:" + String(friend.phone).replace(/[^0-9]/g, "")
+            : friend.id
+              ? "id:" + friend.id
+              : "name:" + friend.name.trim().toLowerCase();
+        if (!merged.has(key)) merged.set(key, { ...friend });
+        else merged.set(key, { ...merged.get(key), ...friend });
+      });
+      return Array.from(merged.values());
+    }
+
+    function saveFriendsRosterToCloud() {
+      if (!fx || !currentUser || !currentUser.uid || friendsRosterWriteInFlight) return;
+      friendsRosterWriteInFlight = true;
+      const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
+      fx.storeMod.setDoc(profileRef, {
+        friends: mergeFriendRecords(appState.friends || []),
+        updatedAt: serverTimestamp(fx)
+      }, { merge: true }).catch(err => {
+        console.warn("Friends roster cloud save note:", err);
+      }).finally(() => {
+        friendsRosterWriteInFlight = false;
+      });
+    }
+
+    function listenToFriendsRoster(user) {
+      if (!fx || !user || !user.uid) return;
+      if (unsubscribeFriendsRosterListener) unsubscribeFriendsRosterListener();
+      unsubscribeFriendsRosterListener = watchDoc(fx, "user_profiles", user.uid, snapshot => {
+        const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
+        const cloudFriends = Array.isArray(cloudData.friends) ? cloudData.friends : [];
+        const mergedFriends = mergeFriendRecords(cloudFriends, appState.friends || []);
+        const localChanged = JSON.stringify(mergedFriends) !== JSON.stringify(appState.friends || []);
+        appState.friends = mergedFriends;
+        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+        renderFriendsRoster();
+        renderFriendPickerDropdown();
+        renderDirectFriendDropdown();
+        renderDirectBalances();
+        if (!snapshot.exists() || JSON.stringify(cloudFriends) !== JSON.stringify(mergedFriends)) {
+          saveFriendsRosterToCloud();
+        }
+      }, err => console.warn("Friends roster cloud sync note:", err));
     }
 
     // --- DOM Elements ---
@@ -4407,8 +4462,9 @@
         if (user) {
           syncUserCloud(user);
         } else {
-          [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener]
+          [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeFriendsRosterListener]
             .forEach(unsubscribe => { if (typeof unsubscribe === "function") unsubscribe(); });
+          unsubscribeFriendsRosterListener = null;
           unsubIncomingRequests = null;
           unsubOutgoingRequests = null;
           unsubscribeGroupListener = null;
@@ -4487,6 +4543,10 @@
       }
 
       const g = getGroup();
+
+      // Friend contacts belong to the signed-in account, not to a particular group
+      // or browser's local storage.
+      listenToFriendsRoster(user);
 
       // 1. Listen for incoming friend requests
       if (unsubIncomingRequests) unsubIncomingRequests();
