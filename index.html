@@ -2146,10 +2146,13 @@
         if (modalGroupName) modalGroupName.value = "";
         if (modalFriendsCheckboxes) {
           modalFriendsCheckboxes.innerHTML = "";
-          if (appState.friends.length === 0) {
+          const friendsForGroup = currentUser ? appState.friends : [];
+          if (!currentUser) {
+            modalFriendsCheckboxes.innerHTML = `<span style="font-size:0.8rem; color:var(--muted);">Sign in to see your saved friends.</span>`;
+          } else if (friendsForGroup.length === 0) {
             modalFriendsCheckboxes.innerHTML = `<span style="font-size:0.8rem; color:var(--muted);">No saved friends yet.</span>`;
           } else {
-            appState.friends.forEach(f => {
+            friendsForGroup.forEach(f => {
               const row = document.createElement("div");
               row.style.display = "flex";
               row.style.alignItems = "center";
