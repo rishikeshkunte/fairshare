@@ -13,6 +13,11 @@ service cloud.firestore {
         && email() in data.memberEmails;
     }
 
+    // Each signed-in account owns its saved friends roster, independent of groups.
+    match /user_profiles/{userId} {
+      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+    }
+
     match /groups/{groupId} {
       // A transaction may check whether a new group document exists before creating it.
       // Existing documents remain readable only by listed members.
