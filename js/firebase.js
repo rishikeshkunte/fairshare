@@ -38,7 +38,17 @@ export function watchAuth(fx, callback) {
 
 export function signInGoogle(fx) {
   const provider = new fx.authMod.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  const coarse = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  if (coarse && typeof fx.authMod.signInWithRedirect === "function") {
+    return fx.authMod.signInWithRedirect(fx.auth, provider);
+  }
   return fx.authMod.signInWithPopup(fx.auth, provider);
+}
+
+export function finishRedirectSignIn(fx) {
+  if (!fx?.authMod?.getRedirectResult) return Promise.resolve(null);
+  return fx.authMod.getRedirectResult(fx.auth);
 }
 
 export function signOutGoogle(fx) {
@@ -60,6 +70,10 @@ export function watchDoc(fx, path, id, onNext, onError) {
 
 export function setMerge(fx, path, id, data) {
   return fx.storeMod.setDoc(fx.storeMod.doc(fx.db, path, id), data, { merge: true });
+}
+
+export function runTransaction(fx, updateFunction) {
+  return fx.storeMod.runTransaction(fx.db, updateFunction);
 }
 
 export async function uploadReceipt(fx, path, dataUrl) {
