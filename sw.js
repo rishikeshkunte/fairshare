@@ -1,11 +1,12 @@
 // Bump CACHE when shipped assets change so old caches are deleted on activate.
-const CACHE = "fairshare-v19";
+const CACHE = "fairshare-v22";
 const ASSETS = [
   "./",
   "./index.html",
   "./fairshare.css",
   "./manifest.json",
   "./js/money.js",
+  "./js/sync.js",
   "./js/ui.js",
   "./js/receipts.js",
   "./js/firebase.js",
@@ -39,14 +40,20 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  event.respondWith(isHtml(request, url) ? networkFirst(request) : cacheFirst(request));
+  const freshFirst = isHtml(request, url) || url.pathname.endsWith(".js") || url.pathname.endsWith(".css");
+  event.respondWith(freshFirst ? networkFirst(request) : cacheFirst(request));
 });
 
 async function networkFirst(request) {
   const cache = await caches.open(CACHE);
+  const url = new URL(request.url);
+  const html = request.mode === "navigate" || url.pathname.endsWith("/") || url.pathname.endsWith(".html");
   try {
     const fresh = await fetch(request);
-    if (fresh && fresh.ok) cache.put("./index.html", fresh.clone());
+    if (fresh && fresh.ok) {
+      cache.put(request, fresh.clone());
+      if (html) cache.put("./index.html", fresh.clone());
+    }
     return fresh;
   } catch {
     return (await cache.match(request)) || (await cache.match("./index.html")) || Response.error();

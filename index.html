@@ -879,10 +879,11 @@
   </div>
 
   <script type="module">
-    import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, mergeById, stripReceiptBytes, newId } from "./js/money.js";
+    import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, stripReceiptBytes, newId } from "./js/money.js";
     import { toast, askConfirm, askPrompt } from "./js/ui.js";
     import { compressImage, safeImageSrc } from "./js/receipts.js";
-    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
+    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, finishRedirectSignIn, serverTimestamp, watchQuery, watchDoc, setMerge, runTransaction, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
+    import { applyRemotePair, canonEmail, deletedForFriend, friendsSignature, linkFriend, mergeFriends, mergePairLedger, pairIdFor, pairWritePayload, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
 
     document.body.addEventListener("click", (event) => {
       const node = event.target.closest("[data-call]");
@@ -1182,16 +1183,19 @@
       // Cloud sync active group
       if (fx && currentUser && appState.groups[appState.activeGroupId]) {
         const g = getGroup();
-        const myEmailNorm = normalizeEmail(currentUser.email);
+        const myExact = (currentUser.email || "").toLowerCase().trim();
+        const myEmailNorm = normalizeEmail(myExact);
         const memberLinks = { ...(g.memberLinks || {}) };
         memberLinks[getMyGroupMemberName(g)] = myEmailNorm;
         
-        // Collect verified member emails for group access security
-        const memberEmails = [myEmailNorm];
+        // Store both the real sign-in email and the dot-stripped Gmail form.
+        // Firestore rules accept either, so a dotted Gmail address is not locked out.
+        const memberEmails = [myExact, myEmailNorm];
         (appState.friends || []).forEach(f => {
           if (f.email && g.members.includes(f.name)) {
-            const friendEmail = normalizeEmail(f.email);
-            memberEmails.push(friendEmail);
+            const friendExact = f.email.toLowerCase().trim();
+            const friendEmail = normalizeEmail(friendExact);
+            memberEmails.push(friendExact, friendEmail);
             memberLinks[f.name] = friendEmail;
           }
         });
@@ -1212,6 +1216,7 @@
         }).catch((err) => console.warn("Cloud sync note:", err));
       }
       localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+      saveFriendsRosterToCloud();
     }
 
     // --- DOM Elements ---
@@ -1574,6 +1579,7 @@
         saveState();
         renderFriendsRoster();
         renderFriendPickerDropdown();
+        refreshDirectListeners();
       }
     };
 
@@ -1591,13 +1597,7 @@
     };
 
     function normalizeEmail(email) {
-      if (!email) return "";
-      let clean = email.toLowerCase().trim();
-      if (clean.endsWith("@gmail.com")) {
-        const parts = clean.split("@");
-        clean = parts[0].replace(/\./g, "") + "@gmail.com";
-      }
-      return clean;
+      return canonEmail(email);
     }
 
     window.checkIncomingRequestsManual = async function() {
@@ -1661,7 +1661,7 @@
         return;
       }
 
-      if (appState.friends.some(f => f.email && f.email.toLowerCase() === targetEmail)) {
+      if (appState.friends.some(f => f.email && canonEmail(f.email) === canonEmail(targetEmail))) {
         toast(`${targetEmail} is already in your Connected Friends list.`);
         return;
       }
@@ -1773,20 +1773,15 @@
     };
 
     function addApprovedFriend(email, name) {
-      const em = email ? email.toLowerCase().trim() : "";
-      const nm = name || (em ? em.split("@")[0] : "Friend");
-      if (!appState.friends.some(f => (em && f.email && f.email.toLowerCase() === em) || (f.name === nm))) {
-        appState.friends.push({
-          id: newId(),
-          name: nm,
-          email: em,
-          approved: true,
-          type: "google"
-        });
-        saveState();
-        renderFriendsRoster();
-        renderFriendPickerDropdown();
-      }
+      const linked = linkFriend(appState.friends, email, name, newId);
+      if (!linked.changed) return linked.friend;
+      appState.friends = linked.friends;
+      saveState();
+      renderFriendsRoster();
+      renderFriendPickerDropdown();
+      refreshDirectListeners();
+      if (linked.friend && linked.friend.email) syncDirectPairExpense(linked.friend.name);
+      return linked.friend;
     }
 
     function renderFriendRequestsUI() {
@@ -2273,9 +2268,11 @@
           category: "Settlement",
           date: formatDisplayDate(todayISO()),
           dateISO: todayISO(),
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          updatedAt: Date.now()
         };
         appState.directTransactions.unshift(newTx);
+        syncDirectPairExpense(friendName);
         saveState();
         triggerConfetti();
         renderAll();
@@ -2789,9 +2786,11 @@
         const dateISO = (expenseDateInput && expenseDateInput.value) || todayISO();
         const notes = expenseNotesInput ? expenseNotesInput.value.trim() : "";
 
+        let previousDirectFriend = "";
         if (editId) {
           const found = findTransaction(editId);
           if (found) {
+            if (found.where === "direct" && found.tx.friend) previousDirectFriend = found.tx.friend;
             const tx = found.tx;
             tx.desc = desc;
             tx.amount = amount;
@@ -2807,6 +2806,7 @@
             if (activeReceiptBase64) tx.receipt = activeReceiptBase64;
             if (receiptUrl) tx.receiptUrl = receiptUrl;
             if (receiptPath) tx.receiptPath = receiptPath;
+            tx.updatedAt = Date.now();
             tx.recurring = repeat ? { freq: repeat, nextDue: Date.now() + (repeat === "weekly" ? 7 : 30) * 86400000 } : tx.recurring || null;
 
             const targetIsDirect = currentExpenseScope === "friend";
@@ -2846,7 +2846,6 @@
           if (currentExpenseScope === "friend") {
             if (!appState.directTransactions) appState.directTransactions = [];
             appState.directTransactions.unshift(newTx);
-            syncDirectPairExpense(selectedDirectFriend);
           } else {
             g.transactions.unshift(newTx);
           }
@@ -2859,6 +2858,11 @@
           updateCatBadge(null);
           if (btnClearReceipt) btnClearReceipt.click();
         }
+
+        const directSync = new Set();
+        if (previousDirectFriend) directSync.add(previousDirectFriend);
+        if (currentExpenseScope === "friend" && selectedDirectFriend) directSync.add(selectedDirectFriend);
+        directSync.forEach((friendName) => syncDirectPairExpense(friendName));
 
         saveState();
         renderAll();
@@ -2969,7 +2973,8 @@
         groupId: found.where === "group" ? found.group.id : null,
         groupName: found.where === "group" ? found.group.name : `1-on-1 with ${found.tx.friend || "friend"}`,
         deletedAt: Date.now(),
-        deletedBy: typeof currentUser !== "undefined" && currentUser?.displayName ? currentUser.displayName : "You"
+        deletedBy: typeof currentUser !== "undefined" && currentUser?.displayName ? currentUser.displayName : "You",
+        friendEmail: found.where === "direct" ? ((appState.friends || []).find(f => f.name === found.tx.friend)?.email || "") : ""
       };
       if (found.where === "direct") {
         appState.deletedTransactions = appState.deletedTransactions || [];
@@ -3002,6 +3007,7 @@
         group.deletedTransactions = group.deletedTransactions || [];
         record = group.deletedTransactions.find(item => String(item.id) === String(deletedId));
         if (!record) return;
+        record.transaction.updatedAt = Date.now();
         group.transactions = group.transactions || [];
         group.transactions.unshift(record.transaction);
         group.deletedTransactions = group.deletedTransactions.filter(item => String(item.id) !== String(deletedId));
@@ -3009,6 +3015,7 @@
         appState.deletedTransactions = appState.deletedTransactions || [];
         record = appState.deletedTransactions.find(item => String(item.id) === String(deletedId));
         if (!record) return;
+        record.transaction.updatedAt = Date.now();
         appState.directTransactions = appState.directTransactions || [];
         appState.directTransactions.unshift(record.transaction);
         appState.deletedTransactions = appState.deletedTransactions.filter(item => String(item.id) !== String(deletedId));
@@ -4189,10 +4196,12 @@
     async function ensureCloud() {
       if (fx) return fx;
       fx = await loadFirebase(firebaseConfig);
+      await finishRedirectSignIn(fx).catch((err) => console.warn("Redirect sign-in note:", err));
       watchAuth(fx, (user) => {
         currentUser = user;
         updateAuthUI(user);
         if (user) syncUserCloud(user);
+        else stopCloudListeners();
       });
       return fx;
     }
@@ -4299,7 +4308,92 @@
       if (g.id) listenToCloudGroup(g.id);
 
       // 4. Bilateral 1-on-1 direct pair listeners
-      listenToDirectPairs(myEmailNorm);
+      refreshDirectListeners();
+      listenToProfile(user.uid);
+    }
+
+    function stopCloudListeners() {
+      if (unsubIncomingRequests) unsubIncomingRequests();
+      if (unsubOutgoingRequests) unsubOutgoingRequests();
+      if (unsubscribeGroupListener) unsubscribeGroupListener();
+      if (unsubscribeDirectListener) unsubscribeDirectListener();
+      if (profileUnsub) profileUnsub();
+      unsubIncomingRequests = null;
+      unsubOutgoingRequests = null;
+      unsubscribeGroupListener = null;
+      unsubscribeDirectListener = null;
+      profileUnsub = null;
+    }
+
+    let profileUnsub = null;
+    let profileSave = { running: false, queued: false };
+    let toldProfileRules = false;
+
+    function friendsForCloud() {
+      return (appState.friends || []).map((friend) => ({
+        id: friend.id,
+        name: friend.name,
+        email: friend.email || "",
+        phone: friend.phone || "",
+        approved: Boolean(friend.approved),
+        type: friend.type || "custom"
+      }));
+    }
+
+    function saveFriendsRosterToCloud() {
+      if (!fx || !currentUser) return;
+      if (profileSave.running) {
+        profileSave.queued = true;
+        return;
+      }
+      profileSave.running = true;
+      const write = async () => {
+        do {
+          profileSave.queued = false;
+          await setMerge(fx, "user_profiles", currentUser.uid, {
+            friends: friendsForCloud(),
+            email: (currentUser.email || "").toLowerCase().trim(),
+            emailCanon: normalizeEmail(currentUser.email),
+            updatedAt: serverTimestamp(fx)
+          });
+        } while (profileSave.queued);
+      };
+      write().catch((err) => {
+        console.warn("Profile sync note:", err);
+        if (!toldProfileRules && String(err?.code || err?.message || "").includes("permission")) {
+          toldProfileRules = true;
+          toast("Friends could not be saved to the cloud. Publish the latest Firestore rules, then sign in again.");
+        }
+      }).finally(() => {
+        profileSave.running = false;
+        if (profileSave.queued) saveFriendsRosterToCloud();
+      });
+    }
+
+    function listenToProfile(uid) {
+      if (!fx || !uid) return;
+      if (profileUnsub) profileUnsub();
+      profileUnsub = watchDoc(fx, "user_profiles", uid, (snap) => {
+        if (!snap.exists()) {
+          saveFriendsRosterToCloud();
+          return;
+        }
+        const remoteFriends = snap.data().friends || [];
+        const merged = mergeFriends(appState.friends, remoteFriends, newId);
+        if (merged.changed) {
+          appState.friends = merged.friends;
+          localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+          renderFriendsRoster();
+          renderFriendPickerDropdown();
+          refreshDirectListeners();
+          appState.friends.forEach((friend) => {
+            if (friend.email) syncDirectPairExpense(friend.name, { quiet: true });
+          });
+        }
+        if (friendsSignature(remoteFriends) !== friendsSignature(appState.friends)) {
+          saveFriendsRosterToCloud();
+        }
+      }, (err) => console.warn("Profile note:", err));
     }
 
     function listenToCloudGroup(groupId) {
@@ -4312,9 +4406,14 @@
           if (cloudData.transactions) {
             const g = getGroup();
             const remote = cloudData.schemaVersion === 9 ? cloudData : migrateMoney({ schemaVersion: 0, groups: { [g.id]: cloudData }, directTransactions: [] }).groups[g.id];
-            const merged = mergeById(g.transactions, remote.transactions || cloudData.transactions);
-            if (JSON.stringify(merged) !== JSON.stringify(g.transactions)) g.transactions = merged;
-            if (Array.isArray(cloudData.deletedTransactions)) g.deletedTransactions = cloudData.deletedTransactions;
+            const merged = mergePairLedger({
+              localTransactions: g.transactions,
+              remoteTransactions: remote.transactions || cloudData.transactions,
+              localDeleted: g.deletedTransactions || [],
+              remoteDeleted: Array.isArray(cloudData.deletedTransactions) ? cloudData.deletedTransactions : []
+            });
+            g.transactions = merged.transactions;
+            g.deletedTransactions = merged.deletedTransactions;
             if (cloudData.members) g.members = cloudData.members;
             if (cloudData.memberLinks) g.memberLinks = cloudData.memberLinks;
             if (cloudData.currency) g.currency = cloudData.currency;
@@ -4327,62 +4426,116 @@
       }, (err) => console.warn("Firestore group note:", err));
     }
 
-    // Bilateral 1-on-1 Synchronization via direct_pairs collection
-    function syncDirectPairExpense(friendName) {
-      if (!fx || !currentUser) return;
-      const friend = appState.friends.find(f => f.name === friendName);
-      if (!friend || !friend.email) return;
+    // Bilateral 1-on-1 synchronization. Each pair is one Firestore document.
+    const pairSyncState = new Map();
+    const missingEmailNoted = new Set();
+    let toldPairRules = false;
 
-      const myEmail = normalizeEmail(currentUser.email);
-      const friendEmail = normalizeEmail(friend.email);
-      const pairId = [myEmail, friendEmail].sort().join("_").replace(/[^a-zA-Z0-9_]/g, "_");
-
-      const pairExpenses = (appState.directTransactions || []).filter(t => t.friend === friendName);
-      const pairDeleted = (appState.deletedTransactions || []).filter(item => item.location === "direct" && item.transaction?.friend === friendName);
-
-      setMerge(fx, "direct_pairs", pairId, {
-        pairId: pairId,
-        schemaVersion: 9,
-        participants: [myEmail, friendEmail],
-        transactions: stripReceiptBytes(pairExpenses),
-        deletedTransactions: pairDeleted,
-        updatedAt: serverTimestamp(fx),
-        updatedBy: myEmail
-      }).catch((err) => console.warn("Direct pair sync note:", err));
+    function notePairError(err) {
+      console.warn("Direct pair sync note:", err);
+      const code = String(err?.code || err?.message || "");
+      if (!toldPairRules && code.includes("permission")) {
+        toldPairRules = true;
+        toast("1-on-1 sync was denied by Firebase. Publish the latest Firestore rules, then reload.");
+      }
     }
 
-    function listenToDirectPairs(myEmailNorm) {
+    function refreshDirectListeners() {
       if (!fx || !currentUser) return;
       if (unsubscribeDirectListener) unsubscribeDirectListener();
-
-      unsubscribeDirectListener = watchQuery(fx, "direct_pairs", "participants", "array-contains", myEmailNorm, (snapshot) => {
-          snapshot.forEach(doc => {
-            const d = doc.data();
-            if (d.transactions && Array.isArray(d.transactions)) {
-              // Merge remote transactions without triggering infinite loops
-              const otherEmail = (d.participants || []).find(e => e !== myEmailNorm);
-              const matchingFriend = appState.friends.find(f => f.email && normalizeEmail(f.email) === otherEmail);
-              
-              if (matchingFriend) {
-                // Remove local entries for this friend and replace with cloud source of truth
-                appState.directTransactions = (appState.directTransactions || []).filter(t => t.friend !== matchingFriend.name);
-                d.transactions.forEach(t => {
-                  t.friend = matchingFriend.name;
-                  appState.directTransactions.push(t);
-                });
-                if (Array.isArray(d.deletedTransactions)) {
-                  appState.deletedTransactions = (appState.deletedTransactions || []).filter(item => !(item.location === "direct" && item.transaction?.friend === matchingFriend.name));
-                  d.deletedTransactions.forEach(item => {
-                    if (item.transaction) item.transaction.friend = matchingFriend.name;
-                    appState.deletedTransactions.push(item);
-                  });
-                }
-                localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
-                renderAll();
-              }
-            }
+      const unsubs = [];
+      const seen = new Set();
+      const myExact = (currentUser.email || "").toLowerCase().trim();
+      for (const friend of appState.friends || []) {
+        if (!friend.email) continue;
+        const pairId = pairIdFor(myExact, friend.email);
+        if (!pairId || seen.has(pairId)) continue;
+        seen.add(pairId);
+        const friendName = friend.name;
+        const friendEmail = friend.email;
+        unsubs.push(watchDoc(fx, "direct_pairs", pairId, (docSnap) => {
+          if (!docSnap.exists()) return;
+          const remote = docSnap.data() || {};
+          const next = applyRemotePair(appState, {
+            friendName,
+            friendEmail,
+            remoteTransactions: remote.transactions || [],
+            remoteDeleted: remote.deletedTransactions || []
           });
-        }, (err) => console.warn("Direct pairs listener note:", err));
+          const beforeTx = JSON.stringify(appState.directTransactions);
+          const beforeDel = JSON.stringify(appState.deletedTransactions);
+          appState.directTransactions = next.directTransactions;
+          appState.deletedTransactions = next.deletedTransactions;
+          if (beforeTx !== JSON.stringify(appState.directTransactions) || beforeDel !== JSON.stringify(appState.deletedTransactions)) {
+            localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+            renderAll();
+          }
+          const localTx = transactionsForFriend(appState.directTransactions, friendName);
+          const localDel = deletedForFriend(appState.deletedTransactions, friendName, friendEmail);
+          if (remotePairNeedsPush(remote, localTx, localDel)) syncDirectPairExpense(friendName, { quiet: true });
+        }, (err) => notePairError(err)));
+      }
+      unsubscribeDirectListener = () => unsubs.forEach((unsub) => unsub());
+    }
+
+    function syncDirectPairExpense(friendName, options = {}) {
+      if (!fx || !currentUser) return;
+      const friend = (appState.friends || []).find((item) => item.name === friendName);
+      if (!friend || !friend.email) {
+        if (!options.quiet && friendName && !missingEmailNoted.has(friendName)) {
+          missingEmailNoted.add(friendName);
+          toast(`Add ${friendName}'s Google email on the Friends page so this 1-on-1 can sync.`);
+        }
+        return;
+      }
+      const myExact = currentUser.email.toLowerCase().trim();
+      const pairId = pairIdFor(myExact, friend.email);
+      if (!pairId) return;
+      const state = pairSyncState.get(pairId) || { running: false, queued: false };
+      pairSyncState.set(pairId, state);
+      if (state.running) {
+        state.queued = true;
+        return;
+      }
+      state.running = true;
+      const drain = async () => {
+        try {
+          do {
+            state.queued = false;
+            await commitDirectPair(pairId, friendName, myExact, friend.email);
+          } while (state.queued);
+        } catch (err) {
+          notePairError(err);
+        } finally {
+          state.running = false;
+          if (state.queued) syncDirectPairExpense(friendName, { quiet: true });
+        }
+      };
+      drain();
+    }
+
+    async function commitDirectPair(pairId, friendName, myExact, friendEmail) {
+      const ref = fx.storeMod.doc(fx.db, "direct_pairs", pairId);
+      await runTransaction(fx, async (tx) => {
+        const snap = await tx.get(ref);
+        const remote = snap.exists() ? (snap.data() || {}) : {};
+        const merged = mergePairLedger({
+          localTransactions: transactionsForFriend(appState.directTransactions, friendName),
+          remoteTransactions: remote.transactions || [],
+          localDeleted: deletedForFriend(appState.deletedTransactions, friendName, friendEmail),
+          remoteDeleted: remote.deletedTransactions || []
+        });
+        const payload = pairWritePayload({
+          pairId,
+          myEmail: myExact,
+          friendEmail,
+          transactions: merged.transactions,
+          deletedTransactions: merged.deletedTransactions
+        });
+        if (payload.participants.length !== 2 || payload.participantKeys.length !== 2) return;
+        payload.updatedAt = serverTimestamp(fx);
+        tx.set(ref, payload, { merge: true });
+      });
     }
 
     // URL Group Invites
