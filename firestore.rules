@@ -7,10 +7,27 @@ service cloud.firestore {
     function email() {
       return request.auth.token.email.lower();
     }
+    // Gmail ignores dots. The app used to store only the dot-stripped form,
+    // while these rules checked the real sign-in email, so dotted Gmail
+    // accounts could not read or write their own ledgers.
+    function canonical(e) {
+      return e.matches('^[^@]+@gmail[.]com$')
+        ? e.split('@')[0].replace('[.]', '') + '@gmail.com'
+        : e;
+    }
+    function mine() {
+      return canonical(email());
+    }
     function isMember(data) {
       return signedIn()
         && data.memberEmails is list
-        && email() in data.memberEmails;
+        && (email() in data.memberEmails || mine() in data.memberEmails);
+    }
+    function pairMember(data) {
+      return signedIn() && (
+        (data.participantKeys is list && mine() in data.participantKeys)
+        || (data.participants is list && (email() in data.participants || mine() in data.participants))
+      );
     }
 
     match /groups/{groupId} {
@@ -18,23 +35,40 @@ service cloud.firestore {
       allow list: if false;
       allow create: if signedIn()
         && request.resource.data.memberEmails is list
-        && email() in request.resource.data.memberEmails;
+        && (email() in request.resource.data.memberEmails || mine() in request.resource.data.memberEmails);
       allow update, delete: if isMember(resource.data);
     }
 
     match /direct_pairs/{pairId} {
-      function inPair(data) {
-        return signedIn()
-          && data.participants is list
-          && email() in data.participants;
-      }
-      allow read: if inPair(resource.data);
+      allow get: if pairMember(resource.data);
+      allow list: if signedIn()
+        && resource.data.participants is list
+        && email() in resource.data.participants;
       allow create: if signedIn()
         && request.resource.data.participants is list
-        && email() in request.resource.data.participants
-        && request.resource.data.participants.size() == 2;
-      allow update, delete: if inPair(resource.data)
-        && email() in request.resource.data.participants;
+        && request.resource.data.participants.size() == 2
+        && (email() in request.resource.data.participants || mine() in request.resource.data.participants)
+        && (
+          !('participantKeys' in request.resource.data)
+          || (
+            request.resource.data.participantKeys is list
+            && request.resource.data.participantKeys.size() == 2
+            && mine() in request.resource.data.participantKeys
+          )
+        );
+      allow update: if pairMember(resource.data)
+        && request.resource.data.participants is list
+        && request.resource.data.participants.size() == 2
+        && (email() in request.resource.data.participants || mine() in request.resource.data.participants)
+        && (
+          !('participantKeys' in request.resource.data)
+          || (
+            request.resource.data.participantKeys is list
+            && request.resource.data.participantKeys.size() == 2
+            && mine() in request.resource.data.participantKeys
+          )
+        );
+      allow delete: if pairMember(resource.data);
     }
 
     match /friend_requests/{requestId} {
@@ -59,6 +93,11 @@ service cloud.firestore {
         )
       );
       allow delete: if signedIn() && resource.data.fromEmail == email();
+    }
+
+    match /user_profiles/{userId} {
+      allow get, create, update, delete: if signedIn()
+        && request.auth.uid == userId;
     }
   }
 }
