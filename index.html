@@ -892,7 +892,7 @@
     import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, mergeById, stripReceiptBytes, newId } from "./js/money.js";
     import { toast, askConfirm, askPrompt } from "./js/ui.js";
     import { compressImage, safeImageSrc } from "./js/receipts.js";
-    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
+    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, finishRedirectSignIn, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
 
     document.body.addEventListener("click", (event) => {
       const node = event.target.closest("[data-call]");
@@ -4489,6 +4489,7 @@
     async function ensureCloud() {
       if (fx) return fx;
       fx = await loadFirebase(firebaseConfig);
+      await finishRedirectSignIn(fx).catch((err) => console.warn("Redirect sign-in note:", err));
       watchAuth(fx, (user) => {
         currentUser = user;
         updateAuthUI(user);
