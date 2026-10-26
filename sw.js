@@ -1,5 +1,5 @@
 // Bump CACHE when shipped assets change so old caches are deleted on activate.
-const CACHE = "fairshare-v24";
+const CACHE = "fairshare-v25";
 const ASSETS = [
   "./",
   "./index.html",
@@ -40,6 +40,8 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  // Firebase Auth handlers must always use the network, never the app cache.
+  if (url.pathname.startsWith("/__/auth/") || url.pathname.startsWith("/__/firebase/")) return;
   const freshFirst = isHtml(request, url) || url.pathname.endsWith(".js") || url.pathname.endsWith(".css");
   event.respondWith(freshFirst ? networkFirst(request) : cacheFirst(request));
 });
