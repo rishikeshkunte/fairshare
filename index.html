@@ -742,8 +742,8 @@
         <div class="card" id="card-roster">
           <div class="card-header-row">
             <div>
-              <h2>Connected friends roster (<span id="global-friends-count">0</span>)</h2>
-              <span style="font-size:0.8rem; color:var(--muted);">Approved Google connections & saved contacts</span>
+              <h2>Friends &amp; contacts (<span id="global-friends-count">0</span>)</h2>
+              <span style="font-size:0.8rem; color:var(--muted);">Approved Google connections and saved local contacts</span>
             </div>
           </div>
 
@@ -2053,8 +2053,8 @@
           id: newId(),
           name: nm,
           email: em,
-          approved: true,
-          type: "google"
+          approved: Boolean(em),
+          type: em ? "google" : "custom"
         });
         changed = true;
       }
@@ -2072,6 +2072,22 @@
           syncDirectPairExpense(linked.name, { quiet: true });
         }
       }
+    }
+
+    function addGroupMembersToRoster(group) {
+      if (!currentUser || !group) return;
+      const myName = getMyGroupMemberName(group);
+      (group.members || []).forEach(member => {
+        if (!member || member === "You" || member === myName) return;
+        const email = (group.memberLinks || {})[member] || "";
+        const existing = appState.friends.find(friend =>
+          friend.name === member
+          || (email && normalizeEmail(friend.email || "") === normalizeEmail(email))
+        );
+        if (!existing || (email && !normalizeEmail(existing.email || ""))) {
+          addApprovedFriend(email, member);
+        }
+      });
     }
 
     function renderFriendRequestsUI() {
@@ -4425,6 +4441,7 @@
           currentUser = user;
           loadUserState(user);
           materializeRecurring();
+          Object.values(appState.groups || {}).forEach(addGroupMembersToRoster);
         } else {
           currentUser = user;
         }
@@ -4625,6 +4642,7 @@
               changed = true;
             }
           }
+          addGroupMembersToRoster(appState.groups[groupId]);
         });
         if (changed) {
           persistLocalState();
@@ -4667,6 +4685,7 @@
           if (cloudData.currency) group.currency = cloudData.currency;
           if (cloudData.name) group.name = cloudData.name;
           if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
+          addGroupMembersToRoster(group);
           persistLocalState();
           if (appState.activeGroupId === groupId) renderAll();
         } else if (appState.activeGroupId === groupId) {
