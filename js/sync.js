@@ -81,9 +81,38 @@ export function mergePairLedger({ localTransactions, remoteTransactions, localDe
   return { transactions, deletedTransactions };
 }
 
+export function preserveLocalReceipts(mergedTransactions, localTransactions) {
+  const localById = new Map();
+  for (const transaction of localTransactions || []) {
+    if (!transaction || transaction.id == null) continue;
+    localById.set(String(transaction.id), transaction);
+  }
+  return (mergedTransactions || []).map((transaction) => {
+    if (!transaction || transaction.id == null) return transaction;
+    const local = localById.get(String(transaction.id));
+    if (!local || txStamp(local) !== txStamp(transaction)) return transaction;
+    let copy = null;
+    for (const field of ["receipt", "receiptUrl", "receiptPath"]) {
+      if (transaction[field] == null && local[field] != null) {
+        copy = copy || { ...transaction };
+        copy[field] = local[field];
+      }
+    }
+    return copy || transaction;
+  });
+}
+
 export function ledgerSignature(transactions, deleted) {
   const tx = (transactions || []).map((item) => `${item.id}:${txStamp(item)}`).sort().join("|");
-  const removed = [...tombstoneIds(deleted)].sort().join("|");
+  const removed = (deleted || [])
+    .map((item) => {
+      const id = item?.transaction?.id ?? item?.transactionId;
+      if (id == null) return "";
+      return `${String(id)}:${Number(item.deletedAt || 0)}`;
+    })
+    .filter(Boolean)
+    .sort()
+    .join("|");
   return `${tx}#${removed}`;
 }
 
@@ -201,18 +230,90 @@ export function stripPairDeleted(items) {
   });
 }
 
+function emailForMember(member, { myEmail, friendEmail, friendName } = {}) {
+  if (member === "You") return canonEmail(myEmail);
+  if (member === friendName) return canonEmail(friendEmail);
+  return "";
+}
+
+export function canonicalizePairTransaction(transaction, context) {
+  if (!transaction || typeof transaction !== "object") return transaction;
+  const mine = String(context?.myEmail || "").toLowerCase().trim();
+  const copy = {
+    ...transaction,
+    ownerEmail: String(transaction.ownerEmail || mine).toLowerCase().trim(),
+    scope: transaction.scope || "direct"
+  };
+  const payerEmail = transaction.payerEmail
+    ? canonEmail(transaction.payerEmail)
+    : emailForMember(transaction.payer, context);
+  if (payerEmail) copy.payerEmail = payerEmail;
+  else delete copy.payerEmail;
+
+  const receiverEmail = transaction.receiverEmail
+    ? canonEmail(transaction.receiverEmail)
+    : emailForMember(transaction.receiver, context);
+  if (receiverEmail) copy.receiverEmail = receiverEmail;
+  else delete copy.receiverEmail;
+
+  if (transaction.sharesByEmail) {
+    copy.sharesByEmail = Object.fromEntries(
+      Object.entries(transaction.sharesByEmail).map(([email, share]) => [canonEmail(email) || email, share])
+    );
+  } else if (transaction.shares) {
+    copy.sharesByEmail = Object.fromEntries(
+      Object.entries(transaction.shares).map(([member, share]) => [emailForMember(member, context) || member, share])
+    );
+  }
+  return copy;
+}
+
+export function canonicalizePairDeleted(item, context) {
+  if (!item?.transaction) return item;
+  return { ...item, transaction: canonicalizePairTransaction(item.transaction, context) };
+}
+
+export function buildPairWritePayload({
+  pairId,
+  myEmail,
+  friendEmail,
+  friendName,
+  transactions,
+  deletedTransactions,
+  remoteTransactions,
+  remoteDeleted
+}) {
+  const context = { myEmail, friendEmail, friendName };
+  const localTransactions = transactionsForFriend(transactions, friendName)
+    .map((transaction) => canonicalizePairTransaction(transaction, context));
+  const localDeleted = deletedForFriend(deletedTransactions, friendName, friendEmail)
+    .map((item) => canonicalizePairDeleted(item, context));
+  const merged = mergePairLedger({
+    localTransactions,
+    remoteTransactions: remoteTransactions || [],
+    localDeleted,
+    remoteDeleted: remoteDeleted || []
+  });
+  return pairWritePayload({
+    pairId,
+    myEmail,
+    friendEmail,
+    transactions: merged.transactions,
+    deletedTransactions: merged.deletedTransactions
+  });
+}
+
 export function pairWritePayload({ pairId, myEmail, friendEmail, transactions, deletedTransactions }) {
   const mine = String(myEmail || "").toLowerCase().trim();
   const theirs = String(friendEmail || "").toLowerCase().trim();
-  const participantKeys = [canonEmail(mine), canonEmail(theirs)].filter(Boolean).sort();
-  // Exactly two addresses: the sign-in email and the friend's email.
-  // The published rules reject a pair document whose participant list is any other size.
-  const participants = [...new Set([mine, theirs].filter(Boolean))];
+  // Canonical addresses are the stable pair identity. Raw auth identity stays in
+  // updatedBy and in Firestore request.auth; it must not alternate between writers.
+  const participantKeys = [...new Set([canonEmail(mine), canonEmail(theirs)].filter(Boolean))].sort();
   return {
     pairId,
     schemaVersion: 9,
     participantKeys,
-    participants,
+    participants: [...participantKeys],
     transactions: stripReceiptBytes(transactions || []),
     deletedTransactions: stripPairDeleted(deletedTransactions || []),
     updatedBy: mine

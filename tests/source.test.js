@@ -10,6 +10,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
 const css = readFileSync(join(root, "fairshare.css"), "utf8");
 const rules = readFileSync(join(root, "firestore.rules"), "utf8");
+const sync = readFileSync(join(root, "js", "sync.js"), "utf8");
 
 test("inline application module parses as valid JavaScript", () => {
   const match = html.match(/<script\s+type="module">([\s\S]*?)<\/script>/i);
@@ -82,17 +83,20 @@ test("signed-out summaries, details, trash, and exports exclude cached 1-on-1 da
 });
 
 test("group discovery rules restrict reads to signed-in group members", () => {
-  assert.match(rules, /allow list:\s*if isMember\(resource\.data\);/);
+  assert.match(rules, /allow list:\s*if signedIn\(\) && email\(\) in resource\.data\.memberEmails;/);
   assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
   assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?groups\/\$\(groupId\)[\s\S]*?isMember\(resource\.data\)/);
-  assert.match(rules, /direct_pairs[\s\S]*?allow get:\s*if signedIn\(\)[\s\S]*?direct_pairs\/\$\(pairId\)[\s\S]*?inPair\(resource\.data\)/);
+  assert.match(rules, /direct_pairs[\s\S]*?allow get:\s*if signedIn\(\)[\s\S]*?direct_pairs\/\$\(pairId\)[\s\S]*?pairMember\(resource\.data\)/);
 });
 
 test("shared expense sync uses transactional merges and stable participant identities", () => {
   assert.match(html, /runTransaction\(fx\.db, async transaction/);
-  assert.match(html, /mergeTransactionsWithDeletes\(/);
-  assert.match(html, /payerEmail/);
-  assert.match(html, /sharesByEmail/);
+  assert.match(html, /mergePairLedger\(/);
+  assert.match(html, /buildPairWritePayload\(/);
+  assert.match(html, /participantKeys/);
+  assert.match(sync, /export function canonicalizePairTransaction/);
+  assert.match(sync, /payerEmail/);
+  assert.match(sync, /sharesByEmail/);
   assert.match(html, /watchQuery\(fx, "groups", "memberEmails", "array-contains", myEmail/);
 });
 
@@ -192,23 +196,27 @@ test("simplify debts toggle persists its selected mode and re-renders settlement
 });
 
 
-test("direct-pair listener restores transactions even if the other contact is not already saved", () => {
-  const start = html.indexOf("function listenToDirectPairs(myEmail)");
+test("direct-pair listener merges snapshots through the shared tombstone-aware module", () => {
+  const start = html.indexOf("function refreshDirectListeners()");
   const end = html.indexOf("\n    function ", start + 20);
   const listener = html.slice(start, end);
-  assert.match(listener, /const otherEmail = \(data\.participants \|\| \[\]\)\.find/);
-  assert.match(listener, /if \(!matchingFriend\)[\s\S]*?addApprovedFriend\(otherEmail, suggestedName\)/);
-  assert.ok(listener.indexOf("addApprovedFriend(otherEmail, suggestedName)") < listener.indexOf("if (!matchingFriend) return"));
-  assert.match(listener, /const friendName = matchingFriend\.name/);
+  assert.match(listener, /const pairId = pairIdFor\(myEmail, friend\.email\)/);
+  assert.match(listener, /applyRemotePair\(appState/);
+  assert.match(listener, /remotePairNeedsPush\(remote, localTx, localDel\)/);
+  assert.match(listener, /syncDirectPairExpense\(friendName, \{ quiet: true \}\)/);
+  assert.doesNotMatch(listener, /filter\(tx => tx\.friend !== friendName\)\.concat/);
 });
 
 
-test("direct-pair listener uses the resolved friend's name without a self-reference", () => {
-  const start = html.indexOf("function listenToDirectPairs(myEmail)");
-  const end = html.indexOf("\n    function ", start + 20);
-  const listener = html.slice(start, end);
-  assert.match(listener, /const friendName = matchingFriend\.name;/);
-  assert.doesNotMatch(listener, /const friendName = friendName;/);
+test("direct-pair writes and listeners use the same canonical pair id", () => {
+  const writerStart = html.indexOf("function syncDirectPairExpense(friendName");
+  const writerEnd = html.indexOf("\n    async function ", writerStart + 20);
+  const writer = html.slice(writerStart, writerEnd);
+  const listenerStart = html.indexOf("function refreshDirectListeners()");
+  const listenerEnd = html.indexOf("\n    function ", listenerStart + 20);
+  const listener = html.slice(listenerStart, listenerEnd);
+  assert.match(writer, /const pairId = pairIdFor\(myEmail, friendEmail\)/);
+  assert.match(listener, /const pairId = pairIdFor\(myEmail, friend\.email\)/);
 });
 
 
@@ -220,9 +228,11 @@ test("direct expense deletion persists its tombstone before syncing the shared l
   assert.ok(deletion.indexOf("saveState();") < deletion.indexOf("syncDirectPairExpense(found.tx.friend)"));
 });
 
-test("shared expense merge prefers cloud versions over stale local duplicates", () => {
-  assert.match(html, /function mergeTransactionsWithDeletes\([\s\S]*?mergeById\(cloudTransactions \|\| \[\], localTransactions \|\| \[\]\)/);
-  assert.match(html, /deletedTransactionIds\.has\(String\(tx\.id\)\)/);
+test("shared ledgers use the timestamp-aware merge from the sync module", () => {
+  assert.match(html, /mergePairLedger\(/);
+  assert.doesNotMatch(html, /function mergeTransactionsWithDeletes/);
+  assert.match(sync, /export function mergePairLedger/);
+  assert.match(sync, /Number\(tomb\.deletedAt \|\| 0\) >= txStamp\(tx\)/);
 });
 
 test("Gmail linking upgrades a same-name local friend without an email", () => {
@@ -233,4 +243,62 @@ test("Gmail linking upgrades a same-name local friend without an email", () => {
   assert.ok(fn.includes('!normalizeEmail(friend.email || "")'));
   assert.ok(fn.includes("renderDirectFriendDropdown()"));
   assert.ok(fn.includes('normalizeEmail(friend.email || "") === em'));
+});
+
+test("application wires the shared direct-pair sync module instead of inline merge logic", () => {
+  assert.match(html, /import\s*\{[^}]*\bapplyRemotePair\b[^}]*\}\s*from\s*"\.\/js\/sync\.js"/);
+  assert.match(html, /import\s*\{[^}]*\bbuildPairWritePayload\b[^}]*\}\s*from\s*"\.\/js\/sync\.js"/);
+  assert.match(html, /import\s*\{[^}]*\bmergePairLedger\b[^}]*\}\s*from\s*"\.\/js\/sync\.js"/);
+  assert.match(html, /function refreshDirectListeners\(\)[\s\S]*?applyRemotePair\(/);
+  assert.match(html, /remotePairNeedsPush\(/);
+  assert.match(html, /buildPairWritePayload\(/);
+  assert.doesNotMatch(html, /function mergeTransactionsWithDeletes\(/);
+});
+
+test("restoring a deleted record advances updatedAt past the tombstone", () => {
+  const start = html.indexOf("window.restoreDeletedTransaction = function(deletedId, location, groupId)");
+  const end = html.indexOf("// Settle Form", start);
+  const restore = html.slice(start, end);
+  assert.match(restore, /const restoredAt = Math\.max\(\s*Date\.now\(\),\s*Number\(record\.deletedAt \|\| 0\) \+ 1,\s*Number\(record\.transaction\.updatedAt \|\| 0\) \+ 1\s*\);/);
+  assert.match(restore, /record\.transaction\.updatedAt = restoredAt;/);
+});
+
+test("direct-pair rules derive canonical membership from the auth token and stable keys", () => {
+  assert.match(rules, /function canonical\(e\)[\s\S]*?gmail\[\.\]com/);
+  assert.match(rules, /function mine\(\)[\s\S]*?canonical\(email\(\)\)/);
+  assert.match(rules, /function pairMember\(data\)[\s\S]*?mine\(\) in data\.participantKeys[\s\S]*?data\.participants/);
+  assert.match(rules, /allow list:\s*if signedIn\(\) && mine\(\) in resource\.data\.participantKeys;/);
+  assert.match(rules, /function validPair\(data\)[\s\S]*?mine\(\) in data\.participantKeys[\s\S]*?mine\(\) in data\.participants/);
+  assert.match(rules, /data\.participantKeys\.hasAll\(data\.participants\)[\s\S]*?data\.participants\.hasAll\(data\.participantKeys\)/);
+  assert.match(rules, /function legacyPairKeys\(\)[\s\S]*?canonical\(resource\.data\.participants\[0\]\)[\s\S]*?canonical\(resource\.data\.participants\[1\]\)/);
+  assert.match(rules, /function stableMembership\(\)[\s\S]*?resource\.data\.participants is list[\s\S]*?\('participantKeys' in resource\.data\)[\s\S]*?hasAll\(request\.resource\.data\.participantKeys\)[\s\S]*?request\.resource\.data\.participantKeys\.hasAll\(resource\.data\.participantKeys\)/);
+  assert.match(rules, /request\.resource\.data\.participantKeys\.hasAll\(legacyPairKeys\(\)\)[\s\S]*?legacyPairKeys\(\)\.hasAll\(request\.resource\.data\.participantKeys\)/);
+  assert.match(rules, /allow create:\s*if signedIn\(\) && validPair\(request\.resource\.data\);/);
+  assert.match(rules, /allow update:\s*if pairMember\(resource\.data\) && validPair\(request\.resource\.data\) && stableMembership\(\);/);
+  assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?!exists\([\s\S]*?pairMember\(resource\.data\)/);
+});
+
+test("scan bill is removed without breaking manual receipt attachment", () => {
+  assert.doesNotMatch(html, /GOOGLE_VISION_API_KEY|vision\.googleapis\.com|scanReceiptImage|parseReceiptText|receipt-scan-status|detected-amounts-wrapper|Scan bill receipt/i);
+  assert.doesNotMatch(html, /receipt-auth-pill|receipt-auth-note/);
+  assert.match(html, /<label for="receipt-file">Receipt photo \(optional\)<\/label>/);
+  assert.match(html, /<input type="file" id="receipt-file" accept="image\/\*">/);
+  assert.match(html, /receiptFileInput\.addEventListener\("change"/);
+  assert.match(html, /activeReceiptBase64 = await compressImage\(evt\.target\.result\)/);
+  assert.match(html, /if \(receiptThumb\) receiptThumb\.src = activeReceiptBase64;/);
+  assert.match(html, /btnClearReceipt\.addEventListener\("click"/);
+  assert.match(html, /safeImageSrc\(tx\.receiptUrl \|\| tx\.receipt\)/);
+});
+
+test("receipt reconciliation preserves local receipt fields", () => {
+  assert.match(html, /import\s*\{[^}]*\bpreserveLocalReceipts\b[^}]*\}\s*from "\.\/js\/sync\.js"/);
+  assert.match(sync, /export function preserveLocalReceipts/);
+  assert.match(html, /preserveLocalReceipts\(reconciled\.transactions, localGroupTransactions\)/);
+  assert.match(html, /preserveLocalReceipts\(merged\.transactions, localGroupTransactions\)/);
+  assert.match(html, /preserveLocalReceipts\(next\.directTransactions, localDirectTransactions\)/);
+});
+
+test("group reconciliation keeps merged tombstones instead of cloud-only tombstones", () => {
+  assert.match(html, /localGroup\.deletedTransactions = merged\.deletedTransactions;/);
+  assert.doesNotMatch(html, /\bdeletedTransactions\s*=\s*cloudData\.deletedTransactions\b/);
 });
