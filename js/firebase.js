@@ -39,10 +39,8 @@ export function watchAuth(fx, callback) {
 export function signInGoogle(fx) {
   const provider = new fx.authMod.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  const coarse = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-  if (coarse && typeof fx.authMod.signInWithRedirect === "function") {
-    return fx.authMod.signInWithRedirect(fx.auth, provider);
-  }
+  // Popup auth avoids redirect cookie/state persisting across deployments and
+  // works with Firebase's stable registered auth handler on mobile as well.
   return fx.authMod.signInWithPopup(fx.auth, provider);
 }
 
