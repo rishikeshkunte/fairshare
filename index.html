@@ -302,33 +302,16 @@
           <input type="text" id="expense-notes" placeholder="e.g. Skipped dessert, split cab fare" autocomplete="off">
         </div>
 
-        <!-- Smart Cloud Vision OCR Attachment -->
         <div class="form-group">
-          <label for="receipt-file">Scan bill receipt <span class="auth-pill" id="receipt-auth-pill">Needs sign-in</span></label>
-          <p id="receipt-auth-note" class="auth-note">Scanning a receipt for the total needs Google sign-in. You can still attach a photo on this device.</p>
+          <label for="receipt-file">Receipt photo (optional)</label>
           <label class="dropzone" id="receipt-dropzone">
             <input type="file" id="receipt-file" accept="image/*">
-            <span><strong>Drop bill image here</strong><br>or tap to photograph receipt. Google Vision will locate and set total.</span>
+            <span><strong>Drop bill image here</strong><br>or tap to attach or photograph a receipt.</span>
           </label>
           <button type="button" id="btn-clear-receipt" class="btn btn-secondary" style="display:none; margin-top:8px;">Remove receipt</button>
-          
+
           <div id="receipt-upload-preview" style="display:none; margin-top: 10px;">
-            <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
-              <img id="receipt-thumb" src="" alt="Receipt Preview" style="max-height: 90px; border-radius: 8px; border: 1px solid var(--line); box-shadow:var(--shadow);">
-              <div id="receipt-scan-status" style="flex:1; min-width:240px; padding:10px 14px; background:var(--box-bg); border:1px solid var(--line); border-radius:12px;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <span id="scan-icon" style="font-size:1.15rem;">🔍</span>
-                  <div>
-                    <strong id="scan-status-title" style="font-size:0.85rem; color:var(--text); display:block;">Scanning receipt...</strong>
-                    <span id="scan-status-detail" style="font-size:0.75rem; color:var(--muted); display:block;">Sending to Google Vision API...</span>
-                  </div>
-                </div>
-                <div id="detected-amounts-wrapper" style="margin-top:8px; display:none;">
-                  <span style="font-size:0.72rem; color:var(--muted); font-weight:700; text-transform:uppercase;">Detected bill figures (tap to select):</span>
-                  <div id="detected-amounts-chips" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;"></div>
-                </div>
-              </div>
-            </div>
+            <img id="receipt-thumb" src="" alt="Receipt Preview" style="max-height: 90px; border-radius: 8px; border: 1px solid var(--line); box-shadow:var(--shadow);">
           </div>
         </div>
 
@@ -889,10 +872,11 @@
   </div>
 
   <script type="module">
-    import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, mergeById, stripReceiptBytes, newId } from "./js/money.js";
+    import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, stripReceiptBytes, newId } from "./js/money.js";
     import { toast, askConfirm, askPrompt } from "./js/ui.js";
     import { compressImage, safeImageSrc } from "./js/receipts.js";
     import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, finishRedirectSignIn, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
+    import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, mergePairLedger, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
 
     document.body.addEventListener("click", (event) => {
       const node = event.target.closest("[data-call]");
@@ -1197,26 +1181,6 @@
       ["fairshare_state_v6", "fairshare_state_v7", "fairshare_state_v8"].forEach((key) => localStorage.removeItem(key));
     }
 
-    function mergeTransactionsWithDeletes(localTransactions, cloudTransactions, localDeleted, cloudDeleted) {
-      const deletedById = new Map();
-      [...(cloudDeleted || []), ...(localDeleted || [])].forEach(item => {
-        if (!item || item.id == null) return;
-        const previous = deletedById.get(String(item.id));
-        if (!previous || (Number(item.deletedAt) || 0) >= (Number(previous.deletedAt) || 0)) {
-          deletedById.set(String(item.id), item);
-        }
-      });
-      const deletedTransactionIds = new Set([...deletedById.values()]
-        .map(item => item.transaction?.id)
-        .filter(id => id != null)
-        .map(String));
-      // Keep cloud versions authoritative when the same transaction exists in both places.
-      // Local-only transactions are still retained so a newly created/offline expense can sync later.
-      const transactions = mergeById(cloudTransactions || [], localTransactions || [])
-        .filter(tx => !deletedTransactionIds.has(String(tx.id)));
-      return { transactions, deletedTransactions: [...deletedById.values()] };
-    }
-
     function saveState() {
       // Persist locally first, then sync the signed-in user's own friend roster
       // independently of groups. A roster must work even before a group exists.
@@ -1247,12 +1211,12 @@
       fx.storeMod.runTransaction(fx.db, async transaction => {
         const snapshot = await transaction.get(groupRef);
         const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
-        const merged = mergeTransactionsWithDeletes(
-          stripReceiptBytes(g.transactions),
-          cloudData.transactions || [],
-          g.deletedTransactions || [],
-          cloudData.deletedTransactions || []
-        );
+        const merged = mergePairLedger({
+          localTransactions: stripReceiptBytes(g.transactions),
+          remoteTransactions: cloudData.transactions || [],
+          localDeleted: g.deletedTransactions || [],
+          remoteDeleted: cloudData.deletedTransactions || []
+        });
         transaction.set(groupRef, {
           id: g.id,
           schemaVersion: 9,
@@ -1271,13 +1235,14 @@
       }).then(merged => {
         // Reconcile the cloud result with the original local objects so local receipt
         // data URLs remain available on this device while cloud copies stay lightweight.
-        const reconciled = mergeTransactionsWithDeletes(
-          g.transactions || [],
-          merged.transactions || [],
-          g.deletedTransactions || [],
-          merged.deletedTransactions || []
-        );
-        g.transactions = reconciled.transactions;
+        const localGroupTransactions = g.transactions || [];
+        const reconciled = mergePairLedger({
+          localTransactions: localGroupTransactions,
+          remoteTransactions: merged.transactions || [],
+          localDeleted: g.deletedTransactions || [],
+          remoteDeleted: merged.deletedTransactions || []
+        });
+        g.transactions = preserveLocalReceipts(reconciled.transactions, localGroupTransactions);
         g.deletedTransactions = reconciled.deletedTransactions;
         localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
         if (appState.activeGroupId === g.id) renderAll();
@@ -1332,6 +1297,7 @@
         renderFriendPickerDropdown();
         renderDirectFriendDropdown();
         renderDirectBalances();
+        if (localChanged) refreshDirectListeners();
         if (!snapshot.exists() || JSON.stringify(cloudFriends) !== JSON.stringify(mergedFriends)) {
           saveFriendsRosterToCloud();
         }
@@ -1726,6 +1692,7 @@
         saveState();
         renderFriendsRoster();
         renderFriendPickerDropdown();
+        refreshDirectListeners();
       }
     };
 
@@ -1743,13 +1710,7 @@
     };
 
     function normalizeEmail(email) {
-      if (!email) return "";
-      let clean = email.toLowerCase().trim();
-      if (clean.endsWith("@gmail.com")) {
-        const parts = clean.split("@");
-        clean = parts[0].replace(/\./g, "") + "@gmail.com";
-      }
-      return clean;
+      return canonEmail(email);
     }
 
     window.checkIncomingRequestsManual = async function() {
@@ -1965,6 +1926,14 @@
         renderFriendsRoster();
         renderFriendPickerDropdown();
         renderDirectFriendDropdown();
+        refreshDirectListeners();
+        const linked = em
+          ? appState.friends.find(friend => normalizeEmail(friend.email || "") === em)
+          : null;
+        if (linked && (transactionsForFriend(appState.directTransactions, linked.name).length
+          || deletedForFriend(appState.deletedTransactions, linked.name, linked.email).length)) {
+          syncDirectPairExpense(linked.name, { quiet: true });
+        }
       }
     }
 
@@ -2747,166 +2716,6 @@
       });
     }
 
-    // --- Google Cloud Vision API Integration ---
-    const GOOGLE_VISION_API_KEY = "AIzaSyAW-RBZq9BmTWG9clF_gA5wOK5xPN82wqw";
-
-    async function scanReceiptImage(base64Image) {
-      const scanStatus = document.getElementById("receipt-scan-status");
-      const scanIcon = document.getElementById("scan-icon");
-      const scanTitle = document.getElementById("scan-status-title");
-      const scanDetail = document.getElementById("scan-status-detail");
-      const amountsWrapper = document.getElementById("detected-amounts-wrapper");
-
-      if (scanStatus) scanStatus.style.display = "block";
-      if (scanIcon) scanIcon.textContent = "⏳";
-      if (scanTitle) scanTitle.textContent = "Reading bill with Google Cloud Vision AI...";
-      if (scanDetail) scanDetail.textContent = "Extracting text and locating total figures...";
-      if (amountsWrapper) amountsWrapper.style.display = "none";
-
-      const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
-
-      try {
-        const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            requests: [
-              {
-                image: { content: cleanBase64 },
-                features: [{ type: "DOCUMENT_TEXT_DETECTION" }]
-              }
-            ]
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error?.message || `HTTP ${response.status}`);
-        }
-
-        const result = await response.json();
-        const fullText = result.responses?.[0]?.fullTextAnnotation?.text || "";
-
-        if (!fullText) {
-          if (scanIcon) scanIcon.textContent = "ℹ️";
-          if (scanTitle) scanTitle.textContent = "No legible text found in photo";
-          if (scanDetail) scanDetail.textContent = "Make sure the bill is clear and well-lit.";
-          return;
-        }
-
-        parseReceiptText(fullText);
-
-      } catch (err) {
-        console.error("Cloud Vision scan error:", err);
-        if (scanIcon) scanIcon.textContent = "ℹ️";
-        if (scanTitle) scanTitle.textContent = "Could not auto-read receipt";
-        if (scanDetail) scanDetail.textContent = "Please enter amount manually.";
-      }
-    }
-
-    function parseReceiptText(text) {
-      const scanIcon = document.getElementById("scan-icon");
-      const scanTitle = document.getElementById("scan-status-title");
-      const scanDetail = document.getElementById("scan-status-detail");
-      const amountsWrapper = document.getElementById("detected-amounts-wrapper");
-      const amountsChips = document.getElementById("detected-amounts-chips");
-
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-
-      // Auto-fill merchant name from top 4 lines if description empty
-      if (!descInput.value || descInput.value.trim() === "") {
-        for (let i = 0; i < Math.min(4, lines.length); i++) {
-          const line = lines[i];
-          if (line.length > 2 && !/^\d+$/.test(line) && !/invoice|receipt|date|bill|gst|tax|order|table|cashier|welcome/i.test(line)) {
-            descInput.value = line.replace(/[^a-zA-Z0-9 &'-]/g, "").trim();
-            if (!categoryManuallyOverridden) {
-              const detected = predictCategory(descInput.value);
-              if (detected && categorySelect) {
-                categorySelect.value = detected;
-                updateCatBadge("auto");
-              }
-            }
-            break;
-          }
-        }
-      }
-
-      // High-precision monetary extraction
-      const ignorePattern = /gstin|date|time|table|order\s*no|invoice\s*no|fssai|phone|tel|mobile|cashier|pin/i;
-      const totalKeywords = /grand\s*total|net\s*amount|total\s*amount|bill\s*amount|amount\s*payable|balance\s*due|total|subtotal|paid|sum/i;
-      const amountRegex = /(?:₹|Rs\.?|INR|\$|€|£)?\s*([0-9]{1,3}(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})|[0-9]+(?:\.[0-9]{1,2})|[0-9]{2,6}(?:\s*\/-|\.-)?)/g;
-
-      const candidateTotals = [];
-      const allPrices = [];
-
-      lines.forEach((line) => {
-        if (ignorePattern.test(line)) return;
-
-        let match;
-        const lineNums = [];
-        while ((match = amountRegex.exec(line)) !== null) {
-          const numStr = match[1].replace(/,/g, "").replace('/-', '').replace('.-', '').trim();
-          const val = parseFloat(numStr);
-          if (!isNaN(val) && val > 0 && val < 500000 && ![2024, 2025, 2026].includes(val)) {
-            lineNums.push(val);
-            allPrices.push(val);
-          }
-        }
-
-        if (totalKeywords.test(line) && lineNums.length > 0) {
-          const maxOnLine = Math.max(...lineNums);
-          const weight = /grand\s*total|net\s*amount|payable|final\s*total/i.test(line) ? 3 : 2;
-          candidateTotals.push({ weight, amount: maxOnLine });
-        }
-      });
-
-      let detectedTotal = null;
-      if (candidateTotals.length > 0) {
-        candidateTotals.sort((a, b) => b.weight - a.weight || b.amount - a.amount);
-        detectedTotal = candidateTotals[0].amount;
-      } else if (allPrices.length > 0) {
-        detectedTotal = Math.max(...allPrices);
-      }
-
-      const cur = getGroup().currency;
-
-      if (detectedTotal !== null && detectedTotal > 0) {
-        amountInput.value = detectedTotal.toFixed(2);
-        amountInput.dispatchEvent(new Event("input"));
-
-        if (scanIcon) scanIcon.textContent = "✨";
-        if (scanTitle) scanTitle.textContent = `Auto-scanned Bill Total: ${cur}${detectedTotal.toFixed(2)}`;
-        if (scanDetail) scanDetail.textContent = "Google Vision extracted total and updated split shares!";
-      } else {
-        if (scanIcon) scanIcon.textContent = "ℹ️";
-        if (scanTitle) scanTitle.textContent = "Receipt photo processed";
-        if (scanDetail) scanDetail.textContent = "Could not pinpoint total. Please select or enter amount.";
-      }
-
-      // Display chips for alternative figures
-      const uniquePrices = Array.from(new Set(allPrices)).sort((a, b) => b - a).slice(0, 6);
-      if (uniquePrices.length > 0 && amountsWrapper && amountsChips) {
-        amountsChips.innerHTML = "";
-        uniquePrices.forEach(amt => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "chip";
-          btn.style.cursor = "pointer";
-          btn.style.fontSize = "0.8rem";
-          btn.style.padding = "3px 8px";
-          btn.style.border = (detectedTotal === amt) ? "2px solid var(--primary)" : "1px solid var(--line)";
-          btn.textContent = `${cur}${amt.toFixed(2)}`;
-          btn.onclick = () => {
-            amountInput.value = amt.toFixed(2);
-            amountInput.dispatchEvent(new Event("input"));
-            if (scanTitle) scanTitle.textContent = `Amount set to: ${cur}${amt.toFixed(2)}`;
-          };
-          amountsChips.appendChild(btn);
-        });
-        amountsWrapper.style.display = "block";
-      }
-    }
-
     // Outbound Sharing Helpers
     window.openInviteInGmail = function() {
       const inputEl = document.getElementById("input-friend-email");
@@ -2963,8 +2772,6 @@
           if (receiptThumb) receiptThumb.src = activeReceiptBase64;
           if (receiptUploadPreview) receiptUploadPreview.style.display = "block";
           if (btnClearReceipt) btnClearReceipt.style.display = "inline-block";
-          
-          scanReceiptImage(activeReceiptBase64);
         };
         reader.readAsDataURL(file);
       });
@@ -2976,8 +2783,6 @@
         if (receiptFileInput) receiptFileInput.value = "";
         if (receiptUploadPreview) receiptUploadPreview.style.display = "none";
         if (btnClearReceipt) btnClearReceipt.style.display = "none";
-        const amountsWrapper = document.getElementById("detected-amounts-wrapper");
-        if (amountsWrapper) amountsWrapper.style.display = "none";
       });
     }
 
@@ -3257,6 +3062,8 @@
         group.deletedTransactions = group.deletedTransactions || [];
         record = group.deletedTransactions.find(item => String(item.id) === String(deletedId));
         if (!record) return;
+        const restoredAt = Math.max(Date.now(), Number(record.deletedAt || 0) + 1, Number(record.transaction.updatedAt || 0) + 1);
+        record.transaction.updatedAt = restoredAt;
         group.transactions = group.transactions || [];
         group.transactions.unshift(record.transaction);
         group.deletedTransactions = group.deletedTransactions.filter(item => String(item.id) !== String(deletedId));
@@ -3264,6 +3071,8 @@
         appState.deletedTransactions = appState.deletedTransactions || [];
         record = appState.deletedTransactions.find(item => String(item.id) === String(deletedId));
         if (!record) return;
+        const restoredAt = Math.max(Date.now(), Number(record.deletedAt || 0) + 1, Number(record.transaction.updatedAt || 0) + 1);
+        record.transaction.updatedAt = restoredAt;
         appState.directTransactions = appState.directTransactions || [];
         appState.directTransactions.unshift(record.transaction);
         appState.deletedTransactions = appState.deletedTransactions.filter(item => String(item.id) !== String(deletedId));
@@ -4534,10 +4343,6 @@
         node.disabled = !user;
         node.querySelectorAll(".auth-pill").forEach((pill) => { pill.hidden = Boolean(user); });
       });
-      const receiptPill = document.getElementById("receipt-auth-pill");
-      if (receiptPill) receiptPill.hidden = Boolean(user);
-      const receiptNote = document.getElementById("receipt-auth-note");
-      if (receiptNote) receiptNote.hidden = Boolean(user);
       const friendsStack = document.getElementById("friends-stack");
       if (friendsStack) friendsStack.classList.toggle("signed-out", !user);
     }
@@ -4574,7 +4379,6 @@
       if (!fx || !user) return;
       migrateDefaultGroupId();
       const myEmail = (user.email || "").toLowerCase().trim();
-      const myEmailNorm = normalizeEmail(myEmail);
 
       if (myDisplayAccount) {
         myDisplayAccount.textContent = user.displayName ? `${user.displayName} (${user.email})` : user.email;
@@ -4636,19 +4440,26 @@
               members: Array.isArray(cloudData.members) ? cloudData.members : ["You"],
               memberLinks: cloudData.memberLinks || {},
               simplifyDebts: cloudData.simplifyDebts !== false,
-              transactions: mergeTransactionsWithDeletes([], migrated.transactions || [], [], cloudData.deletedTransactions || []).transactions,
+              transactions: mergePairLedger({
+                localTransactions: [],
+                remoteTransactions: migrated.transactions || [],
+                localDeleted: [],
+                remoteDeleted: cloudData.deletedTransactions || []
+              }).transactions,
               deletedTransactions: Array.isArray(cloudData.deletedTransactions) ? cloudData.deletedTransactions : []
             };
             changed = true;
           } else {
-            const merged = mergeTransactionsWithDeletes(
-              localGroup.transactions || [],
-              migrated.transactions || [],
-              localGroup.deletedTransactions || [],
-              cloudData.deletedTransactions || []
-            );
-            if (JSON.stringify(merged.transactions) !== JSON.stringify(localGroup.transactions || [])) {
-              localGroup.transactions = merged.transactions;
+            const localGroupTransactions = localGroup.transactions || [];
+            const merged = mergePairLedger({
+              localTransactions: localGroupTransactions,
+              remoteTransactions: migrated.transactions || [],
+              localDeleted: localGroup.deletedTransactions || [],
+              remoteDeleted: cloudData.deletedTransactions || []
+            });
+            const mergedTransactions = preserveLocalReceipts(merged.transactions, localGroupTransactions);
+            if (JSON.stringify(mergedTransactions) !== JSON.stringify(localGroupTransactions)) {
+              localGroup.transactions = mergedTransactions;
               changed = true;
             }
             if (JSON.stringify(merged.deletedTransactions) !== JSON.stringify(localGroup.deletedTransactions || [])) {
@@ -4665,7 +4476,6 @@
               localGroup.memberLinks = cloudData.memberLinks;
               changed = true;
             }
-            if (Array.isArray(cloudData.deletedTransactions)) localGroup.deletedTransactions = cloudData.deletedTransactions;
             if (typeof cloudData.simplifyDebts === "boolean" && localGroup.simplifyDebts !== cloudData.simplifyDebts) {
               localGroup.simplifyDebts = cloudData.simplifyDebts;
               changed = true;
@@ -4681,9 +4491,9 @@
       // 4. Listen to the active group for live updates.
       if (g.id) listenToCloudGroup(g.id);
 
-      // 5. Bilateral 1-on-1 direct pair listeners use the exact lower-case auth email,
-      // because Firestore rules compare against that value without Gmail alias normalization.
-      listenToDirectPairs(myEmail);
+      // 5. Bilateral 1-on-1 pair listeners are keyed by the same canonical pair id
+      // used by every writer, while rules derive membership from the auth token.
+      refreshDirectListeners();
     }
 
     function listenToCloudGroup(groupId) {
@@ -4699,13 +4509,14 @@
           const remote = cloudData.schemaVersion === 9
             ? cloudData
             : migrateMoney({ schemaVersion: 0, groups: { [groupId]: { ...cloudData, id: groupId } }, directTransactions: [] }).groups[groupId];
-          const merged = mergeTransactionsWithDeletes(
-            group.transactions || [],
-            remote.transactions || cloudData.transactions || [],
-            group.deletedTransactions || [],
-            cloudData.deletedTransactions || []
-          );
-          group.transactions = merged.transactions;
+          const localGroupTransactions = group.transactions || [];
+          const merged = mergePairLedger({
+            localTransactions: localGroupTransactions,
+            remoteTransactions: remote.transactions || cloudData.transactions || [],
+            localDeleted: group.deletedTransactions || [],
+            remoteDeleted: cloudData.deletedTransactions || []
+          });
+          group.transactions = preserveLocalReceipts(merged.transactions, localGroupTransactions);
           group.deletedTransactions = merged.deletedTransactions;
           if (Array.isArray(cloudData.members)) group.members = cloudData.members;
           if (cloudData.memberLinks) group.memberLinks = cloudData.memberLinks;
@@ -4722,166 +4533,120 @@
       }, (err) => console.warn("Firestore group note:", err));
     }
 
-    // Bilateral 1-on-1 Synchronization via direct_pairs collection
-    function syncDirectPairExpense(friendName) {
-      if (!fx || !currentUser) return;
-      const friend = appState.friends.find(f => f.name === friendName);
-      if (!friend || !friend.email) return;
+    // Bilateral 1-on-1 synchronization. Each pair is one Firestore document.
+    const pairSyncState = new Map();
+    const missingEmailNoted = new Set();
+    let toldPairRules = false;
 
-      const myEmail = (currentUser.email || "").toLowerCase().trim();
-      const friendEmail = (friend.email || "").toLowerCase().trim();
-      if (!myEmail || !friendEmail || normalizeEmail(myEmail) === normalizeEmail(friendEmail)) return;
-      const pairId = [normalizeEmail(myEmail), normalizeEmail(friendEmail)].sort().join("_").replace(/[^a-zA-Z0-9_]/g, "_");
-
-      const pairExpenses = (appState.directTransactions || []).filter(t => t.friend === friendName);
-      const canonicalize = (transaction) => {
-        const ownerEmail = (transaction.ownerEmail || myEmail).toLowerCase().trim();
-        const ownerIsMe = normalizeEmail(ownerEmail) === normalizeEmail(myEmail);
-        const copy = { ...transaction, ownerEmail };
-        const emailForMember = member => member === "You"
-          ? (ownerIsMe ? myEmail : friendEmail)
-          : (member === friendName ? (ownerIsMe ? friendEmail : myEmail) : null);
-        copy.payerEmail = transaction.payerEmail || emailForMember(transaction.payer);
-        if (transaction.receiver) copy.receiverEmail = transaction.receiverEmail || emailForMember(transaction.receiver);
-        if (transaction.shares) {
-          copy.sharesByEmail = transaction.sharesByEmail || Object.fromEntries(
-            Object.entries(transaction.shares).map(([member, share]) => [emailForMember(member) || member, share])
-          );
-        }
-        return copy;
-      };
-      const localCanonical = pairExpenses.map(canonicalize);
-      const localDeleted = (appState.deletedTransactions || [])
-        .filter(item => item.location === "direct" && item.transaction?.friend === friendName)
-        .map(item => ({ ...item, transaction: item.transaction ? canonicalize(item.transaction) : item.transaction }));
-
-      // Merge inside a Firestore transaction so a new write from either person cannot
-      // immediately replace the other person's existing ledger.
-      const pairRef = fx.storeMod.doc(fx.db, "direct_pairs", pairId);
-      fx.storeMod.runTransaction(fx.db, async transaction => {
-        const snapshot = await transaction.get(pairRef);
-        const cloudData = snapshot.exists() ? snapshot.data() : {};
-        const merged = mergeTransactionsWithDeletes(
-          localCanonical,
-          cloudData.transactions || [],
-          localDeleted,
-          cloudData.deletedTransactions || []
-        );
-        transaction.set(pairRef, {
-          pairId,
-          schemaVersion: 9,
-          // Raw lower-case emails must match request.auth.token.email in firestore.rules.
-          participants: [myEmail, friendEmail],
-          transactions: stripReceiptBytes(merged.transactions),
-          deletedTransactions: merged.deletedTransactions,
-          updatedAt: serverTimestamp(fx),
-          updatedBy: myEmail
-        }, { merge: true });
-        return merged;
-      }).then(merged => {
-        // Keep any transactions recovered from the cloud visible locally too.
-        const visible = merged.transactions.map(tx => {
-          const copy = { ...tx };
-          const ownerEmail = copy.ownerEmail || myEmail;
-          const ownerIsMe = normalizeEmail(ownerEmail) === normalizeEmail(myEmail);
-          const flipLegacy = value => value === "You" ? (ownerIsMe ? "You" : friendName) : (ownerIsMe ? friendName : "You");
-          copy.payer = copy.payerEmail
-            ? (normalizeEmail(copy.payerEmail) === normalizeEmail(myEmail) ? "You" : friendName)
-            : flipLegacy(copy.payer);
-          if (copy.receiverEmail) {
-            copy.receiver = normalizeEmail(copy.receiverEmail) === normalizeEmail(myEmail) ? "You" : friendName;
-          } else if (copy.receiver) {
-            copy.receiver = flipLegacy(copy.receiver);
-          }
-          if (copy.sharesByEmail) {
-            copy.shares = Object.fromEntries(Object.entries(copy.sharesByEmail).map(([email, share]) => [
-              normalizeEmail(email) === normalizeEmail(myEmail) ? "You" :
-                (normalizeEmail(email) === normalizeEmail(friendEmail) ? friendName : email),
-              share
-            ]));
-          } else if (copy.shares) {
-            copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flipLegacy(member), share]));
-          }
-          copy.friend = friendName;
-          copy.scope = "direct";
-          copy.ownerEmail = ownerEmail;
-          return copy;
-        });
-        appState.directTransactions = (appState.directTransactions || []).filter(t => t.friend !== friendName).concat(visible);
-        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
-        renderAll();
-      }).catch((err) => console.warn("Direct pair sync note:", err));
+    function notePairError(err) {
+      console.warn("Direct pair sync note:", err);
+      const code = String(err?.code || err?.message || "");
+      if (!toldPairRules && code.includes("permission")) {
+        toldPairRules = true;
+        toast("1-on-1 sync was denied by Firebase. Publish the latest Firestore rules, then reload.");
+      }
     }
 
-    function listenToDirectPairs(myEmail) {
+    function refreshDirectListeners() {
       if (!fx || !currentUser) return;
       if (unsubscribeDirectListener) unsubscribeDirectListener();
-
-      unsubscribeDirectListener = watchQuery(fx, "direct_pairs", "participants", "array-contains", myEmail, (snapshot) => {
-        snapshot.forEach(docSnap => {
-          const data = docSnap.data() || {};
-          if (!Array.isArray(data.transactions)) return;
-          const otherEmail = (data.participants || []).find(email => normalizeEmail(email) !== normalizeEmail(myEmail));
-          if (!otherEmail) return;
-
-          // A direct-pair ledger is shared by both accounts. The other participant
-          // may not have manually saved/approved the first user's contact yet, so
-          // don't discard the entire ledger just because their local roster is missing it.
-          let matchingFriend = appState.friends.find(friend =>
-            friend.email && normalizeEmail(friend.email) === normalizeEmail(otherEmail)
-          );
-          if (!matchingFriend) {
-            const suggestedName = String(otherEmail).split("@")[0] || "Friend";
-            addApprovedFriend(otherEmail, suggestedName);
-            matchingFriend = appState.friends.find(friend =>
-              friend.email && normalizeEmail(friend.email) === normalizeEmail(otherEmail)
-            );
+      const unsubs = [];
+      const seen = new Set();
+      const myEmail = (currentUser.email || "").toLowerCase().trim();
+      for (const friend of appState.friends || []) {
+        if (!friend.email) continue;
+        const pairId = pairIdFor(myEmail, friend.email);
+        if (!pairId || seen.has(pairId)) continue;
+        seen.add(pairId);
+        const friendName = friend.name;
+        const friendEmail = friend.email;
+        unsubs.push(watchDoc(fx, "direct_pairs", pairId, (docSnap) => {
+          if (!docSnap.exists()) {
+            const localTx = transactionsForFriend(appState.directTransactions, friendName);
+            const localDel = deletedForFriend(appState.deletedTransactions, friendName, friendEmail);
+            if (localTx.length || localDel.length) syncDirectPairExpense(friendName, { quiet: true });
+            return;
           }
-          if (!matchingFriend) return;
-          const friendName = matchingFriend.name;
-
-          const visibleTransactions = data.transactions.map(transaction => {
-            const copy = { ...transaction };
-            const ownerEmail = copy.ownerEmail || data.updatedBy || otherEmail;
-            const ownerIsMe = normalizeEmail(ownerEmail) === normalizeEmail(myEmail);
-            const flipLegacy = value => value === "You" ? (ownerIsMe ? "You" : friendName) : (ownerIsMe ? friendName : "You");
-            if (copy.payerEmail) {
-              copy.payer = normalizeEmail(copy.payerEmail) === normalizeEmail(myEmail) ? "You" : friendName;
-            } else {
-              copy.payer = flipLegacy(copy.payer);
-            }
-            if (copy.receiverEmail) {
-              copy.receiver = normalizeEmail(copy.receiverEmail) === normalizeEmail(myEmail) ? "You" : friendName;
-            } else if (copy.receiver) {
-              copy.receiver = flipLegacy(copy.receiver);
-            }
-            if (copy.sharesByEmail) {
-              copy.shares = Object.fromEntries(Object.entries(copy.sharesByEmail).map(([email, share]) => [
-                normalizeEmail(email) === normalizeEmail(myEmail) ? "You" :
-                  (normalizeEmail(email) === normalizeEmail(otherEmail) ? friendName : email),
-                share
-              ]));
-            } else if (copy.shares) {
-              copy.shares = Object.fromEntries(Object.entries(copy.shares).map(([member, share]) => [flipLegacy(member), share]));
-            }
-            copy.friend = friendName;
-            copy.scope = "direct";
-            copy.ownerEmail = ownerEmail;
-            return copy;
+          const remote = docSnap.data() || {};
+          const localDirectTransactions = appState.directTransactions || [];
+          const next = applyRemotePair(appState, {
+            friendName,
+            friendEmail,
+            remoteTransactions: remote.transactions || [],
+            remoteDeleted: remote.deletedTransactions || []
           });
-
-          appState.directTransactions = (appState.directTransactions || []).filter(tx => tx.friend !== friendName).concat(visibleTransactions);
-          if (Array.isArray(data.deletedTransactions)) {
-            appState.deletedTransactions = (appState.deletedTransactions || []).filter(item => !(item.location === "direct" && item.transaction?.friend === friendName));
-            data.deletedTransactions.forEach(item => {
-              const copy = { ...item, transaction: item.transaction ? { ...item.transaction, friend: friendName } : item.transaction };
-              appState.deletedTransactions.push(copy);
-            });
+          const beforeTx = JSON.stringify(appState.directTransactions);
+          const beforeDel = JSON.stringify(appState.deletedTransactions);
+          appState.directTransactions = preserveLocalReceipts(next.directTransactions, localDirectTransactions);
+          appState.deletedTransactions = next.deletedTransactions;
+          if (beforeTx !== JSON.stringify(appState.directTransactions) || beforeDel !== JSON.stringify(appState.deletedTransactions)) {
+            localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+            renderAll();
           }
-          localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
-          renderAll();
+          const localTx = transactionsForFriend(appState.directTransactions, friendName);
+          const localDel = deletedForFriend(appState.deletedTransactions, friendName, friendEmail);
+          if (remotePairNeedsPush(remote, localTx, localDel)) syncDirectPairExpense(friendName, { quiet: true });
+        }, (err) => notePairError(err)));
+      }
+      unsubscribeDirectListener = () => unsubs.forEach((unsubscribe) => unsubscribe());
+    }
+
+    function syncDirectPairExpense(friendName, options = {}) {
+      if (!fx || !currentUser) return;
+      const friend = (appState.friends || []).find((item) => item.name === friendName);
+      if (!friend || !friend.email) {
+        if (!options.quiet && friendName && !missingEmailNoted.has(friendName)) {
+          missingEmailNoted.add(friendName);
+          toast(`Add ${friendName}'s Google email on the Friends page so this 1-on-1 can sync.`);
+        }
+        return;
+      }
+      const myEmail = (currentUser.email || "").toLowerCase().trim();
+      const friendEmail = (friend.email || "").toLowerCase().trim();
+      const pairId = pairIdFor(myEmail, friendEmail);
+      if (!pairId) return;
+      const state = pairSyncState.get(pairId) || { running: false, queued: false };
+      pairSyncState.set(pairId, state);
+      if (state.running) {
+        state.queued = true;
+        return;
+      }
+      state.running = true;
+      const drain = async () => {
+        try {
+          do {
+            state.queued = false;
+            await commitDirectPair(pairId, friendName, myEmail, friendEmail);
+          } while (state.queued);
+        } catch (err) {
+          notePairError(err);
+        } finally {
+          state.running = false;
+          if (state.queued) syncDirectPairExpense(friendName, { quiet: true });
+        }
+      };
+      drain();
+    }
+
+    async function commitDirectPair(pairId, friendName, myEmail, friendEmail) {
+      const pairRef = fx.storeMod.doc(fx.db, "direct_pairs", pairId);
+      await fx.storeMod.runTransaction(fx.db, async transaction => {
+        const snapshot = await transaction.get(pairRef);
+        const remote = snapshot.exists() ? (snapshot.data() || {}) : {};
+        const payload = buildPairWritePayload({
+          pairId,
+          myEmail,
+          friendEmail,
+          friendName,
+          transactions: appState.directTransactions || [],
+          deletedTransactions: appState.deletedTransactions || [],
+          remoteTransactions: remote.transactions || [],
+          remoteDeleted: remote.deletedTransactions || []
         });
-      }, (err) => console.warn("Direct pairs listener note:", err));
+        if (payload.participants.length !== 2 || payload.participantKeys.length !== 2) return;
+        payload.updatedAt = serverTimestamp(fx);
+        transaction.set(pairRef, payload, { merge: true });
+      });
     }
 
     // URL Group Invites

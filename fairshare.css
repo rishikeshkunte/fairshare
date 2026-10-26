@@ -630,7 +630,6 @@ button.brand-group { background: none; border: none; }
   display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
   background: #dbeafe; color: #1e3a8a; font-size: 0.68rem; font-weight: 800;
 }
-.auth-note { font-size: 0.78rem; color: #1e3a8a; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 10px; }
 .group-hint { font-size: 0.85rem; color: var(--muted); margin: 0 0 8px; }
 .toast {
   position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
