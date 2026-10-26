@@ -28,7 +28,17 @@
 
   <canvas id="confetti-canvas"></canvas>
 
-  <div class="app-shell">
+  <div id="auth-gate" class="auth-gate">
+    <div class="auth-gate-card">
+      <span class="eyebrow">Private by account</span>
+      <h1>FairShare</h1>
+      <p>Sign in to view your groups, expenses, balances, and receipts.</p>
+      <button type="button" class="btn btn-primary" data-call="handleAuthClick">Sign in with Google</button>
+      <p class="auth-gate-note">Your data is visible only while you are signed in on this device.</p>
+    </div>
+  </div>
+
+  <div class="app-shell" id="app-shell" hidden>
   <aside class="command-dock">
   <!-- App Header -->
   <header class="app-header">
@@ -1101,7 +1111,7 @@
       if (isEmptyTemplate) {
         delete appState.groups["group_default"];
         if (appState.activeGroupId === "group_default") appState.activeGroupId = null;
-        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+        persistLocalState();
         return;
       }
       // Preserve any existing group that contains user-created data.
@@ -1110,7 +1120,7 @@
       appState.groups[newId] = legacy;
       delete appState.groups["group_default"];
       if (appState.activeGroupId === "group_default") appState.activeGroupId = newId;
-      localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+      persistLocalState();
     }
 
     function pairwiseDebts(g) {
@@ -1145,46 +1155,119 @@
       return edges;
     }
 
-    function loadSavedState() {
-      const saved = localStorage.getItem("fairshare_state_v9") || localStorage.getItem("fairshare_state_v8") || localStorage.getItem("fairshare_state_v7") || localStorage.getItem("fairshare_state_v6");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (parsed.theme) appState.theme = parsed.theme;
-          if (parsed.friends && Array.isArray(parsed.friends)) {
-            // Strip out template demo records
-            appState.friends = parsed.friends.filter(f => f.id !== "f1" && f.id !== "f2" && (f.email || f.phone || (f.name !== "Aryan" && f.name !== "Rahul")));
-          }
-          if (parsed.directTransactions && Array.isArray(parsed.directTransactions)) appState.directTransactions = parsed.directTransactions;
-          if (parsed.deletedTransactions && Array.isArray(parsed.deletedTransactions)) appState.deletedTransactions = parsed.deletedTransactions;
-          if (parsed.groups && Object.keys(parsed.groups).length > 0) {
-            appState.groups = parsed.groups;
-            Object.values(appState.groups).forEach(g => {
-              if (g.id === "group_default" && (!g.transactions || g.transactions.length === 0)) {
-                g.members = g.members.filter(m => m !== "Aryan" && m !== "Rahul");
-                if (g.members.length === 0) g.members = ["You"];
-              }
-            });
-          }
-          if (parsed.schemaVersion) appState.schemaVersion = parsed.schemaVersion;
-          if (parsed.activeGroupId && appState.groups[parsed.activeGroupId]) appState.activeGroupId = parsed.activeGroupId;
-        } catch (e) {
-          console.error("Could not parse saved state:", e);
+    const LEGACY_STATE_KEYS = ["fairshare_state_v9", "fairshare_state_v8", "fairshare_state_v7", "fairshare_state_v6"];
+
+    function emptyState(theme = "light") {
+      return { theme, activeGroupId: null, friends: [], directTransactions: [], deletedTransactions: [], groups: {} };
+    }
+
+    function stateKeyFor(user = currentUser) {
+      return user?.uid ? `fairshare_state_v9:${user.uid}` : "";
+    }
+
+    function persistLocalState(user = currentUser) {
+      try {
+        localStorage.setItem("fairshare_theme", appState.theme || "light");
+        const key = stateKeyFor(user);
+        if (key) localStorage.setItem(key, JSON.stringify(appState));
+      } catch (e) {
+        console.warn("Could not save local state:", e);
+      }
+    }
+
+    function applySavedState(saved) {
+      appState = emptyState(appState.theme);
+      if (!saved) return false;
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.theme) appState.theme = parsed.theme;
+        if (parsed.friends && Array.isArray(parsed.friends)) {
+          // Strip out template demo records
+          appState.friends = parsed.friends.filter(f => f.id !== "f1" && f.id !== "f2" && (f.email || f.phone || (f.name !== "Aryan" && f.name !== "Rahul")));
         }
-      } else {
-        if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-          appState.theme = "dark";
+        if (parsed.directTransactions && Array.isArray(parsed.directTransactions)) appState.directTransactions = parsed.directTransactions;
+        if (parsed.deletedTransactions && Array.isArray(parsed.deletedTransactions)) appState.deletedTransactions = parsed.deletedTransactions;
+        if (parsed.groups && Object.keys(parsed.groups).length > 0) {
+          appState.groups = parsed.groups;
+          Object.values(appState.groups).forEach(g => {
+            if (g.id === "group_default" && (!g.transactions || g.transactions.length === 0)) {
+              g.members = g.members.filter(m => m !== "Aryan" && m !== "Rahul");
+              if (g.members.length === 0) g.members = ["You"];
+            }
+          });
+        }
+        if (parsed.schemaVersion) appState.schemaVersion = parsed.schemaVersion;
+        if (parsed.activeGroupId && appState.groups[parsed.activeGroupId]) appState.activeGroupId = parsed.activeGroupId;
+        appState = migrateMoney(appState);
+        return true;
+      } catch (e) {
+        console.error("Could not parse saved state:", e);
+        return false;
+      }
+    }
+
+    function loadUserState(user) {
+      const key = stateKeyFor(user);
+      if (!key) {
+        appState = emptyState();
+        return;
+      }
+      let saved = null;
+      try { saved = localStorage.getItem(key); } catch { /* ignore */ }
+      let legacyKey = null;
+      if (!saved) {
+        legacyKey = LEGACY_STATE_KEYS.find((candidate) => {
+          try { return Boolean(localStorage.getItem(candidate)); } catch { return false; }
+        }) || null;
+        if (legacyKey) {
+          try { saved = localStorage.getItem(legacyKey); } catch { /* ignore */ }
         }
       }
-      appState = migrateMoney(appState);
-      localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
-      ["fairshare_state_v6", "fairshare_state_v7", "fairshare_state_v8"].forEach((key) => localStorage.removeItem(key));
+      const applied = applySavedState(saved);
+      if (applied) {
+        persistLocalState(user);
+        if (legacyKey) {
+          LEGACY_STATE_KEYS.forEach((candidate) => {
+            try { localStorage.removeItem(candidate); } catch { /* ignore */ }
+          });
+        }
+      } else if (!saved) {
+        persistLocalState(user);
+      }
+    }
+
+    function clearSensitiveState() {
+      appState = emptyState(appState.theme);
+      activeReceiptBase64 = null;
+      currentExpenseScope = "group";
+      selectedDirectFriend = "";
+      historyFilterType = "all";
+      if (receiptFileInput) receiptFileInput.value = "";
+      if (receiptThumb) receiptThumb.removeAttribute("src");
+      if (receiptUploadPreview) receiptUploadPreview.style.display = "none";
+      if (btnClearReceipt) btnClearReceipt.style.display = "none";
+      if (modalBody) modalBody.innerHTML = "";
+      document.querySelectorAll(".modal-backdrop").forEach((modal) => {
+        modal.classList.remove("active");
+      });
+      if (typeof window.cancelEditMode === "function") window.cancelEditMode();
+    }
+
+    function loadSavedState() {
+      // Never load user data before Firebase confirms the signed-in account.
+      let theme = "";
+      try { theme = localStorage.getItem("fairshare_theme") || ""; } catch { /* ignore */ }
+      if (theme === "light" || theme === "dark") {
+        appState.theme = theme;
+      } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        appState.theme = "dark";
+      }
     }
 
     function saveState() {
       // Persist locally first, then sync the signed-in user's own friend roster
       // independently of groups. A roster must work even before a group exists.
-      localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+      persistLocalState();
       if (fx && currentUser) saveFriendsRosterToCloud();
       if (!(fx && currentUser && appState.groups[appState.activeGroupId])) return;
 
@@ -1244,7 +1327,7 @@
         });
         g.transactions = preserveLocalReceipts(reconciled.transactions, localGroupTransactions);
         g.deletedTransactions = reconciled.deletedTransactions;
-        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+        persistLocalState();
         if (appState.activeGroupId === g.id) renderAll();
       }).catch(err => console.warn("Cloud sync note:", err));
     }
@@ -1292,7 +1375,7 @@
         const mergedFriends = mergeFriendRecords(cloudFriends, appState.friends || []);
         const localChanged = JSON.stringify(mergedFriends) !== JSON.stringify(appState.friends || []);
         appState.friends = mergedFriends;
-        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+        persistLocalState();
         renderFriendsRoster();
         renderFriendPickerDropdown();
         renderDirectFriendDropdown();
@@ -1422,6 +1505,7 @@
     // Navigation (SPA)
     window.navigateTo = function(pageId) {
       const requestedPage = pageId;
+      if (!currentUser) pageId = "home";
       if (pageId === "balances") pageId = "home";
       document.querySelectorAll(".app-page").forEach(page => page.classList.remove("active"));
       const targetPage = document.getElementById("page-" + pageId);
@@ -3034,7 +3118,7 @@
         appState.directTransactions = (appState.directTransactions || []).filter(t => t.id !== found.tx.id);
         // Persist the tombstone locally before starting the async pair-ledger merge.
         // Otherwise a listener/write race can reintroduce the deleted cloud copy.
-        localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+        persistLocalState();
       } else {
         appState.activeGroupId = found.group.id;
         if (typeof listenToCloudGroup === "function") listenToCloudGroup(found.group.id);
@@ -4295,36 +4379,54 @@
     let unsubscribeDirectListener = null;
     let unsubscribeUserGroupsListener = null;
 
+    function enterSignedOutState(persist = true) {
+      const previousUser = currentUser;
+      if (persist && previousUser) persistLocalState(previousUser);
+      currentUser = null;
+      [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeFriendsRosterListener]
+        .forEach(unsubscribe => { if (typeof unsubscribe === "function") unsubscribe(); });
+      unsubscribeFriendsRosterListener = null;
+      unsubIncomingRequests = null;
+      unsubOutgoingRequests = null;
+      unsubscribeGroupListener = null;
+      unsubscribeDirectListener = null;
+      unsubscribeUserGroupsListener = null;
+      clearSensitiveState();
+      updateAuthUI(null);
+      renderAll();
+    }
+
     async function ensureCloud() {
       if (fx) return fx;
       fx = await loadFirebase(firebaseConfig);
       await finishRedirectSignIn(fx).catch((err) => console.warn("Redirect sign-in note:", err));
       watchAuth(fx, (user) => {
-        currentUser = user;
-        updateAuthUI(user);
-        // Re-render immediately on auth changes so locally saved friends and
-        // auth-gated controls don't remain stuck in their signed-out state while
-        // Firestore listeners are still starting up.
-        renderAll();
+        const previousUser = currentUser;
         if (user) {
+          if (!previousUser || previousUser.uid !== user.uid) {
+            if (previousUser) persistLocalState(previousUser);
+            updateAuthUI(null);
+            currentUser = user;
+            loadUserState(user);
+            materializeRecurring();
+          } else {
+            currentUser = user;
+          }
+          updateAuthUI(user);
+          renderAll();
           syncUserCloud(user);
         } else {
-          [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeFriendsRosterListener]
-            .forEach(unsubscribe => { if (typeof unsubscribe === "function") unsubscribe(); });
-          unsubscribeFriendsRosterListener = null;
-          unsubIncomingRequests = null;
-          unsubOutgoingRequests = null;
-          unsubscribeGroupListener = null;
-          unsubscribeDirectListener = null;
-          unsubscribeUserGroupsListener = null;
-          selectedDirectFriend = "";
-          renderAll();
+          enterSignedOutState(true);
         }
       });
       return fx;
     }
 
     function updateAuthUI(user) {
+      const authGate = document.getElementById("auth-gate");
+      const appShell = document.getElementById("app-shell");
+      if (authGate) authGate.hidden = Boolean(user);
+      if (appShell) appShell.hidden = !user;
       const authBtn = document.getElementById("auth-btn-label");
       if (!authBtn) return;
       if (user) {
@@ -4357,10 +4459,16 @@
       if (currentUser) {
         const ok = await askConfirm({ title: "Sign out", message: `Sign out of ${currentUser.email}? Local data stays on this device.`, confirmLabel: "Sign out" });
         if (!ok) return;
+        persistLocalState(currentUser);
         setCloudIntent(false);
-        await signOutGoogle(fx);
-        currentUser = null;
-        updateAuthUI(null);
+        try {
+          await signOutGoogle(fx);
+        } catch (error) {
+          console.error("Sign-out error:", error);
+          toast(error?.message || "Could not sign out. Please try again.");
+          return;
+        }
+        enterSignedOutState(false);
       } else {
         setCloudIntent(true);
         try {
@@ -4483,7 +4591,7 @@
           }
         });
         if (changed) {
-          localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+          persistLocalState();
           renderAll();
         }
       }, (err) => console.warn("Cloud group discovery note:", err));
@@ -4523,7 +4631,7 @@
           if (cloudData.currency) group.currency = cloudData.currency;
           if (cloudData.name) group.name = cloudData.name;
           if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
-          localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+          persistLocalState();
           if (appState.activeGroupId === groupId) renderAll();
         } else if (appState.activeGroupId === groupId) {
           // Only initialise the currently selected group. Never save whichever group
@@ -4580,7 +4688,7 @@
           appState.directTransactions = preserveLocalReceipts(next.directTransactions, localDirectTransactions);
           appState.deletedTransactions = next.deletedTransactions;
           if (beforeTx !== JSON.stringify(appState.directTransactions) || beforeDel !== JSON.stringify(appState.deletedTransactions)) {
-            localStorage.setItem("fairshare_state_v9", JSON.stringify(appState));
+            persistLocalState();
             renderAll();
           }
           const localTx = transactionsForFriend(appState.directTransactions, friendName);
