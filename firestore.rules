@@ -7,6 +7,16 @@ service cloud.firestore {
     function email() {
       return request.auth.token.email.lower();
     }
+    // Gmail ignores dots in the local part. Canonicalize Gmail addresses only;
+    // other email providers keep their dots and local-part semantics.
+    function canonical(e) {
+      return e.matches('^[^@]+@gmail[.]com$')
+        ? e.split('@')[0].replace('[.]', '') + '@gmail.com'
+        : e;
+    }
+    function mine() {
+      return canonical(email());
+    }
     function isMember(data) {
       return signedIn()
         && data.memberEmails is list
@@ -24,7 +34,9 @@ service cloud.firestore {
       allow get: if signedIn()
         && (!exists(/databases/$(database)/documents/groups/$(groupId)) || isMember(resource.data));
       // Group discovery queries must constrain memberEmails to the signed-in email.
-      allow list: if isMember(resource.data);
+      // List rules evaluate membership directly because queried resource fields do
+      // not reliably satisfy `is list` checks in the collection rule evaluation.
+      allow list: if signedIn() && email() in resource.data.memberEmails;
       allow create: if signedIn()
         && request.resource.data.memberEmails is list
         && email() in request.resource.data.memberEmails;
@@ -32,21 +44,62 @@ service cloud.firestore {
     }
 
     match /direct_pairs/{pairId} {
-      function inPair(data) {
-        return signedIn()
-          && data.participants is list
-          && email() in data.participants;
+      // Membership is derived from the signed-in token, never from a client-supplied
+      // email alone. participantKeys are canonical for every writer; participants is
+      // retained so existing documents with raw addresses remain readable.
+      function pairMember(data) {
+        return signedIn() && (
+          (data.participantKeys is list && mine() in data.participantKeys)
+          || (data.participants is list && (email() in data.participants || mine() in data.participants))
+        );
+      }
+      function validPair(data) {
+        return data.participants is list
+          && data.participants.size() == 2
+          && data.participantKeys is list
+          && data.participantKeys.size() == 2
+          && mine() in data.participantKeys
+          && mine() in data.participants
+          && data.participantKeys.hasAll(data.participants)
+          && data.participants.hasAll(data.participantKeys);
+      }
+      function legacyPairKeys() {
+        return [
+          canonical(resource.data.participants[0]),
+          canonical(resource.data.participants[1])
+        ];
+      }
+      // Existing membership must survive every update. Legacy documents without keys
+      // are compared using their canonicalized participants so migration is allowed
+      // but adding or replacing a participant is still rejected.
+      function stableMembership() {
+        return resource.data.participants is list
+          && resource.data.participants.size() == 2
+          && request.resource.data.participantKeys is list
+          && request.resource.data.participantKeys.size() == 2
+          && (
+            ('participantKeys' in resource.data)
+              ? (
+                resource.data.participantKeys is list
+                && resource.data.participantKeys.size() == 2
+                && resource.data.participantKeys.hasAll(request.resource.data.participantKeys)
+                && request.resource.data.participantKeys.hasAll(resource.data.participantKeys)
+              )
+              : (
+                request.resource.data.participantKeys.hasAll(legacyPairKeys())
+                && legacyPairKeys().hasAll(request.resource.data.participantKeys)
+              )
+          );
       }
       // Permit checking a not-yet-created pair document before a transactional create.
       allow get: if signedIn()
-        && (!exists(/databases/$(database)/documents/direct_pairs/$(pairId)) || inPair(resource.data));
-      allow list: if inPair(resource.data);
-      allow create: if signedIn()
-        && request.resource.data.participants is list
-        && email() in request.resource.data.participants
-        && request.resource.data.participants.size() == 2;
-      allow update, delete: if inPair(resource.data)
-        && email() in request.resource.data.participants;
+        && (!exists(/databases/$(database)/documents/direct_pairs/$(pairId)) || pairMember(resource.data));
+      // List authorization is evaluated against the canonical field used by the
+      // participantKeys query; it remains derived from the authenticated token.
+      allow list: if signedIn() && mine() in resource.data.participantKeys;
+      allow create: if signedIn() && validPair(request.resource.data);
+      allow update: if pairMember(resource.data) && validPair(request.resource.data) && stableMembership();
+      allow delete: if pairMember(resource.data);
     }
 
     match /friend_requests/{requestId} {
