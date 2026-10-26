@@ -4396,30 +4396,49 @@
       renderAll();
     }
 
+    let ensureCloudPromise = null;
+
+    function applyAuthState(user) {
+      const previousUser = currentUser;
+      if (user) {
+        const switchedUser = !previousUser || previousUser.uid !== user.uid;
+        if (switchedUser) {
+          if (previousUser) persistLocalState(previousUser);
+          updateAuthUI(null);
+          currentUser = user;
+          loadUserState(user);
+          materializeRecurring();
+        } else {
+          currentUser = user;
+        }
+        updateAuthUI(user);
+        renderAll();
+        if (switchedUser) syncUserCloud(user);
+      } else {
+        enterSignedOutState(true);
+      }
+    }
+
     async function ensureCloud() {
       if (fx) return fx;
-      fx = await loadFirebase(firebaseConfig);
-      await finishRedirectSignIn(fx).catch((err) => console.warn("Redirect sign-in note:", err));
-      watchAuth(fx, (user) => {
-        const previousUser = currentUser;
-        if (user) {
-          if (!previousUser || previousUser.uid !== user.uid) {
-            if (previousUser) persistLocalState(previousUser);
-            updateAuthUI(null);
-            currentUser = user;
-            loadUserState(user);
-            materializeRecurring();
-          } else {
-            currentUser = user;
-          }
-          updateAuthUI(user);
-          renderAll();
-          syncUserCloud(user);
-        } else {
-          enterSignedOutState(true);
-        }
+      if (ensureCloudPromise) return ensureCloudPromise;
+      ensureCloudPromise = (async () => {
+        fx = await loadFirebase(firebaseConfig);
+        const redirectResult = await finishRedirectSignIn(fx).catch((err) => {
+          console.warn("Redirect sign-in note:", err);
+          return null;
+        });
+        watchAuth(fx, applyAuthState);
+        // Mobile redirect sign-in can return a credential before the initial
+        // onAuthStateChanged callback. Apply it so the privacy gate opens.
+        const authenticatedUser = redirectResult?.user || fx.auth.currentUser;
+        if (authenticatedUser) applyAuthState(authenticatedUser);
+        return fx;
+      })().catch((err) => {
+        ensureCloudPromise = null;
+        throw err;
       });
-      return fx;
+      return ensureCloudPromise;
     }
 
     function updateAuthUI(user) {
