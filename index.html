@@ -925,6 +925,7 @@
       friends: [],
       directTransactions: [],
       deletedTransactions: [],
+      deletedGroups: [],
       groups: {}
     };
 
@@ -1211,7 +1212,7 @@
     const LEGACY_STATE_KEYS = ["fairshare_state_v9", "fairshare_state_v8", "fairshare_state_v7", "fairshare_state_v6"];
 
     function emptyState(theme = "light") {
-      return { theme, activeGroupId: null, friends: [], directTransactions: [], deletedTransactions: [], groups: {} };
+      return { theme, activeGroupId: null, friends: [], directTransactions: [], deletedTransactions: [], deletedGroups: [], groups: {} };
     }
 
     function stateKeyFor(user = currentUser) {
@@ -1240,6 +1241,7 @@
         }
         if (parsed.directTransactions && Array.isArray(parsed.directTransactions)) appState.directTransactions = parsed.directTransactions;
         if (parsed.deletedTransactions && Array.isArray(parsed.deletedTransactions)) appState.deletedTransactions = parsed.deletedTransactions;
+        if (parsed.deletedGroups && Array.isArray(parsed.deletedGroups)) appState.deletedGroups = parsed.deletedGroups.map(String);
         if (parsed.groups && Object.keys(parsed.groups).length > 0) {
           appState.groups = parsed.groups;
           Object.values(appState.groups).forEach(g => {
@@ -2356,10 +2358,12 @@
       btnDeleteGroup.addEventListener("click", async () => {
         const g = getGroup();
         if (!g.id) return;
-        if (await askConfirm({ message: `Delete group "${g.name}" and its expenses?` })) {
+        if (await askConfirm({ message: `Delete group "${g.name}" from your account? Other members keep their copy.` })) {
+          appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(g.id)]));
           delete appState.groups[g.id];
           appState.activeGroupId = Object.keys(appState.groups)[0] || null;
           saveState();
+          listenToCloudGroup(appState.activeGroupId);
           renderAll();
         }
       });
@@ -4588,6 +4592,13 @@
         let changed = false;
         snapshot.forEach(docSnap => {
           const groupId = docSnap.id;
+          if ((appState.deletedGroups || []).includes(groupId)) {
+            if (appState.groups[groupId]) {
+              delete appState.groups[groupId];
+              changed = true;
+            }
+            return;
+          }
           const cloudData = docSnap.data() || {};
           const migrated = cloudData.schemaVersion === 9
             ? cloudData
@@ -4659,8 +4670,10 @@
     }
 
     function listenToCloudGroup(groupId) {
-      if (!fx || !currentUser || !groupId) return;
+      if (!fx || !currentUser) return;
       if (unsubscribeGroupListener) unsubscribeGroupListener();
+      unsubscribeGroupListener = null;
+      if (!groupId) return;
 
       unsubscribeGroupListener = watchDoc(fx, "groups", groupId, (docSnap) => {
         const group = appState.groups[groupId];
@@ -4836,6 +4849,7 @@
     window.acceptGroupInvite = function() {
       if (!pendingGroupInviteData) return;
       const { id, name, by, byEmail } = pendingGroupInviteData;
+      appState.deletedGroups = (appState.deletedGroups || []).filter(groupId => String(groupId) !== String(id));
       
       if (!appState.groups[id]) {
         appState.groups[id] = {
