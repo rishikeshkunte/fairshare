@@ -895,16 +895,11 @@
       if (typeof fn === "function") fn(node.dataset.arg, node.dataset.arg2);
     });
 
-    const authHost = window.location.hostname;
-    const sameOriginAuth = window.location.protocol === "https:"
-      && !["localhost", "127.0.0.1"].includes(authHost)
-      && !authHost.endsWith(".firebaseapp.com")
-      && authHost !== "rishikeshkunte.github.io";
     const firebaseConfig = {
       apiKey: "AIzaSyByVkmNFtjMVB9esryWD5tx9SbHw1oAAVo",
-      // Keep redirect auth on the app origin so mobile browsers do not lose
-      // Firebase's redirect state through third-party storage partitioning.
-      authDomain: sameOriginAuth ? authHost : "fairshare-app-ba160.firebaseapp.com",
+      // Use Firebase's stable registered auth handler. Deployment-specific
+      // auth domains create stale OAuth/session state across releases.
+      authDomain: "fairshare-app-ba160.firebaseapp.com",
       projectId: "fairshare-app-ba160",
       storageBucket: "fairshare-app-ba160.firebasestorage.app",
       messagingSenderId: "279219217084",
