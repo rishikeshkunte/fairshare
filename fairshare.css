@@ -102,6 +102,31 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
 
 #confetti-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 80; }
 
+.auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+  background-image: var(--bg-accent);
+}
+.auth-gate[hidden], .app-shell[hidden] { display: none !important; }
+.auth-gate-card {
+  width: min(100%, 420px);
+  padding: 32px;
+  text-align: center;
+  background: var(--surface-solid);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+}
+.auth-gate-card h1 { margin: 8px 0; font-size: 2rem; }
+.auth-gate-card p { color: var(--muted); line-height: 1.5; }
+.auth-gate-card .btn { width: 100%; margin-top: 12px; }
+.auth-gate-note { font-size: 0.78rem; margin: 16px 0 0; }
+
 .app-shell {
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
