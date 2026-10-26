@@ -4957,7 +4957,27 @@
       console.warn("Firebase session restore failed; continuing in local mode.");
     });
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+      window.addEventListener("load", async () => {
+        try {
+          const hadController = Boolean(navigator.serviceWorker.controller);
+          let refreshing = false;
+          navigator.serviceWorker.addEventListener("controllerchange", () => {
+            if (!hadController || refreshing) return;
+            refreshing = true;
+            window.location.reload();
+          });
+          const registration = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+          await registration.update();
+          if (registration.waiting) registration.waiting.postMessage({ type: "SKIP_WAITING" });
+          const checkForUpdate = () => registration.update().catch(() => {});
+          setInterval(checkForUpdate, 15 * 60 * 1000);
+          document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") checkForUpdate();
+          });
+        } catch {
+          /* offline or unsupported */
+        }
+      });
     }
 
     const initialPage = window.location.hash.replace("#", "") || "home";
