@@ -197,6 +197,12 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
   assert.match(html, /Old invite links are no longer supported/);
 });
 
+test("self-invites and duplicate connections are rejected", () => {
+  assert.match(html, /You can't connect with yourself/);
+  assert.match(html, /You're already connected with this person/);
+  assert.match(html, /You're already in this group/);
+});
+
 test("invite rules validate tokens, expiry, revocation, and use", () => {
   assert.match(rules, /match \/invites\/\{token\}/);
   assert.match(rules, /validGroupInvite/);
