@@ -76,10 +76,6 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"/></svg>
         <span id="theme-btn-text">Dark mode</span>
       </button>
-      <button type="button" id="btn-export-csv" class="btn btn-export" title="Export entire ledger to CSV">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10l4 4 4-4"/><path d="M5 19h14"/></svg>
-        <span class="label-long">Export CSV</span>
-      </button>
     </div>
   </header>
 
@@ -504,15 +500,10 @@
 
   <!-- ================= PAGE 5: SPENDING ANALYTICS ================= -->
   <section id="page-analytics" class="app-page">
-    <div class="section-header"><div><h1>Spending analytics</h1><p id="analytics-subtitle">Category, person, and time for the active group and 1-on-1 bills.</p></div></div>
+    <div class="section-header"><div><h1>Spending analytics</h1><p id="analytics-subtitle">Where the money went for the active group and 1-on-1 bills.</p></div></div>
     <div class="card">
-      <div class="tab-group" role="group" aria-label="Analytics view">
-        <button type="button" class="tab-btn active" data-analytics-view="category">By category</button>
-        <button type="button" class="tab-btn" data-analytics-view="person">Per person</button>
-        <button type="button" class="tab-btn" data-analytics-view="time">Over time</button>
-      </div>
       <div class="card-header-row">
-        <h2>Spending breakdown</h2>
+        <h2>Spending by category</h2>
         <div class="tab-group chart-switch" id="chart-style-tabs" style="margin-bottom:0; width:140px;">
           <button type="button" class="tab-btn active" id="btn-chart-pie">Pie</button>
           <button type="button" class="tab-btn" id="btn-chart-bar">Bar</button>
@@ -594,7 +585,7 @@
   </section>
 
   <section id="page-account" class="app-page">
-    <div class="section-header"><div><h1>Account</h1><p>Manage your sign-in and export your ledger.</p></div></div>
+    <div class="section-header"><div><h1>Account</h1><p>Manage your sign-in, invite links, and preferences.</p></div></div>
     <div id="account-profile-slot"></div>
     <div class="card account-settings-card">
       <h2>Preferences & tools</h2>
@@ -984,7 +975,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v47";
+    const APP_BUILD = "v48";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1638,7 +1629,6 @@
     // --- DOM Elements ---
     const btnThemeToggle = document.getElementById("btn-theme-toggle");
     const themeBtnText = document.getElementById("theme-btn-text");
-    const btnExportCsv = document.getElementById("btn-export-csv");
 
     const myDisplayAccount = document.getElementById("my-display-account");
     const cloudSyncStatus = document.getElementById("cloud-sync-status");
@@ -1738,7 +1728,6 @@
     const chartVisual = document.getElementById("chart-visual");
     const chartLegend = document.getElementById("chart-legend");
     let chartType = "pie";
-    let analyticsView = "category";
 
     // History Filters
     let historyFilter = "all";
@@ -4259,9 +4248,7 @@
       ];
       expenseSources.forEach(t => {
         if (t.type !== "expense") return;
-        let key = t.category || "Other";
-        if (analyticsView === "person") key = t.payer || "Someone";
-        if (analyticsView === "time") key = t.dateISO || t.date || "Undated";
+        const key = t.category || "Other";
         catTotals[key] = (catTotals[key] || 0) + (Number(t.amount) || 0);
       });
 
@@ -4728,48 +4715,6 @@
     if (memberModalEl) {
       memberModalEl.addEventListener("click", (e) => {
         if (e.target === memberModalEl) closeMemberModal();
-      });
-    }
-
-    // Export CSV
-    if (btnExportCsv) {
-      btnExportCsv.addEventListener("click", () => {
-        const g = getGroup();
-        const rows = [
-          ...g.transactions.map(t => ({ ...t, scopeLabel: g.name })),
-          ...(currentUser ? (appState.directTransactions || []) : []).map(t => ({ ...t, scopeLabel: `1-on-1: ${t.friend || ""}` }))
-        ];
-        if (rows.length === 0) {
-          toast("No transactions recorded yet to export.");
-          return;
-        }
-
-        const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-        let csv = "ID,Date,Scope,Type,Description,Notes,Amount,Currency,Payer,Receiver/SplitWith,Category\n";
-        rows.forEach(t => {
-          const other = t.type === "settlement" ? (t.receiver || "") : Object.keys(t.shares || {}).join(";");
-          csv += [
-            t.id,
-            csvCell(t.dateISO || t.date),
-            csvCell(t.scopeLabel),
-            t.type,
-            csvCell(t.desc),
-            csvCell(t.notes),
-            paiseToInput(t.amount),
-            g.currency,
-            csvCell(t.payer),
-            csvCell(other),
-            csvCell(t.category)
-          ].join(",") + "\n";
-        });
-
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `FairShare_${g.name.replace(/\s+/g, '_')}_Ledger.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
       });
     }
 
@@ -5939,15 +5884,6 @@
     if (expenseDateInput && !expenseDateInput.value) expenseDateInput.value = todayISO();
     updateAuthUI(null);
     renderAll();
-    document.querySelectorAll("[data-analytics-view]").forEach((button) => {
-      button.addEventListener("click", () => {
-        analyticsView = button.dataset.analyticsView;
-        document.querySelectorAll("[data-analytics-view]").forEach((item) => item.classList.toggle("active", item === button));
-        const styleTabs = document.getElementById("chart-style-tabs");
-        if (styleTabs) styleTabs.hidden = analyticsView === "time";
-        renderCategoryChart();
-      });
-    });
     // Always restore Firebase's persisted auth session on startup. The UI must
     // not depend on a separate local cloud-intent flag to recognise a signed-in user.
     ensureCloud().catch(() => {
