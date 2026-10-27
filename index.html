@@ -984,7 +984,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v45";
+    const APP_BUILD = "v46";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -5576,6 +5576,8 @@
     let pendingInviteData = null;
     let unsubInvitesListener = null;
     let localInvites = [];
+    let inviteProcessing = false;
+    let inviteAccepting = false;
 
     function newInviteToken() {
       const bytes = new Uint8Array(18);
@@ -5746,8 +5748,9 @@
       if (!pendingInviteToken) {
         try { pendingInviteToken = sessionStorage.getItem("fairshare_pending_invite") || ""; } catch { /* ignore */ }
       }
-      if (!pendingInviteToken || pendingInviteData || !fx || !currentUser) return;
+      if (!pendingInviteToken || pendingInviteData || inviteProcessing || !fx || !currentUser) return;
       const token = pendingInviteToken;
+      inviteProcessing = true;
       try {
         const snap = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "invites", token));
         if (!snap.exists()) throw new Error("missing");
@@ -5771,15 +5774,23 @@
         }
         if (modal) modal.classList.add("active");
       } catch (err) {
-        console.warn("Invite read note:", err?.code || err?.message || err);
-        clearPendingInvite();
-        toast("This invite link is invalid or unavailable.");
+        const code = String(err?.code || err?.message || "");
+        console.warn("Invite read note:", code);
+        if (code.includes("unavailable") || code.includes("network")) {
+          toast("Could not load the invite. Check your connection and reload.");
+        } else {
+          clearPendingInvite();
+          toast("This invite link is invalid or unavailable.");
+        }
+      } finally {
+        inviteProcessing = false;
       }
     }
 
     window.acceptInvite = async function() {
       const invite = pendingInviteData;
-      if (!invite || !fx || !currentUser) return;
+      if (!invite || inviteAccepting || !fx || !currentUser) return;
+      inviteAccepting = true;
       const myEmail = (currentUser.email || "").toLowerCase().trim();
       const myEmailNorm = normalizeEmail(myEmail);
       const myName = currentUser.displayName || myEmail.split("@")[0];
@@ -5836,6 +5847,8 @@
         toast(err?.message === "group-deleted"
           ? "This group is deleted for your account."
           : "Could not accept this invite. It may have expired or been revoked.");
+      } finally {
+        inviteAccepting = false;
       }
     };
 
