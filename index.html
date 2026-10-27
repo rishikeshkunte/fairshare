@@ -908,6 +908,7 @@
     };
     let fx = null;
     let currentUser = null;
+    let authActionInProgress = false;
 
     function requestsCol() {
       return fx.storeMod.collection(fx.db, "friend_requests");
@@ -4527,14 +4528,20 @@
         enterSignedOutState(false);
       } else {
         setCloudIntent(true);
+        authActionInProgress = true;
         try {
-          await signInGoogle(fx);
+          const credential = await signInGoogle(fx);
+          const signedInUser = credential?.user || fx.auth.currentUser;
+          if (signedInUser) applyAuthState(signedInUser);
+          else toast("Google sign-in completed without a user session. Please try again.");
         } catch (error) {
           console.error("Auth error:", error);
           const code = error?.code || "";
           if (code === "auth/unauthorized-domain") {
             toast("Add this site under Firebase Authentication → Authorized domains, then try again.");
           } else toast(error?.message || "Google sign-in did not finish.");
+        } finally {
+          authActionInProgress = false;
         }
       }
     };
@@ -4961,7 +4968,7 @@
           const hadController = Boolean(navigator.serviceWorker.controller);
           let refreshing = false;
           navigator.serviceWorker.addEventListener("controllerchange", () => {
-            if (!hadController || refreshing) return;
+            if (!hadController || refreshing || authActionInProgress) return;
             refreshing = true;
             window.location.reload();
           });
