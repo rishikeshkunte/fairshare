@@ -914,7 +914,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v34";
+    const APP_BUILD = "v35";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1447,6 +1447,8 @@
 
     let unsubscribeFriendsRosterListener = null;
     let friendsRosterWriteInFlight = false;
+    let deletedGroupsWriteInFlight = false;
+    let deletedGroupsWriteQueued = false;
 
     function mergeFriendRecords(...lists) {
       const merged = new Map();
@@ -1479,6 +1481,40 @@
       });
     }
 
+    // Account-wide group deletions. deletedGroups lives on user_profiles/{uid}
+    // so a group deleted on one device stays deleted on every device signed in
+    // with the same Google account, while other members keep their own copy.
+    function saveDeletedGroupsToCloud() {
+      if (!fx || !currentUser || !currentUser.uid) return;
+      if (deletedGroupsWriteInFlight) {
+        deletedGroupsWriteQueued = true;
+        return;
+      }
+      deletedGroupsWriteInFlight = true;
+      const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
+      fx.storeMod.runTransaction(fx.db, async (transaction) => {
+        const snapshot = await transaction.get(profileRef);
+        const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
+        const merged = Array.from(new Set([
+          ...(Array.isArray(cloudData.deletedGroups) ? cloudData.deletedGroups : []).map(String),
+          ...(appState.deletedGroups || []).map(String)
+        ]));
+        appState.deletedGroups = merged;
+        transaction.set(profileRef, {
+          deletedGroups: merged,
+          updatedAt: serverTimestamp(fx)
+        }, { merge: true });
+      }).catch(err => {
+        console.warn("Deleted groups cloud save note:", err?.code || err);
+      }).finally(() => {
+        deletedGroupsWriteInFlight = false;
+        if (deletedGroupsWriteQueued) {
+          deletedGroupsWriteQueued = false;
+          saveDeletedGroupsToCloud();
+        }
+      });
+    }
+
     function listenToFriendsRoster(user) {
       if (!fx || !user || !user.uid) return;
       if (unsubscribeFriendsRosterListener) unsubscribeFriendsRosterListener();
@@ -1488,16 +1524,44 @@
         const mergedFriends = mergeFriendRecords(cloudFriends, appState.friends || []);
         const localChanged = JSON.stringify(mergedFriends) !== JSON.stringify(appState.friends || []);
         appState.friends = mergedFriends;
+
+        const cloudDeleted = Array.isArray(cloudData.deletedGroups) ? cloudData.deletedGroups.map(String) : [];
+        const mergedDeleted = Array.from(new Set([
+          ...(appState.deletedGroups || []).map(String),
+          ...cloudDeleted
+        ]));
+        const deletedChanged = JSON.stringify(mergedDeleted) !== JSON.stringify((appState.deletedGroups || []).map(String));
+        appState.deletedGroups = mergedDeleted;
+        let groupsChanged = false;
+        let removedActive = false;
+        mergedDeleted.forEach((groupId) => {
+          if (appState.groups[groupId]) {
+            delete appState.groups[groupId];
+            groupsChanged = true;
+          }
+          if (appState.activeGroupId === groupId) {
+            appState.activeGroupId = Object.keys(appState.groups)[0] || null;
+            removedActive = true;
+          }
+        });
+
         persistLocalState();
         renderFriendsRoster();
         renderFriendPickerDropdown();
         renderDirectFriendDropdown();
         renderDirectBalances();
         if (localChanged) refreshDirectListeners();
+        if (groupsChanged) {
+          if (removedActive) listenToCloudGroup(appState.activeGroupId);
+          renderAll();
+        }
         if (!snapshot.exists() || JSON.stringify(cloudFriends) !== JSON.stringify(mergedFriends)) {
           saveFriendsRosterToCloud();
         }
-      }, err => console.warn("Friends roster cloud sync note:", err));
+        if (!snapshot.exists() || deletedChanged || JSON.stringify(cloudDeleted) !== JSON.stringify(mergedDeleted)) {
+          saveDeletedGroupsToCloud();
+        }
+      }, err => console.warn("Friends roster cloud sync note:", err?.code || err));
     }
 
     // --- DOM Elements ---
@@ -2421,6 +2485,8 @@
           appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(g.id)]));
           delete appState.groups[g.id];
           appState.activeGroupId = Object.keys(appState.groups)[0] || null;
+          persistLocalState();
+          saveDeletedGroupsToCloud();
           saveState();
           listenToCloudGroup(appState.activeGroupId);
           renderAll();
@@ -5063,7 +5129,15 @@
     window.acceptGroupInvite = function() {
       if (!pendingGroupInviteData) return;
       const { id, name, by, byEmail } = pendingGroupInviteData;
-      appState.deletedGroups = (appState.deletedGroups || []).filter(groupId => String(groupId) !== String(id));
+      // Deletion is account-wide and sticky. Accepting an old invite must not
+      // resurrect a group this account has already deleted on another device.
+      if ((appState.deletedGroups || []).includes(String(id))) {
+        const deletedModal = document.getElementById("group-invite-modal");
+        if (deletedModal) deletedModal.classList.remove("active");
+        window.history.replaceState({}, document.title, window.location.pathname + "#friends");
+        toast("This group is deleted for your account. It stays hidden on all your devices.");
+        return;
+      }
       
       if (!appState.groups[id]) {
         appState.groups[id] = {
