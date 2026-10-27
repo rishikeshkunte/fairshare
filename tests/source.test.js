@@ -143,6 +143,19 @@ test("add-expense form has a clear amount focus, accessible scope choices, and r
 });
 
 
+test("friends roster includes group balances alongside 1-on-1 balances", () => {
+  assert.match(html, /function findGroupMemberForFriend\(group, friend\)/);
+  const helper = html.slice(html.indexOf("function getFriendGroupBalances(friend)"), html.indexOf("function renderFriendsRoster()"));
+  assert.match(helper, /pairwiseDebts\(group\)/);
+  assert.match(helper, /byCurrency/);
+  const roster = html.slice(html.indexOf("function renderFriendsRoster()"), html.indexOf("function renderFriendPickerDropdown"));
+  assert.match(roster, /getFriendGroupBalances\(f\)/);
+  assert.match(roster, /friend-group-badge/);
+  assert.match(roster, /friendBal/);
+  assert.match(css, /\.friend-group-badge\.positive/);
+  assert.match(css, /\.friend-group-badge\.negative/);
+});
+
 test("groups page shows its own expense totals and balances", () => {
   assert.match(html, /id="group-expenses-card"/);
   assert.match(html, /id="group-expenses-total"/);

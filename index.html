@@ -936,7 +936,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v38";
+    const APP_BUILD = "v39";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -2273,6 +2273,47 @@
       }
     }
 
+    function findGroupMemberForFriend(group, friend) {
+      const friendEmail = normalizeEmail(friend?.email || "");
+      if (friendEmail) {
+        const linked = Object.entries(group.memberLinks || {}).find(([, email]) =>
+          normalizeEmail(email || "") === friendEmail
+        );
+        if (linked && (group.members || []).includes(linked[0])) return linked[0];
+      }
+      const name = String(friend?.name || "").trim();
+      if (!name) return null;
+      const members = group.members || [];
+      const exact = members.find(member => member === name);
+      if (exact) return exact;
+      return members.find(member => String(member).toLowerCase() === name.toLowerCase()) || null;
+    }
+
+    // Pairwise group amounts are used here (not simplified totals) so a friend's
+    // badge reflects what that specific friend owes you inside each group.
+    function getFriendGroupBalances(friend) {
+      const byCurrency = {};
+      const groups = [];
+      Object.values(appState.groups || {}).forEach(group => {
+        if (!group || !Array.isArray(group.members)) return;
+        const member = findGroupMemberForFriend(group, friend);
+        if (!member) return;
+        const myName = getMyGroupMemberName(group);
+        if (!myName || member === myName) return;
+        const edges = pairwiseDebts(group);
+        let net = 0;
+        edges.forEach(edge => {
+          if (edge.from === member && edge.to === myName) net += Number(edge.amount) || 0;
+          else if (edge.from === myName && edge.to === member) net -= Number(edge.amount) || 0;
+        });
+        if (Math.abs(net) < 0.01) return;
+        const currency = group.currency || "₹";
+        byCurrency[currency] = (byCurrency[currency] || 0) + net;
+        groups.push({ id: group.id, name: group.name, currency, net });
+      });
+      return { byCurrency, groups };
+    }
+
     function renderFriendsRoster() {
       const visibleFriends = appState.friends || [];
       if (globalFriendsCount) globalFriendsCount.textContent = visibleFriends.length;
@@ -2306,6 +2347,16 @@
           }
         });
 
+        const groupInfo = getFriendGroupBalances(f);
+        const groupBadges = Object.entries(groupInfo.byCurrency)
+          .filter(([, net]) => Math.abs(net) > 0.01)
+          .map(([currency, net]) => {
+            const label = net > 0 ? "Owes you" : "You owe";
+            return `<span class="friend-group-badge ${net > 0 ? "positive" : "negative"}">Groups: ${label} ${formatMoney(Math.abs(net), currency)}</span>`;
+          })
+          .join("");
+        const groupTitle = groupInfo.groups.map(item => item.name).filter(Boolean).join(", ");
+
         let balBadge = "";
         if (Math.abs(friendBal) > 0.01) {
           if (friendBal > 0) {
@@ -2332,6 +2383,7 @@
             <span style="font-size:0.75rem; color:var(--muted); display:block; margin-top:2px;">
               ${f.email ? escapeHtml(f.email) : (f.phone ? escapeHtml(f.phone) : 'Local contact')}
             </span>
+            ${groupBadges ? `<div class="friend-group-balances" title="${escapeHtml(groupTitle)}">${groupBadges}</div>` : ""}
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
             <button type="button" class="btn btn-secondary" data-call="renameFriendPrompt" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;" aria-label="Rename contact">✏️</button>
