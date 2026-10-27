@@ -181,6 +181,16 @@ test("friends roster includes group balances alongside 1-on-1 balances", () => {
   assert.match(css, /\.friend-group-badge\.negative/);
 });
 
+test("friend invite link can be generated and copied in the app", () => {
+  assert.match(html, /data-call="copyInviteLink"/);
+  assert.match(html, /id="invite-link-note"/);
+  assert.match(html, /function activeGroupInviteUrl\(\)/);
+  assert.match(html, /window\.copyInviteLink = async function\(\)/);
+  assert.match(html, /navigator\.clipboard\.writeText\(inviteUrl\)/);
+  assert.match(html, /requireGroupForInvite\(\)/);
+  assert.match(html, /This link joins/);
+});
+
 test("group management requires an explicit group selection", () => {
   assert.match(html, /id="manage-group-select"/);
   assert.match(html, /<option value="">Choose a group\.\.\.<\/option>/);

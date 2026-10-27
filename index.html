@@ -743,10 +743,14 @@
               <button type="button" id="btn-send-friend-request" class="btn btn-primary" data-call="sendFriendRequest" data-needs-auth disabled style="white-space:nowrap;">In-App request <span class="auth-pill">Needs sign-in</span></button>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Direct messaging:</span>
+              <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Invite link:</span>
+              <button type="button" class="btn btn-primary" data-call="copyInviteLink">Copy invite link</button>
               <button type="button" class="btn btn-secondary" data-call="openInviteInGmail">Open in Gmail</button>
               <button type="button" class="btn btn-secondary" data-call="shareViaWhatsApp">Share via WhatsApp</button>
             </div>
+            <p id="invite-link-note" style="font-size:0.75rem; color:var(--muted); margin:8px 0 0; line-height:1.4;">
+              Create or select a group to generate an invite link.
+            </p>
           </div>
 
           <!-- Outgoing Pending Requests -->
@@ -970,7 +974,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v43";
+    const APP_BUILD = "v44";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -3263,12 +3267,41 @@
     }
 
     // Outbound Sharing Helpers
+    function activeGroupInviteUrl() {
+      const g = getGroup();
+      if (!g.id) return "";
+      const myName = myInviteName();
+      const myEmail = currentUser ? currentUser.email : "";
+      return `${window.location.origin}${window.location.pathname}?joinGroup=${encodeURIComponent(g.id)}&groupName=${encodeURIComponent(g.name)}&by=${encodeURIComponent(myName)}&byEmail=${encodeURIComponent(myEmail)}#friends`;
+    }
+
+    function requireGroupForInvite() {
+      const g = getGroup();
+      if (g.id) return g;
+      toast("Create or select a group first to generate an invite link.");
+      window.openNewGroupPrompt();
+      return null;
+    }
+
+    window.copyInviteLink = async function() {
+      const g = requireGroupForInvite();
+      if (!g) return;
+      const inviteUrl = activeGroupInviteUrl();
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+        toast(`Invite link for "${g.name}" copied. It is reusable and does not expire.`);
+      } catch {
+        await askPrompt({ message: `Invite link for "${g.name}":`, defaultValue: inviteUrl });
+      }
+    };
+
     window.openInviteInGmail = function() {
+      const g = requireGroupForInvite();
+      if (!g) return;
       const inputEl = document.getElementById("input-friend-email");
       const toEmail = (inputEl ? inputEl.value : "").trim();
-      const g = getGroup();
       const myName = myInviteName();
-      const inviteUrl = `${window.location.origin}${window.location.pathname}?joinGroup=${encodeURIComponent(g.id)}&groupName=${encodeURIComponent(g.name)}&by=${encodeURIComponent(myName)}#friends`;
+      const inviteUrl = activeGroupInviteUrl();
 
       const subject = encodeURIComponent(`Split expenses on FairShare with ${myName}`);
       const body = encodeURIComponent(`Hey! I am using FairShare to track and split our expenses.\n\nOpen this link to join "${g.name}":\n${inviteUrl}\n\nSign in with Gmail after opening the link if you want the expenses to sync live.\n\nCheers`);
@@ -3277,9 +3310,9 @@
     };
 
     window.shareViaWhatsApp = function() {
-      const g = getGroup();
-      const myName = myInviteName();
-      const inviteUrl = `${window.location.origin}${window.location.pathname}?joinGroup=${encodeURIComponent(g.id)}&groupName=${encodeURIComponent(g.name)}&by=${encodeURIComponent(myName)}#friends`;
+      const g = requireGroupForInvite();
+      if (!g) return;
+      const inviteUrl = activeGroupInviteUrl();
       const text = encodeURIComponent(`Hey! Join me on FairShare to track and split our expenses: ${inviteUrl}`);
       window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
     };
@@ -4829,6 +4862,12 @@
       if (homeGroupStats) homeGroupStats.textContent = groups.length
         ? `${(g.transactions || []).filter(tx => tx.type === "expense").length} expenses`
         : "No groups yet";
+      const inviteNote = document.getElementById("invite-link-note");
+      if (inviteNote) {
+        inviteNote.textContent = g.id
+          ? `This link joins "${g.name}". It is reusable, does not expire, and the recipient must sign in with Gmail to sync.`
+          : "Create or select a group to generate an invite link.";
+      }
       const manageCard = document.getElementById("group-management-card");
       if (manageCard) manageCard.hidden = groups.length === 0;
       if (currencySelect && document.activeElement !== currencySelect) {
@@ -5505,10 +5544,9 @@
     };
 
     window.shareGroupInvite = async function() {
-      const g = getGroup();
-      const myName = myInviteName();
-      const myEmail = currentUser ? currentUser.email : "";
-      const inviteUrl = `${window.location.origin}${window.location.pathname}?joinGroup=${encodeURIComponent(g.id)}&groupName=${encodeURIComponent(g.name)}&by=${encodeURIComponent(myName)}&byEmail=${encodeURIComponent(myEmail)}#friends`;
+      const g = requireGroupForInvite();
+      if (!g) return;
+      const inviteUrl = activeGroupInviteUrl();
       try {
         await navigator.clipboard.writeText(inviteUrl);
         toast(`Group invite link copied. Send it to anyone you want in "${g.name}".`);
