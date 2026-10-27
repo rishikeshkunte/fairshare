@@ -55,7 +55,6 @@ test("signed-out state hides cached friends and direct activity", () => {
   assert.match(html, /scope === "friend" && !currentUser[\s\S]*?Sign in to access your saved friends/);
   assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see saved friends/);
   assert.match(html, /currentUser \? \(appState\.directTransactions \|\| \[\]\)\.map/);
-  assert.match(html, /Sign in to view 1-on-1 balances/);
   assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to add a 1-on-1 expense/);
 });
 
@@ -142,6 +141,12 @@ test("add-expense form has a clear amount focus, accessible scope choices, and r
   assert.match(html, /id="btn-submit-expense"/);
 });
 
+
+test("home does not duplicate a direct-only friend balances card", () => {
+  assert.doesNotMatch(html, /direct-balances-card|direct-balances-list|renderDirectBalances/);
+  assert.doesNotMatch(html, /Direct 1-on-1 friend balances/);
+  assert.match(html, /across groups & 1-on-1/);
+});
 
 test("friends roster includes group balances alongside 1-on-1 balances", () => {
   assert.match(html, /function findGroupMemberForFriend\(group, friend\)/);
