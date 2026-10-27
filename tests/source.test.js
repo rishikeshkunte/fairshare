@@ -181,6 +181,17 @@ test("friends roster includes group balances alongside 1-on-1 balances", () => {
   assert.match(css, /\.friend-group-badge\.negative/);
 });
 
+test("group management requires an explicit group selection", () => {
+  assert.match(html, /id="manage-group-select"/);
+  assert.match(html, /<option value="">Choose a group\.\.\.<\/option>/);
+  assert.match(html, /id="group-management-body" hidden/);
+  assert.match(html, /id="group-management-hint"/);
+  assert.match(html, /function renderManageGroupSelector\(\)/);
+  assert.match(html, /renderManageGroupSelector\(\);/);
+  assert.match(html, /groupManagementBody\.hidden = !hasManaged/);
+  assert.match(html, /switchActiveGroup\(id, \{ keepManaged: true \}\)/);
+});
+
 test("groups page shows its own expense totals and balances", () => {
   assert.match(html, /id="group-expenses-card"/);
   assert.match(html, /id="group-expenses-total"/);
