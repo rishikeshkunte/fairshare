@@ -715,6 +715,7 @@
                 <span style="font-size:0.75rem; color:var(--muted);">Click × to remove</span>
               </div>
               <div id="members-container" class="chip-container"></div>
+              <p class="group-hint" style="margin-top:8px;">Members without a linked Gmail can't see cloud changes. Use “Link” on a member or send a secure Invite link.</p>
             </div>
           </div>
         </div>
@@ -988,7 +989,8 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v49";
+    let toldGroupSyncError = false;
+    const APP_BUILD = "v50";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1932,6 +1934,64 @@
       renderAll();
     };
 
+    window.linkMemberEmail = async function(name) {
+      const g = getGroup();
+      if (!g.id || !name) return;
+      if (!currentUser) {
+        toast("Sign in with Gmail to link a member.");
+        return;
+      }
+      const email = await askPrompt({
+        title: "Link Gmail",
+        message: `Gmail address for ${name}`,
+        placeholder: "name@gmail.com"
+      });
+      const normalized = String(email || "").trim().toLowerCase();
+      if (!normalized) return;
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) {
+        toast("Enter a valid email address.");
+        return;
+      }
+      g.memberLinks = { ...(g.memberLinks || {}), [name]: normalized };
+      saveState();
+      renderAll();
+      toast(`Linked ${name} to ${normalized}. They can now see this group after signing in.`);
+    };
+
+    window.linkFriendEmail = async function(friendId) {
+      if (!currentUser) {
+        toast("Sign in with Gmail to link a friend.");
+        return;
+      }
+      const friend = (appState.friends || []).find(item => String(item.id) === String(friendId));
+      if (!friend) return;
+      const email = await askPrompt({
+        title: "Link Gmail",
+        message: `Gmail address for ${friend.name}`,
+        placeholder: "name@gmail.com"
+      });
+      const normalized = String(email || "").trim().toLowerCase();
+      if (!normalized) return;
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized)) {
+        toast("Enter a valid email address.");
+        return;
+      }
+      const duplicate = (appState.friends || []).find(item =>
+        item.id !== friend.id && normalizeEmail(item.email || "") === normalizeEmail(normalized)
+      );
+      if (duplicate) {
+        toast(`${normalized} is already linked to ${duplicate.name}.`);
+        return;
+      }
+      friend.email = normalized;
+      friend.approved = true;
+      friend.type = "google";
+      saveState();
+      refreshDirectListeners();
+      renderAll();
+      toast(`Linked ${friend.name} to ${normalized}. Direct sync is now available.`);
+    };
+
     window.addNewFriendToRoster = function() {
       if (!currentUser) {
         toast("Sign in to manage your saved friends.");
@@ -2446,6 +2506,7 @@
           <div style="display:flex; gap:6px; align-items:center;">
             <button type="button" class="btn btn-secondary" data-call="renameFriendPrompt" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;" aria-label="Rename contact">✏️</button>
             <button type="button" class="btn btn-secondary" data-call="openFriendDetail" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;">Details</button>
+            ${!f.email ? `<button type="button" class="btn btn-secondary" data-call="linkFriendEmail" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;">Link</button>` : ""}
             <button type="button" class="btn btn-secondary" data-call="quickStartDirectExpense" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;">Split</button>
             ${Math.abs(friendBal) >= 1 ? `<button type="button" class="btn btn-settle" data-call="quickStartDirectSettle" data-arg="${escapeHtml(f.id)}" data-arg2="${friendBal}" style="padding:4px 8px; font-size:0.75rem;">Settle</button>` : ''}
             <button type="button" class="btn-delete" data-call="deleteFriendFromRoster" data-arg="${escapeHtml(f.id)}" aria-label="Remove friend">&times;</button>
@@ -3937,7 +3998,10 @@
       if (metaEl) {
         const memberCount = (g.members || []).length;
         const countLabel = expenses.length === 1 ? "expense" : "expenses";
-        metaEl.textContent = `${memberCount} ${memberCount === 1 ? "member" : "members"} • ${expenses.length} ${countLabel}`;
+        const localOnly = (g.members || []).filter(name =>
+          name !== myName && !(g.memberLinks || {})[name]
+        ).length;
+        metaEl.textContent = `${memberCount} ${memberCount === 1 ? "member" : "members"} • ${expenses.length} ${countLabel}${localOnly ? ` • ${localOnly} local-only` : ""}`;
       }
       const totalEl = document.getElementById("group-expenses-total");
       if (totalEl) totalEl.textContent = formatMoney(totalExpense, cur);
@@ -4997,6 +5061,18 @@
           label.textContent = name;
           chip.appendChild(label);
 
+          const linkedEmail = (g.memberLinks || {})[name];
+          if (!linkedEmail && name !== getMyGroupMemberName(g)) {
+            const linkButton = document.createElement("button");
+            linkButton.type = "button";
+            linkButton.className = "chip-link";
+            linkButton.textContent = "Link";
+            linkButton.title = `Link a Gmail to ${name}`;
+            linkButton.setAttribute("aria-label", `Link a Gmail to ${name}`);
+            linkButton.addEventListener("click", () => window.linkMemberEmail(name));
+            chip.appendChild(linkButton);
+          }
+
           const removeButton = document.createElement("button");
           removeButton.type = "button";
           removeButton.className = "chip-remove";
@@ -5125,6 +5201,7 @@
       if (persist && previousUser) persistLocalState(previousUser);
       currentUser = null;
       cloudSyncUid = null;
+      toldGroupSyncError = false;
       [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeFriendsRosterListener, unsubInvitesListener]
         .forEach(unsubscribe => { if (typeof unsubscribe === "function") unsubscribe(); });
       unsubscribeFriendsRosterListener = null;
@@ -5458,6 +5535,10 @@
       }, (err) => {
         console.warn("Cloud group discovery note:", err?.code || err);
         setCloudSyncStatus(`Cloud sync failed: ${err?.code || "unknown error"}`);
+        if (!toldGroupSyncError && String(err?.code || "").includes("permission")) {
+          toldGroupSyncError = true;
+          toast("Cloud group sync was denied. Ask the group owner to add your Gmail or send a new secure invite.");
+        }
       });
 
       // 4. Listen to the active group for live updates.
@@ -5995,11 +6076,11 @@
           }
         } else {
           const existing = appState.groups[data.groupId];
-          const myName = existing ? getMyGroupMemberName(existing) : "";
-          const alreadyMember = Boolean(existing && (
-            (Array.isArray(existing.memberEmails) && existing.memberEmails.some(email => normalizeEmail(email) === normalizeEmail(myEmail)))
-            || (Array.isArray(existing.members) && myName && existing.members.includes(myName))
-          ));
+          // Only treat this as already-joined when the local copy has confirmed
+          // cloud membership. A stale local-only copy must be allowed to accept a
+          // new secure invite so its membership can be repaired.
+          const alreadyMember = Boolean(existing && Array.isArray(existing.memberEmails)
+            && existing.memberEmails.some(email => normalizeEmail(email) === normalizeEmail(myEmail)));
           if (alreadyMember || normalizeEmail(inviterEmail) === normalizeEmail(myEmail)) {
             rejectPendingInvite("You're already in this group.");
             return;
