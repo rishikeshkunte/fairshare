@@ -500,10 +500,23 @@
 
   <!-- ================= PAGE 5: SPENDING ANALYTICS ================= -->
   <section id="page-analytics" class="app-page">
-    <div class="section-header"><div><h1>Spending analytics</h1><p id="analytics-subtitle">Where the money went for the active group and 1-on-1 bills.</p></div></div>
+    <div class="section-header"><div><h1>Spending analytics</h1><p id="analytics-subtitle">Compare categories, people, and monthly trends across groups and 1-on-1 bills.</p></div></div>
     <div class="card">
+      <div class="analytics-toolbar">
+        <div class="tab-group" role="group" aria-label="Analytics view" id="analytics-view-tabs">
+          <button type="button" class="tab-btn active" data-analytics-view="category">By category</button>
+          <button type="button" class="tab-btn" data-analytics-view="people">Who spent what</button>
+          <button type="button" class="tab-btn" data-analytics-view="trend">Monthly trend</button>
+        </div>
+        <div class="tab-group" role="group" aria-label="Analytics scope" id="analytics-scope-tabs">
+          <button type="button" class="tab-btn active" data-analytics-scope="active">Active group</button>
+          <button type="button" class="tab-btn" data-analytics-scope="all">All groups</button>
+          <button type="button" class="tab-btn" data-analytics-scope="direct">1-on-1</button>
+        </div>
+      </div>
+      <p id="analytics-scope-note" class="section-hint" hidden></p>
       <div class="card-header-row">
-        <h2>Spending by category</h2>
+        <h2 id="analytics-chart-title">Spending by category</h2>
         <div class="tab-group chart-switch" id="chart-style-tabs" style="margin-bottom:0; width:140px;">
           <button type="button" class="tab-btn active" id="btn-chart-pie">Pie</button>
           <button type="button" class="tab-btn" id="btn-chart-bar">Bar</button>
@@ -975,7 +988,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v48";
+    const APP_BUILD = "v49";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1728,6 +1741,8 @@
     const chartVisual = document.getElementById("chart-visual");
     const chartLegend = document.getElementById("chart-legend");
     let chartType = "pie";
+    let analyticsView = "category";
+    let analyticsScope = "active";
 
     // History Filters
     let historyFilter = "all";
@@ -1855,7 +1870,7 @@
         appState.theme = appState.theme === "dark" ? "light" : "dark";
         applyTheme();
         saveState();
-        renderCategoryChart();
+        renderAnalytics();
       });
     }
 
@@ -4237,17 +4252,92 @@
       settleUpBox?.scrollIntoView({ behavior: "smooth", block: "center" });
     };
 
-    // Category Analytics
-    function renderCategoryChart() {
-      const g = getGroup();
-      const cur = g.currency;
+    // --- Spending analytics ---
+    function analyticsCurrency() {
+      return getGroup().currency || "₹";
+    }
+
+    function analyticsExpenses() {
+      const cur = analyticsCurrency();
+      if (analyticsScope === "direct") {
+        return (currentUser ? (appState.directTransactions || []) : [])
+          .filter(t => t.type === "expense")
+          .map(t => ({ ...t, _currency: cur }));
+      }
+      let groups = [];
+      if (analyticsScope === "all") {
+        groups = Object.values(appState.groups || {}).filter(group =>
+          group && (group.currency || "₹") === cur
+        );
+      } else {
+        const group = getGroup();
+        if (group.id && appState.groups[group.id]) groups = [group];
+      }
+      return groups.flatMap(group => (group.transactions || [])
+        .filter(t => t.type === "expense")
+        .map(t => ({ ...t, _currency: group.currency || cur, _groupName: group.name })));
+    }
+
+    function renderAnalytics() {
+      const cur = analyticsCurrency();
+      const rows = analyticsExpenses();
+      const total = rows.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+      const title = document.getElementById("analytics-chart-title");
+      const note = document.getElementById("analytics-scope-note");
+      const styleTabs = document.getElementById("chart-style-tabs");
+      const dash = document.getElementById("dash-analytics-desc");
+      if (title) {
+        title.textContent = analyticsView === "people"
+          ? "Who spent what"
+          : (analyticsView === "trend" ? "Monthly trend" : "Spending by category");
+      }
+      if (styleTabs) styleTabs.hidden = analyticsView !== "category";
+      if (note) {
+        if (analyticsScope === "all") {
+          note.hidden = false;
+          note.textContent = `All groups in ${cur}. Groups using other currencies are excluded.`;
+        } else if (analyticsScope === "direct") {
+          note.hidden = false;
+          note.textContent = `1-on-1 expenses in ${cur}.`;
+        } else {
+          note.hidden = true;
+          note.textContent = "";
+        }
+      }
+      const emptyMessage = analyticsView === "category"
+        ? "No category spending yet."
+        : (analyticsView === "people" ? "No expenses in this view yet." : "No monthly spending yet.");
+      if (total <= 0) {
+        if (chartEmpty) {
+          chartEmpty.style.display = "block";
+          chartEmpty.innerHTML = `<p>${emptyMessage}</p>`;
+        }
+        if (chartArea) chartArea.style.display = "none";
+        if (chartVisual) chartVisual.innerHTML = "";
+        if (chartLegend) chartLegend.innerHTML = "";
+        if (dash) dash.textContent = "No spending in this view";
+        return;
+      }
+      if (chartEmpty) chartEmpty.style.display = "none";
+      if (chartArea) {
+        chartArea.style.display = "block";
+        chartArea.dataset.view = analyticsView;
+        chartArea.dataset.chart = chartType;
+      }
+      if (chartVisual) {
+        chartVisual.style.display = analyticsView === "category" ? "flex" : "block";
+        chartVisual.style.justifyContent = "center";
+        chartVisual.style.alignItems = "center";
+      }
+      if (chartLegend) chartLegend.innerHTML = "";
+      if (analyticsView === "people") renderPeopleChart(rows, cur);
+      else if (analyticsView === "trend") renderTrendChart(rows, cur);
+      else renderCategoryChart(rows, cur);
+    }
+
+    function renderCategoryChart(rows, cur) {
       const catTotals = {};
-      const expenseSources = [
-        ...(g.transactions || []),
-        ...(currentUser ? (appState.directTransactions || []) : [])
-      ];
-      expenseSources.forEach(t => {
-        if (t.type !== "expense") return;
+      rows.forEach(t => {
         const key = t.category || "Other";
         catTotals[key] = (catTotals[key] || 0) + (Number(t.amount) || 0);
       });
@@ -4322,12 +4412,169 @@
       }
     }
 
+    function renderPeopleChart(rows, cur) {
+      const people = new Map();
+      const ensure = (name) => {
+        const key = name || "Someone";
+        if (!people.has(key)) people.set(key, { name: key, paid: 0, share: 0 });
+        return people.get(key);
+      };
+      rows.forEach(tx => {
+        const amount = Number(tx.amount) || 0;
+        ensure(tx.payer || "Someone").paid += amount;
+        Object.entries(tx.shares || {}).forEach(([name, share]) => {
+          ensure(name).share += Number(share) || 0;
+        });
+      });
+      const peopleRows = [...people.values()]
+        .filter(person => person.paid > 0 || person.share > 0)
+        .map(person => ({ ...person, net: person.paid - person.share }));
+      peopleRows.sort((a, b) => b.share - a.share || b.paid - a.paid);
+      if (!peopleRows.length) return;
+      const max = Math.max(...peopleRows.map(person => Math.max(person.paid, person.share)), 1);
+      if (chartVisual) {
+        chartVisual.innerHTML = `
+          <div class="people-chart">
+            <div class="people-legend">
+              <span><i class="paid"></i>Paid out of pocket</span>
+              <span><i class="share"></i>Share of expenses</span>
+            </div>
+            ${peopleRows.map(person => {
+              const paidPct = (person.paid / max) * 100;
+              const sharePct = (person.share / max) * 100;
+              const net = person.net;
+              const netText = net === 0
+                ? formatMoney(0, cur)
+                : `${net > 0 ? "+" : "-"}${formatMoney(Math.abs(net), cur)}`;
+              return `
+                <div class="people-row">
+                  <div class="people-head">
+                    <strong>${escapeHtml(person.name)}</strong>
+                    <span class="people-net ${net > 0 ? "positive" : (net < 0 ? "negative" : "")}">Net ${netText}</span>
+                  </div>
+                  <div class="people-bar-line">
+                    <span>Paid</span>
+                    <div class="people-bar-track"><div class="people-bar paid" style="width:${paidPct}%"></div></div>
+                    <span class="people-bar-val">${formatMoney(person.paid, cur)}</span>
+                  </div>
+                  <div class="people-bar-line">
+                    <span>Share</span>
+                    <div class="people-bar-track"><div class="people-bar share" style="width:${sharePct}%"></div></div>
+                    <span class="people-bar-val">${formatMoney(person.share, cur)}</span>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+            <p class="analytics-footnote">Net = paid out of pocket minus share of expenses. Settlements are not included here.</p>
+          </div>
+        `;
+      }
+      if (chartLegend) chartLegend.innerHTML = "";
+      const dash = document.getElementById("dash-analytics-desc");
+      if (dash) dash.textContent = `${peopleRows[0].name} has the largest share`;
+    }
+
+    function expenseMonthKey(tx) {
+      const iso = tx.dateISO || "";
+      if (/^\d{4}-\d{2}/.test(iso)) return iso.slice(0, 7);
+      const raw = tx.date || "";
+      const parsed = raw ? new Date(raw) : (tx.timestamp ? new Date(tx.timestamp) : null);
+      if (parsed && !Number.isNaN(parsed.getTime())) {
+        return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
+      }
+      return "";
+    }
+
+    function lastSixMonths() {
+      const now = new Date();
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push({
+          key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+          label: date.toLocaleDateString(undefined, { month: "short" }),
+          total: 0
+        });
+      }
+      return months;
+    }
+
+    function renderTrendChart(rows, cur) {
+      const months = lastSixMonths();
+      const byMonth = new Map(months.map(month => [month.key, month]));
+      rows.forEach(tx => {
+        const month = byMonth.get(expenseMonthKey(tx));
+        if (month) month.total += Number(tx.amount) || 0;
+      });
+      const total = months.reduce((sum, month) => sum + month.total, 0);
+      const dash = document.getElementById("dash-analytics-desc");
+      if (total <= 0) {
+        if (chartEmpty) {
+          chartEmpty.style.display = "block";
+          chartEmpty.innerHTML = "<p>No spending in the last 6 months.</p>";
+        }
+        if (chartArea) chartArea.style.display = "none";
+        if (chartVisual) chartVisual.innerHTML = "";
+        if (dash) dash.textContent = "No recent spending";
+        return;
+      }
+      const max = Math.max(...months.map(month => month.total), 1);
+      const average = total / months.length;
+      const current = months[months.length - 1].total;
+      const previous = months[months.length - 2]?.total || 0;
+      const delta = current - previous;
+      const deltaText = delta === 0
+        ? "No change"
+        : `${delta > 0 ? "+" : "-"}${formatMoney(Math.abs(delta), cur)} vs last month`;
+      const width = 640;
+      const height = 260;
+      const padL = 44;
+      const padR = 28;
+      const padT = 28;
+      const padB = 42;
+      const plotW = width - padL - padR;
+      const plotH = height - padT - padB;
+      const xFor = index => padL + (plotW * index) / (months.length - 1);
+      const yFor = value => padT + plotH - (value / max) * plotH;
+      const points = months.map((month, index) => ({
+        x: xFor(index),
+        y: yFor(month.total),
+        value: month.total,
+        label: month.label
+      }));
+      const avgY = yFor(average);
+      const polyline = points.map(point => `${point.x},${point.y}`).join(" ");
+      const circles = points.map(point => `<circle cx="${point.x}" cy="${point.y}" r="4" fill="var(--primary)"/>`).join("");
+      const labels = points.map(point => `<text x="${point.x}" y="${padT + plotH + 22}" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(point.label)}</text>`).join("");
+      const values = points.map(point => `<text x="${point.x}" y="${point.y - 10}" text-anchor="middle" fill="var(--text)" font-size="11">${formatMoney(point.value, cur)}</text>`).join("");
+      const svg = `<svg class="trend-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Monthly spending trend">
+        <line x1="${padL}" y1="${avgY}" x2="${width - padR}" y2="${avgY}" stroke="var(--marigold)" stroke-width="1.5" stroke-dasharray="6 6"/>
+        <text x="${width - padR}" y="${avgY - 7}" text-anchor="end" fill="var(--muted)" font-size="11">Avg ${formatMoney(average, cur)}</text>
+        <polyline points="${polyline}" fill="none" stroke="var(--primary)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        ${circles}${labels}${values}
+      </svg>`;
+      if (chartVisual) {
+        chartVisual.innerHTML = `
+          <div class="trend-wrap">
+            <div class="trend-summary">
+              <div><span>This month</span><strong>${formatMoney(current, cur)}</strong></div>
+              <div><span>vs last month</span><strong>${deltaText}</strong></div>
+              <div><span>6-month average</span><strong>${formatMoney(average, cur)}</strong></div>
+            </div>
+            ${svg}
+          </div>
+        `;
+      }
+      if (chartLegend) chartLegend.innerHTML = "";
+      if (dash) dash.textContent = `${formatMoney(current, cur)} this month`;
+    }
+
     if (btnChartPie) {
       btnChartPie.addEventListener("click", () => {
         btnChartPie.classList.add("active");
         btnChartBar.classList.remove("active");
         chartType = "pie";
-        renderCategoryChart();
+        renderAnalytics();
       });
     }
 
@@ -4336,9 +4583,29 @@
         btnChartBar.classList.add("active");
         btnChartPie.classList.remove("active");
         chartType = "bar";
-        renderCategoryChart();
+        renderAnalytics();
       });
     }
+
+    document.querySelectorAll("[data-analytics-view]").forEach(button => {
+      button.addEventListener("click", () => {
+        analyticsView = button.dataset.analyticsView;
+        document.querySelectorAll("[data-analytics-view]").forEach(item =>
+          item.classList.toggle("active", item === button)
+        );
+        renderAnalytics();
+      });
+    });
+
+    document.querySelectorAll("[data-analytics-scope]").forEach(button => {
+      button.addEventListener("click", () => {
+        analyticsScope = button.dataset.analyticsScope;
+        document.querySelectorAll("[data-analytics-scope]").forEach(item =>
+          item.classList.toggle("active", item === button)
+        );
+        renderAnalytics();
+      });
+    });
 
     // Transactions List & History
     function renderTransactions() {
@@ -4842,7 +5109,7 @@
       renderBalancesAndSettlements();
       renderGroupExpenseSummary();
       renderHomeAllDebts();
-      renderCategoryChart();
+      renderAnalytics();
       renderTransactions();
       renderFriendsRoster();
       renderInvites();
