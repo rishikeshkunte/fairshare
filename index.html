@@ -964,7 +964,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v41";
+    const APP_BUILD = "v42";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -2323,7 +2323,7 @@
     function getFriendGroupBalances(friend) {
       const byCurrency = {};
       const groups = [];
-      Object.values(appState.groups || {}).forEach(group => {
+      Object.entries(appState.groups || {}).forEach(([groupId, group]) => {
         if (!group || !Array.isArray(group.members)) return;
         const member = findGroupMemberForFriend(group, friend);
         if (!member) return;
@@ -2338,7 +2338,7 @@
         if (Math.abs(net) < 0.01) return;
         const currency = group.currency || "₹";
         byCurrency[currency] = (byCurrency[currency] || 0) + net;
-        groups.push({ id: group.id, name: group.name, currency, net });
+        groups.push({ id: group.id || groupId, name: group.name, currency, net });
       });
       return { byCurrency, groups };
     }
@@ -2491,7 +2491,7 @@
         const groupInfo = getFriendGroupBalances(friend);
         groupsEl.innerHTML = "";
         if (!groupInfo.groups.length) {
-          groupsEl.innerHTML = `<div style="color:var(--muted); padding:8px 0; font-size:0.85rem;">No shared group balance with ${escapeHtml(friend.name)}.</div>`;
+          groupsEl.innerHTML = `<div style="color:var(--muted); padding:8px 0; font-size:0.85rem;">No outstanding group balance with ${escapeHtml(friend.name)}.</div>`;
         } else {
           groupInfo.groups.forEach(item => {
             const row = document.createElement("div");
@@ -2504,7 +2504,7 @@
               </div>
               <div style="display:flex; align-items:center; gap:8px;">
                 <span class="settle-badge">${formatMoney(Math.abs(item.net), item.currency)}</span>
-                <button type="button" class="btn btn-secondary" data-call="openFriendGroup" data-arg="${escapeHtml(item.id)}" style="padding:4px 8px; font-size:0.75rem;">View</button>
+                <button type="button" class="btn btn-secondary" data-call="openFriendGroup" data-arg="${escapeHtml(item.id)}" data-arg2="${escapeHtml(item.name)}" style="padding:4px 8px; font-size:0.75rem;">View</button>
               </div>
             `;
             groupsEl.appendChild(row);
@@ -2568,10 +2568,26 @@
       window.quickStartDirectSettle(friend.id, balance);
     };
 
-    window.openFriendGroup = function(groupId) {
-      if (!appState.groups[groupId]) return;
-      switchActiveGroup(groupId);
+    window.openFriendGroup = function(groupId, groupName) {
+      let id = String(groupId || "");
+      if (!id || !appState.groups[id]) {
+        const found = Object.entries(appState.groups || {}).find(([, group]) =>
+          group && group.name === groupName
+        );
+        id = found ? found[0] : "";
+      }
+      if (!id || !appState.groups[id]) {
+        toast("That group is not available on this device.");
+        return;
+      }
+      // Navigate first so the action is never a silent no-op if rendering fails.
       navigateTo("groups");
+      try {
+        switchActiveGroup(id);
+      } catch (err) {
+        console.error("Group open note:", err);
+        toast("Groups opened, but that group could not be selected.");
+      }
     };
 
     function renderFriendPickerDropdown() {
