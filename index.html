@@ -556,6 +556,45 @@
       </section>
       <section aria-labelledby="selected-group-heading">
         <h2 class="subsection-title" id="selected-group-heading">Selected group</h2>
+
+        <div class="card group-expenses-card" id="group-expenses-card" hidden>
+          <div class="card-header-row">
+            <div>
+              <h2 id="group-expenses-title" style="margin:0;">Group expenses</h2>
+              <span id="group-expenses-meta" class="section-hint">0 members • 0 expenses</span>
+            </div>
+            <button type="button" class="btn btn-primary" data-call="openGroupExpenseForm">+ Add expense</button>
+          </div>
+          <div class="group-expense-metrics">
+            <div class="group-expense-metric">
+              <span>Total spent</span>
+              <strong id="group-expenses-total">₹0.00</strong>
+            </div>
+            <div class="group-expense-metric">
+              <span>Your share</span>
+              <strong id="group-expenses-share">₹0.00</strong>
+            </div>
+            <div class="group-expense-metric">
+              <span>Your balance</span>
+              <strong id="group-expenses-balance">₹0.00</strong>
+            </div>
+          </div>
+          <div class="group-expense-columns">
+            <div>
+              <h3 class="group-expense-subtitle">Who pays whom</h3>
+              <div id="group-expenses-debts" class="group-expense-debts"></div>
+            </div>
+            <div>
+              <div class="group-expense-recent-head">
+                <h3 class="group-expense-subtitle">Recent group records</h3>
+                <button type="button" class="btn btn-secondary" id="btn-group-expenses-history" data-call="openGroupExpensesHistory" style="padding:5px 9px; font-size:0.75rem;">View all</button>
+              </div>
+              <div id="group-expenses-recent" class="transaction-list"></div>
+              <div id="group-expenses-empty" class="empty-state" style="padding:12px 0;" hidden>No records yet.</div>
+            </div>
+          </div>
+        </div>
+
         <div id="group-management-slot"></div>
       </section>
     </div>
@@ -894,7 +933,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v36";
+    const APP_BUILD = "v37";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -3542,6 +3581,118 @@
       renderDebtSimplification(balances, cur);
     }
 
+    function renderGroupExpenseSummary() {
+      const card = document.getElementById("group-expenses-card");
+      if (!card) return;
+      const g = getGroup();
+      const hasGroup = Boolean(g.id && appState.groups[g.id]);
+      card.hidden = !hasGroup;
+      if (!hasGroup) return;
+
+      const cur = g.currency || "₹";
+      const myName = getMyGroupMemberName(g);
+      const expenses = (g.transactions || []).filter(tx => tx.type === "expense");
+      const totalExpense = expenses.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+      const myShare = expenses.reduce((sum, tx) => sum + (Number(tx.shares?.[myName]) || 0), 0);
+      const myBalance = Number(netBalances(g)[myName]) || 0;
+
+      const titleEl = document.getElementById("group-expenses-title");
+      if (titleEl) titleEl.textContent = `${g.name} expenses`;
+      const metaEl = document.getElementById("group-expenses-meta");
+      if (metaEl) {
+        const memberCount = (g.members || []).length;
+        const countLabel = expenses.length === 1 ? "expense" : "expenses";
+        metaEl.textContent = `${memberCount} ${memberCount === 1 ? "member" : "members"} • ${expenses.length} ${countLabel}`;
+      }
+      const totalEl = document.getElementById("group-expenses-total");
+      if (totalEl) totalEl.textContent = formatMoney(totalExpense, cur);
+      const shareEl = document.getElementById("group-expenses-share");
+      if (shareEl) shareEl.textContent = formatMoney(myShare, cur);
+      const balanceEl = document.getElementById("group-expenses-balance");
+      if (balanceEl) {
+        balanceEl.textContent = formatSignedMoney(myBalance, cur);
+        balanceEl.style.color = myBalance > 0.009
+          ? "var(--positive)"
+          : (myBalance < -0.009 ? "var(--negative)" : "var(--text)");
+      }
+
+      const debtsEl = document.getElementById("group-expenses-debts");
+      if (debtsEl) {
+        const balances = netBalances(g);
+        const debts = g.simplifyDebts !== false ? simplifiedDebts(balances) : pairwiseDebts(g);
+        debtsEl.innerHTML = "";
+        if (!debts.length) {
+          debtsEl.innerHTML = `<div style="color:var(--positive); font-weight:600; padding:8px 0;">Everyone is settled up in this group.</div>`;
+        } else {
+          debts.forEach(debt => {
+            const row = document.createElement("div");
+            row.className = "settlement-card";
+            row.innerHTML = `
+              <div>
+                <strong>${escapeHtml(debt.from)}</strong> owes <strong>${escapeHtml(debt.to)}</strong>
+                <span style="font-size:0.78rem; color:var(--muted); display:block;">Suggested settlement</span>
+              </div>
+              <span class="settle-badge">${formatMoney(debt.amount, cur)}</span>
+            `;
+            debtsEl.appendChild(row);
+          });
+        }
+      }
+
+      const listEl = document.getElementById("group-expenses-recent");
+      const emptyEl = document.getElementById("group-expenses-empty");
+      if (listEl) {
+        listEl.innerHTML = "";
+        const recent = [...(g.transactions || [])]
+          .filter(Boolean)
+          .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0))
+          .slice(0, 5);
+        if (emptyEl) emptyEl.hidden = recent.length > 0;
+        recent.forEach(tx => {
+          const item = document.createElement("div");
+          item.className = "transaction-item";
+          item.onclick = () => window.openDetailModal(tx.id);
+          const letter = tx.type === "settlement" ? "S" : (tx.category || "O").slice(0, 1).toUpperCase();
+          const detail = tx.type === "settlement"
+            ? `${escapeHtml(tx.payer)} paid ${escapeHtml(tx.receiver)}`
+            : `Paid by ${escapeHtml(tx.payer)}`;
+          item.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="cat-badge-icon">${letter}</div>
+              <div>
+                <strong>${escapeHtml(tx.desc || (tx.type === "settlement" ? "Settlement" : "Expense"))}</strong>
+                <span class="transaction-meta">${escapeHtml(tx.date || "Undated")} • ${detail}</span>
+              </div>
+            </div>
+            <span class="transaction-amount">${formatMoney(tx.amount, cur)}</span>
+          `;
+          listEl.appendChild(item);
+        });
+      }
+    }
+
+    window.openGroupExpenseForm = function() {
+      const g = getGroup();
+      if (!g.id) {
+        window.openNewGroupPrompt();
+        return;
+      }
+      window.setExpenseScope("group");
+      if (expenseGroupSelect) expenseGroupSelect.value = g.id;
+      navigateTo("add-expense");
+    };
+
+    window.openGroupExpensesHistory = function() {
+      const g = getGroup();
+      if (!g.id) return;
+      navigateTo("history");
+      renderTransactions();
+      if (historyGroupSelect) {
+        historyGroupSelect.value = g.id;
+        renderTransactions();
+      }
+    };
+
     function renderDebtSimplification(balances, cur) {
       if (!settlementListEl) return;
       settlementListEl.innerHTML = "";
@@ -4467,6 +4618,7 @@
 
       renderMembers();
       renderBalancesAndSettlements();
+      renderGroupExpenseSummary();
       renderHomeAllDebts();
       renderCategoryChart();
       renderTransactions();
