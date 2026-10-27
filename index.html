@@ -984,7 +984,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v46";
+    const APP_BUILD = "v47";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -5744,6 +5744,13 @@
       try { sessionStorage.removeItem("fairshare_pending_invite"); } catch { /* ignore */ }
     }
 
+    function rejectPendingInvite(message) {
+      const modal = document.getElementById("group-invite-modal");
+      if (modal) modal.classList.remove("active");
+      clearPendingInvite();
+      toast(message);
+    }
+
     async function processPendingInvite() {
       if (!pendingInviteToken) {
         try { pendingInviteToken = sessionStorage.getItem("fairshare_pending_invite") || ""; } catch { /* ignore */ }
@@ -5756,11 +5763,36 @@
         if (!snap.exists()) throw new Error("missing");
         const data = snap.data() || {};
         if (data.revoked || inviteExpiryMs(data) <= Date.now()) {
-          clearPendingInvite();
-          toast("This invite link has expired or was revoked.");
+          rejectPendingInvite("This invite link has expired or was revoked.");
           return;
         }
         if (data.type !== "group" && data.type !== "friend") throw new Error("type");
+        const myEmail = (currentUser.email || "").toLowerCase().trim();
+        const inviterEmail = (data.createdByEmail || "").toLowerCase().trim();
+        if (data.type === "friend") {
+          if (normalizeEmail(inviterEmail) === normalizeEmail(myEmail)) {
+            rejectPendingInvite("You can't connect with yourself.");
+            return;
+          }
+          const alreadyFriend = (appState.friends || []).some(friend =>
+            normalizeEmail(friend.email || "") === normalizeEmail(inviterEmail)
+          );
+          if (alreadyFriend) {
+            rejectPendingInvite("You're already connected with this person.");
+            return;
+          }
+        } else {
+          const existing = appState.groups[data.groupId];
+          const myName = existing ? getMyGroupMemberName(existing) : "";
+          const alreadyMember = Boolean(existing && (
+            (Array.isArray(existing.memberEmails) && existing.memberEmails.some(email => normalizeEmail(email) === normalizeEmail(myEmail)))
+            || (Array.isArray(existing.members) && myName && existing.members.includes(myName))
+          ));
+          if (alreadyMember || normalizeEmail(inviterEmail) === normalizeEmail(myEmail)) {
+            rejectPendingInvite("You're already in this group.");
+            return;
+          }
+        }
         pendingInviteData = { token, ...data };
         const modal = document.getElementById("group-invite-modal");
         const title = document.getElementById("invite-modal-title");
