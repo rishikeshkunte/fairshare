@@ -563,7 +563,10 @@
               <h2 id="group-expenses-title" style="margin:0;">Group expenses</h2>
               <span id="group-expenses-meta" class="section-hint">0 members • 0 expenses</span>
             </div>
-            <button type="button" class="btn btn-primary" data-call="openGroupExpenseForm">+ Add expense</button>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-settle" data-call="openGroupSettleUp">Settle up</button>
+              <button type="button" class="btn btn-primary" data-call="openGroupExpenseForm">+ Add expense</button>
+            </div>
           </div>
           <div class="group-expense-metrics">
             <div class="group-expense-metric">
@@ -933,7 +936,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v37";
+    const APP_BUILD = "v38";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -3877,10 +3880,30 @@
         return;
       }
       if (!settleUpBox) return;
+      navigateTo("balances");
       settleUpBox.style.display = "block";
       if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
       settleUpBox.scrollIntoView({ behavior: "smooth", block: "center" });
       settlePayer?.focus({ preventScroll: true });
+    };
+
+    window.openGroupSettleUp = function() {
+      const g = getGroup();
+      if (!g.id) {
+        toast("Create a group first before settling up.");
+        window.openNewGroupPrompt();
+        return;
+      }
+      const balances = netBalances(g);
+      const debts = g.simplifyDebts !== false ? simplifiedDebts(balances) : pairwiseDebts(g);
+      window.openSettleUp();
+      if (debts.length) {
+        if (settlePayer) settlePayer.value = debts[0].from;
+        if (settleReceiver) settleReceiver.value = debts[0].to;
+        if (settleAmount) settleAmount.value = paiseToInput(debts[0].amount);
+      } else {
+        toast("Everyone is settled up in this group. Use the form to record any custom payment.");
+      }
     };
 
     window.quickSettlePrompt = function(from, to, amount) {
