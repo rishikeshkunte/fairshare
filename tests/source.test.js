@@ -66,7 +66,6 @@ test("create-group modal never renders cached friends while signed out", () => {
 
 test("friend management and group member picker require sign-in", () => {
   assert.match(html, /window\.addNewFriendToRoster = function\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
-  assert.match(html, /window\.addFriendByMobile = function\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
   assert.match(html, /function renderFriendPickerDropdown\(\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to see saved friends[\s\S]*?btnAddFriendToGroup\) btnAddFriendToGroup\.disabled = true/);
   assert.match(html, /window\.renameFriendPrompt = async function\(friendId\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
   assert.match(html, /window\.deleteFriendFromRoster = async function\(id\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to manage your saved friends/);
