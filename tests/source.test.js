@@ -74,7 +74,7 @@ test("friend management and group member picker require sign-in", () => {
 
 test("signed-out summaries, details, and trash exclude cached 1-on-1 data", () => {
   assert.match(html, /function renderHomeAllDebts\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
-  assert.match(html, /function renderCategoryChart\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
+  assert.match(html, /function analyticsExpenses\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
   assert.match(html, /function renderDeletedTransactions\(\)[\s\S]*?filter\(item => currentUser \|\| item\.location !== "direct"\)/);
   assert.match(html, /window\.openDetailModal = function\(id\)[\s\S]*?found\.where === "direct" && !currentUser[\s\S]*?Sign in to view 1-on-1 transaction details/);
 });
@@ -196,9 +196,29 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
   assert.match(html, /Old invite links are no longer supported/);
 });
 
-test("CSV export and non-working analytics views are removed", () => {
-  assert.doesNotMatch(html, /btn-export-csv|Export CSV|data-analytics-view|Per person|Over time|analyticsView/);
-  assert.match(html, /Spending by category/);
+test("CSV export is removed", () => {
+  assert.doesNotMatch(html, /btn-export-csv|Export CSV/);
+});
+
+test("analytics provides category, people, and trend views with scopes", () => {
+  assert.match(html, /data-analytics-view="category"/);
+  assert.match(html, /data-analytics-view="people"/);
+  assert.match(html, /data-analytics-view="trend"/);
+  assert.match(html, /data-analytics-scope="active"/);
+  assert.match(html, /data-analytics-scope="all"/);
+  assert.match(html, /data-analytics-scope="direct"/);
+  assert.match(html, /function renderAnalytics\(\)/);
+  assert.match(html, /function renderPeopleChart\(rows, cur\)/);
+  assert.match(html, /function renderTrendChart\(rows, cur\)/);
+  assert.match(html, /function analyticsExpenses\(\)/);
+  assert.match(html, /function lastSixMonths\(\)/);
+  assert.match(html, /function expenseMonthKey\(tx\)/);
+  assert.match(html, /analyticsScope === "direct"/);
+  assert.match(html, /analyticsScope === "all"/);
+  assert.match(html, /id="analytics-scope-note"/);
+  assert.match(html, /people-bar/);
+  assert.match(html, /trend-summary/);
+  assert.match(html, /renderAnalytics\(\);/);
 });
 
 test("self-invites and duplicate connections are rejected", () => {
