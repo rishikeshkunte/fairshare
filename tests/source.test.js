@@ -150,6 +150,9 @@ test("groups page shows its own expense totals and balances", () => {
   assert.match(html, /id="group-expenses-balance"/);
   assert.match(html, /data-call="openGroupExpenseForm"/);
   assert.match(html, /data-call="openGroupExpensesHistory"/);
+  assert.match(html, /data-call="openGroupSettleUp"/);
+  assert.match(html, /window\.openGroupSettleUp = function\(\)/);
+  assert.match(html, /window\.openSettleUp = function\(\)[\s\S]*?navigateTo\("balances"\)/);
   const render = html.slice(html.indexOf("function renderGroupExpenseSummary()"), html.indexOf("window.openGroupExpenseForm"));
   assert.match(render, /totalExpense/);
   assert.match(render, /netBalances\(g\)/);
