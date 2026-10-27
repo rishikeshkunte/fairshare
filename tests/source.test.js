@@ -221,6 +221,20 @@ test("analytics provides category, people, and trend views with scopes", () => {
   assert.match(html, /renderAnalytics\(\);/);
 });
 
+test("group members can repair cloud sync with a linked Gmail or new invite", () => {
+  assert.match(html, /window\.linkMemberEmail = async function\(name\)/);
+  assert.match(html, /Members without a linked Gmail can't see cloud changes/);
+  assert.match(html, /local-only/);
+  assert.match(html, /Only treat this as already-joined when the local copy has confirmed/);
+  assert.match(html, /Cloud group sync was denied/);
+});
+
+test("local friends can be linked to Gmail for direct sync", () => {
+  assert.match(html, /window\.linkFriendEmail = async function\(friendId\)/);
+  assert.match(html, /data-call="linkFriendEmail"/);
+  assert.match(html, /Direct sync is now available/);
+});
+
 test("self-invites and duplicate connections are rejected", () => {
   assert.match(html, /You can't connect with yourself/);
   assert.match(html, /You're already connected with this person/);
