@@ -581,10 +581,16 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
 .friends-col .card { margin: 0; }
 .group-bar, .group-select-wrapper { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .friends-list-container { display: flex; flex-direction: column; gap: 8px; }
+.friend-row { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:10px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+.friend-row:first-child { border-top:0; }
+.friend-row > div:last-child { display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:flex-end; }
 .friend-group-balances { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
 .friend-group-badge { font-size:.72rem; font-weight:700; padding:2px 6px; border-radius:4px; background:var(--table-header-bg); color:var(--muted); }
 .friend-group-badge.positive { color:var(--positive); background:var(--success-bg); }
 .friend-group-badge.negative { color:var(--negative); background:var(--danger-bg); }
+.friend-detail-card { margin-top:0; }
+.friend-detail-records { max-height:360px; overflow-y:auto; }
+.friend-detail-records .transaction-meta { line-height:1.4; }
 
 .mobile-bottom-nav {
   display: none; position: fixed; left: 10px; right: 10px; bottom: 12px; z-index: 30;

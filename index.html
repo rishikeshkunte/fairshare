@@ -772,6 +772,45 @@
           <label style="font-size:0.82rem; font-weight:600; color:var(--muted);">Friends list:</label>
           <div id="friends-list-container" class="friends-list-container"></div>
         </div>
+
+        <!-- Selected friend: 1-on-1 ledger -->
+        <div class="card friend-detail-card" id="friend-detail-card" hidden>
+          <div class="card-header-row">
+            <div>
+              <h2 id="friend-detail-name" style="margin:0;">1-on-1 expenses</h2>
+              <span id="friend-detail-meta" class="section-hint">0 records</span>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-settle" id="btn-friend-detail-settle" data-call="friendDetailSettle">Settle up</button>
+              <button type="button" class="btn btn-primary" data-call="friendDetailAddExpense">+ Add 1-on-1 expense</button>
+            </div>
+          </div>
+          <div class="group-expense-metrics">
+            <div class="group-expense-metric">
+              <span>Total 1-on-1</span>
+              <strong id="friend-detail-total">₹0.00</strong>
+            </div>
+            <div class="group-expense-metric">
+              <span>Your share</span>
+              <strong id="friend-detail-share">₹0.00</strong>
+            </div>
+            <div class="group-expense-metric">
+              <span>Your balance</span>
+              <strong id="friend-detail-balance">₹0.00</strong>
+            </div>
+          </div>
+          <div class="group-expense-columns">
+            <div>
+              <h3 class="group-expense-subtitle">Group balances with this friend</h3>
+              <div id="friend-detail-groups"></div>
+            </div>
+            <div>
+              <h3 class="group-expense-subtitle">1-on-1 records</h3>
+              <div id="friend-detail-records" class="transaction-list friend-detail-records"></div>
+              <div id="friend-detail-empty" class="empty-state" style="padding:12px 0;" hidden>No 1-on-1 records yet.</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -925,7 +964,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v40";
+    const APP_BUILD = "v41";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -949,6 +988,7 @@
     let categoryManuallyOverridden = false;
     let currentExpenseScope = "group";
     let selectedDirectFriend = "";
+    let selectedFriendDetailId = "";
     let historyFilterType = "all";
 
     const CATEGORY_ICONS = {
@@ -1918,6 +1958,7 @@
       if (!f) return;
       if (await askConfirm({ message: `Remove "${f.name}" from your friends roster?` })) {
         appState.friends = appState.friends.filter(x => x.id !== id);
+        if (String(selectedFriendDetailId) === String(id)) selectedFriendDetailId = "";
         saveState();
         renderFriendsRoster();
         renderFriendPickerDropdown();
@@ -2307,6 +2348,7 @@
       if (globalFriendsCount) globalFriendsCount.textContent = visibleFriends.length;
       if (dashFriendsDesc) dashFriendsDesc.textContent = `${visibleFriends.length} friends`;
       if (!friendsListContainer) return;
+      renderFriendDetail();
 
       friendsListContainer.innerHTML = "";
       // The roster is a local contact list as well as a cloud-connected feature.
@@ -2375,6 +2417,7 @@
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
             <button type="button" class="btn btn-secondary" data-call="renameFriendPrompt" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;" aria-label="Rename contact">✏️</button>
+            <button type="button" class="btn btn-secondary" data-call="openFriendDetail" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;">Details</button>
             <button type="button" class="btn btn-secondary" data-call="quickStartDirectExpense" data-arg="${escapeHtml(f.id)}" style="padding:4px 8px; font-size:0.75rem;">Split</button>
             ${Math.abs(friendBal) >= 1 ? `<button type="button" class="btn btn-settle" data-call="quickStartDirectSettle" data-arg="${escapeHtml(f.id)}" data-arg2="${friendBal}" style="padding:4px 8px; font-size:0.75rem;">Settle</button>` : ''}
             <button type="button" class="btn-delete" data-call="deleteFriendFromRoster" data-arg="${escapeHtml(f.id)}" aria-label="Remove friend">&times;</button>
@@ -2383,6 +2426,153 @@
         friendsListContainer.appendChild(div);
       });
     }
+
+    function directBalanceForFriend(friendName) {
+      let balance = 0;
+      (appState.directTransactions || []).forEach(t => {
+        if (t.type === "expense" && t.friend === friendName) {
+          const myShare = (t.shares && t.shares["You"]) || 0;
+          const theirShare = (t.shares && t.shares[friendName]) || 0;
+          if (t.payer === "You") balance += theirShare;
+          else if (t.payer === friendName) balance -= myShare;
+        } else if (t.type === "settlement" && t.friend === friendName) {
+          if (t.payer === friendName && t.receiver === "You") balance -= t.amount;
+          else if (t.payer === "You" && t.receiver === friendName) balance += t.amount;
+        }
+      });
+      return balance;
+    }
+
+    function renderFriendDetail() {
+      const card = document.getElementById("friend-detail-card");
+      if (!card) return;
+      const friends = appState.friends || [];
+      if (!friends.length) {
+        card.hidden = true;
+        return;
+      }
+      let friend = friends.find(f => String(f.id) === String(selectedFriendDetailId));
+      if (!friend) {
+        friend = friends.find(f => (appState.directTransactions || []).some(t => t.friend === f.name)) || friends[0];
+        selectedFriendDetailId = friend.id;
+      }
+      card.hidden = false;
+      const cur = getGroup().currency;
+      const nameEl = document.getElementById("friend-detail-name");
+      if (nameEl) nameEl.textContent = friend.name;
+      const metaEl = document.getElementById("friend-detail-meta");
+      const records = (appState.directTransactions || [])
+        .filter(t => t.friend === friend.name)
+        .sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+      const expenses = records.filter(t => t.type === "expense");
+      if (metaEl) {
+        const contact = friend.email || friend.phone || "Local contact";
+        metaEl.textContent = `${contact} • ${records.length} ${records.length === 1 ? "record" : "records"}`;
+      }
+      const total = expenses.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+      const myShare = expenses.reduce((sum, tx) => sum + (Number(tx.shares?.You) || 0), 0);
+      const balance = directBalanceForFriend(friend.name);
+      const totalEl = document.getElementById("friend-detail-total");
+      if (totalEl) totalEl.textContent = formatMoney(total, cur);
+      const shareEl = document.getElementById("friend-detail-share");
+      if (shareEl) shareEl.textContent = formatMoney(myShare, cur);
+      const balanceEl = document.getElementById("friend-detail-balance");
+      if (balanceEl) {
+        balanceEl.textContent = formatSignedMoney(balance, cur);
+        balanceEl.style.color = balance > 0.009
+          ? "var(--positive)"
+          : (balance < -0.009 ? "var(--negative)" : "var(--text)");
+      }
+      const settleBtn = document.getElementById("btn-friend-detail-settle");
+      if (settleBtn) settleBtn.disabled = Math.abs(balance) < 1;
+
+      const groupsEl = document.getElementById("friend-detail-groups");
+      if (groupsEl) {
+        const groupInfo = getFriendGroupBalances(friend);
+        groupsEl.innerHTML = "";
+        if (!groupInfo.groups.length) {
+          groupsEl.innerHTML = `<div style="color:var(--muted); padding:8px 0; font-size:0.85rem;">No shared group balance with ${escapeHtml(friend.name)}.</div>`;
+        } else {
+          groupInfo.groups.forEach(item => {
+            const row = document.createElement("div");
+            row.className = "settlement-card";
+            row.style.marginBottom = "8px";
+            row.innerHTML = `
+              <div>
+                <strong>${escapeHtml(item.name)}</strong>
+                <span style="font-size:0.78rem; color:var(--muted); display:block;">${item.net > 0 ? "Owes you" : "You owe"}</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="settle-badge">${formatMoney(Math.abs(item.net), item.currency)}</span>
+                <button type="button" class="btn btn-secondary" data-call="openFriendGroup" data-arg="${escapeHtml(item.id)}" style="padding:4px 8px; font-size:0.75rem;">View</button>
+              </div>
+            `;
+            groupsEl.appendChild(row);
+          });
+        }
+      }
+
+      const listEl = document.getElementById("friend-detail-records");
+      const emptyEl = document.getElementById("friend-detail-empty");
+      if (listEl) {
+        listEl.innerHTML = "";
+        if (emptyEl) emptyEl.hidden = records.length > 0;
+        records.forEach(tx => {
+          const item = document.createElement("div");
+          item.className = "transaction-item";
+          item.onclick = () => window.openDetailModal(tx.id);
+          const letter = tx.type === "settlement" ? "S" : (tx.category || "O").slice(0, 1).toUpperCase();
+          const payerText = tx.type === "settlement"
+            ? `${escapeHtml(tx.payer)} paid ${escapeHtml(tx.receiver)}`
+            : (tx.payer === "You" ? "You paid" : `${escapeHtml(tx.payer)} paid`);
+          const shareText = tx.type === "expense"
+            ? `Your share ${formatMoney(Number(tx.shares?.You) || 0, cur)} • ${escapeHtml(friend.name)}'s share ${formatMoney(Number(tx.shares?.[friend.name]) || 0, cur)}`
+            : "Settlement";
+          item.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="cat-badge-icon">${letter}</div>
+              <div>
+                <strong>${escapeHtml(tx.desc || (tx.type === "settlement" ? "Settlement" : "Expense"))}</strong>
+                <span class="transaction-meta">${escapeHtml(tx.date || "Undated")} • ${payerText} • ${shareText}</span>
+              </div>
+            </div>
+            <span class="transaction-amount">${formatMoney(tx.amount, cur)}</span>
+          `;
+          listEl.appendChild(item);
+        });
+      }
+    }
+
+    window.openFriendDetail = function(friendId) {
+      const friend = appState.friends.find(f => String(f.id) === String(friendId));
+      if (!friend) return;
+      selectedFriendDetailId = friend.id;
+      renderFriendDetail();
+      document.getElementById("friend-detail-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    window.friendDetailAddExpense = function() {
+      const friend = appState.friends.find(f => String(f.id) === String(selectedFriendDetailId));
+      if (!friend) return;
+      window.quickStartDirectExpense(friend.id);
+    };
+
+    window.friendDetailSettle = function() {
+      const friend = appState.friends.find(f => String(f.id) === String(selectedFriendDetailId));
+      if (!friend) return;
+      const balance = directBalanceForFriend(friend.name);
+      if (Math.abs(balance) < 1) {
+        toast("This friend is already settled up.");
+        return;
+      }
+      window.quickStartDirectSettle(friend.id, balance);
+    };
+
+    window.openFriendGroup = function(groupId) {
+      if (!appState.groups[groupId]) return;
+      switchActiveGroup(groupId);
+      navigateTo("groups");
+    };
 
     function renderFriendPickerDropdown() {
       const g = getGroup();
