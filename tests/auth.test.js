@@ -82,7 +82,29 @@ test("dialogs render above the privacy gate", () => {
   assert.ok(dialog > gate, "dialog must be above the gate");
 });
 
+test("group membership emails are preserved instead of replaced", () => {
+  const save = between(html, "function saveState()", "\n    function syncUserCloud");
+  assert.match(save, /cloudData\.memberEmails/);
+  assert.match(save, /memberEmails\.add/);
+  assert.match(save, /finalMemberEmails/);
+  assert.match(html, /memberEmails: Array\.isArray\(cloudData\.memberEmails\)/);
+});
+
+test("local-only groups are uploaded on sign-in", () => {
+  const push = between(html, "async function pushLocalGroupsToCloud(user)", "\n    function listenToCloudGroup");
+  assert.match(push, /if \(snapshot\.exists\(\)\) return false/);
+  assert.match(push, /memberEmails: finalEmails/);
+  assert.match(html, /pushLocalGroupsToCloud\(user\)/);
+});
+
+test("cloud sync status is visible without exposing account data", () => {
+  assert.match(html, /id="cloud-sync-status"/);
+  const listener = between(html, "unsubscribeUserGroupsListener = watchQuery", "// 4. Listen to the active group");
+  assert.match(listener, /setCloudSyncStatus/);
+  assert.match(listener, /snapshot\.size/);
+});
+
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v33"/);
+  assert.match(sw, /const CACHE = "fairshare-v34"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });
