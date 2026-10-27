@@ -143,6 +143,21 @@ test("add-expense form has a clear amount focus, accessible scope choices, and r
 });
 
 
+test("groups page shows its own expense totals and balances", () => {
+  assert.match(html, /id="group-expenses-card"/);
+  assert.match(html, /id="group-expenses-total"/);
+  assert.match(html, /id="group-expenses-share"/);
+  assert.match(html, /id="group-expenses-balance"/);
+  assert.match(html, /data-call="openGroupExpenseForm"/);
+  assert.match(html, /data-call="openGroupExpensesHistory"/);
+  const render = html.slice(html.indexOf("function renderGroupExpenseSummary()"), html.indexOf("window.openGroupExpenseForm"));
+  assert.match(render, /totalExpense/);
+  assert.match(render, /netBalances\(g\)/);
+  assert.match(render, /simplifiedDebts/);
+  assert.match(render, /group-expenses-recent/);
+  assert.match(html, /renderGroupExpenseSummary\(\);/);
+});
+
 test("balances and settlement layout adapts across desktop, tablet, and mobile", () => {
   assert.match(css, /\.home-balance-details \.balances-layout[\s\S]*?align-items: start/);
   assert.match(css, /@media \(min-width: 1200px\)[\s\S]*?\.home-balance-details \.balances-layout[\s\S]*?grid-template-columns/);
