@@ -34,7 +34,7 @@ The desktop sidebar and the phone tab bar both call `navigateTo(pageId)`, which 
 - **Add expense.** Amount, presets, group or 1-on-1 scope, payer, date, notes, optional receipt, and the split.
 - **Balances.** Total spend, expense count, settlement count, simplify toggle, who pays whom, the member sheet, and separate 1-on-1 balances.
 - **History.** Group and 1-on-1 rows, grouped by date, with search, type filters, and a member filter. Open a row to edit or delete it.
-- **Analytics.** Category donut and bars together on a wide screen. One chart at a time on a phone.
+- **Analytics.** By category, who spent what (paid vs share), and a 6-month trend, with Active group, All groups, and 1-on-1 scopes.
 - **Friends.** Group name, currency, and members. Google account, incoming requests, email or WhatsApp invites, and the friend roster on the right.
 
 On a phone the six destinations sit in the bottom bar. On a desktop a scroll pill at the bottom shows the current page and can jump to any of them.
@@ -79,7 +79,7 @@ Changing the currency symbol does not convert existing numbers. A dinner of 900 
 
 History searches description, payer, category, and notes, and highlights the match. **Clear all** wipes the active group's transactions and the 1-on-1 list after a confirmation. It does not delete groups or friends.
 
-Analytics sums expense amounts by category for the active group and for 1-on-1 bills. **Load sample demo data** replaces the active group's expenses with five sample bills so the charts can be tried on an empty group.
+Analytics can show spending by category, paid-vs-share by person, or a 6-month monthly trend. Choose the scope first: Active group, All groups in the active currency, or 1-on-1 bills.
 
 ## Groups and friends
 
