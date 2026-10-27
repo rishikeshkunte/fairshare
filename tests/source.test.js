@@ -152,12 +152,14 @@ test("balances and settlement layout adapts across desktop, tablet, and mobile",
 });
 
 test("friend roster re-renders immediately when authentication changes", () => {
-  const authCallback = html.indexOf("watchAuth(fx, (user) =>");
-  const callbackEnd = html.indexOf("});", authCallback);
-  const callback = html.slice(authCallback, callbackEnd);
-  assert.ok(authCallback >= 0, "auth state listener exists");
-  assert.ok(callback.indexOf("currentUser = user;") < callback.indexOf("renderAll();"));
-  assert.ok(callback.indexOf("renderAll();") < callback.indexOf("syncUserCloud(user);"));
+  assert.match(html, /watchAuth\(fx, applyAuthState\)/);
+  const start = html.indexOf("function applyAuthState(user)");
+  const end = html.indexOf("\n    async function ensureCloud", start);
+  const apply = html.slice(start, end);
+  assert.ok(start >= 0 && end > start, "applyAuthState exists");
+  assert.ok(apply.indexOf("updateAuthUI(user);") >= 0, "signed-in UI is applied");
+  assert.ok(apply.indexOf("updateAuthUI(user);") < apply.indexOf("syncUserCloud(user);"));
+  assert.ok(apply.indexOf("renderAll();") < apply.indexOf("syncUserCloud(user);"));
   assert.match(html, /function renderFriendsRoster\(\)[\s\S]*?const visibleFriends = appState\.friends \|\| \[\]/);
 });
 
