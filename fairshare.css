@@ -215,6 +215,22 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
 .group-tab.active { background:var(--primary); border-color:var(--primary); color:#fff; }
 .group-tabs-empty { width:100%; padding:12px; border-radius:10px; background:var(--box-bg); color:var(--muted); font-size:.85rem; }
 .groups-page-layout #group-management-card { margin:0; }
+.group-expenses-card { margin:0 0 18px; }
+.group-expense-metrics { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; margin:14px 0 18px; }
+.group-expense-metric {
+  display:flex; flex-direction:column; gap:4px; padding:12px 14px;
+  background:var(--box-bg); border:1px solid var(--line); border-radius:12px;
+}
+.group-expense-metric span { font-size:.72rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+.group-expense-metric strong { font-family:var(--mono); font-size:1.12rem; overflow-wrap:anywhere; }
+.group-expense-columns { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px; }
+.group-expense-subtitle { margin:0 0 8px; font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+.group-expense-recent-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.group-expense-recent-head .group-expense-subtitle { margin:0 0 8px; }
+.group-expense-debts .settlement-card { margin-bottom:8px; }
+@media (max-width: 860px) {
+  .group-expense-metrics, .group-expense-columns { grid-template-columns:1fr; }
+}
 .global-theme-toggle-slot .btn { width:100%; justify-content:flex-start; }
 
 .desktop-nav {
