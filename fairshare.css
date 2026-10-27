@@ -581,6 +581,10 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
 .friends-col .card { margin: 0; }
 .group-bar, .group-select-wrapper { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .friends-list-container { display: flex; flex-direction: column; gap: 8px; }
+.friend-group-balances { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+.friend-group-badge { font-size:.72rem; font-weight:700; padding:2px 6px; border-radius:4px; background:var(--table-header-bg); color:var(--muted); }
+.friend-group-badge.positive { color:var(--positive); background:var(--success-bg); }
+.friend-group-badge.negative { color:var(--negative); background:var(--danger-bg); }
 
 .mobile-bottom-nav {
   display: none; position: fixed; left: 10px; right: 10px; bottom: 12px; z-index: 30;
