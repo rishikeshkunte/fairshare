@@ -637,65 +637,71 @@
         <div class="card" id="group-management-card">
           <div class="card-header-row">
             <div>
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <h2 style="margin:0;">Group management</h2>
+              <h2 style="margin:0;">Group management</h2>
+              <span style="font-size:0.82rem; color:var(--muted);">Choose a group, then manage its members, currency, and settings.</span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label for="manage-group-select">Group to manage</label>
+            <select id="manage-group-select">
+              <option value="">Choose a group...</option>
+            </select>
+          </div>
+
+          <p id="group-management-hint" class="group-hint">Choose a group above to manage it.</p>
+
+          <div id="group-management-body" hidden>
+            <div class="group-bar" style="margin-bottom:14px;">
+              <div class="group-select-wrapper"></div>
+              <div style="display:flex; gap:6px;">
+                <button type="button" id="btn-rename-group" class="btn btn-secondary" title="Rename managed group">Rename</button>
+                <button type="button" id="btn-delete-group" class="btn btn-secondary" title="Delete managed group">Delete</button>
               </div>
-              <span style="font-size:0.82rem; color:var(--muted);">Manage members, active group settings, and currency</span>
-            </div>
-          </div>
-          
-          <div class="group-bar" style="margin-bottom:14px;">
-            <div class="group-select-wrapper">
-              <p id="group-empty-hint" class="group-hint" hidden>Create a group to manage members and currency.</p>
-              <p id="group-choose-hint" class="group-hint" hidden>Choose a group above to manage members and currency.</p>
-            </div>
-            <div style="display:flex; gap:6px;">
-              <button type="button" id="btn-rename-group" class="btn btn-secondary" title="Rename active group">Rename</button>
-              <button type="button" id="btn-delete-group" class="btn btn-secondary" title="Delete active group">Delete</button>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group" style="max-width:140px;">
-              <label for="currency-select">Currency</label>
-              <select id="currency-select">
-                <option value="₹">₹ (INR)</option>
-                <option value="$">$ (USD)</option>
-                <option value="€">€ (EUR)</option>
-                <option value="£">£ (GBP)</option>
-                <option value="¥">¥ (JPY/CNY)</option>
-              </select>
-              <button type="button" id="btn-custom-currency" class="btn btn-secondary" style="margin-top:8px">Custom symbol</button>
             </div>
 
-            <div class="form-group">
-              <label for="friend-picker-select">Add from roster</label>
-              <div style="display:flex; gap:8px;">
-                <select id="friend-picker-select">
-                  <option value="">-- Choose a friend --</option>
+            <div class="form-row">
+              <div class="form-group" style="max-width:140px;">
+                <label for="currency-select">Currency</label>
+                <select id="currency-select">
+                  <option value="₹">₹ (INR)</option>
+                  <option value="$">$ (USD)</option>
+                  <option value="€">€ (EUR)</option>
+                  <option value="£">£ (GBP)</option>
+                  <option value="¥">¥ (JPY/CNY)</option>
                 </select>
-                <button type="button" id="btn-add-friend-to-group" class="btn btn-secondary" style="white-space:nowrap;">Add to group</button>
+                <button type="button" id="btn-custom-currency" class="btn btn-secondary" style="margin-top:8px">Custom symbol</button>
+              </div>
+
+              <div class="form-group">
+                <label for="friend-picker-select">Add from roster</label>
+                <div style="display:flex; gap:8px;">
+                  <select id="friend-picker-select">
+                    <option value="">-- Choose a friend --</option>
+                  </select>
+                  <button type="button" id="btn-add-friend-to-group" class="btn btn-secondary" style="white-space:nowrap;">Add to group</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Add Member by Name Directly -->
-          <div style="background:var(--box-bg); padding:12px 14px; border-radius:12px; border:1px solid var(--line); margin-bottom:14px;">
-            <label for="input-new-member-name" style="font-size:0.85rem; font-weight:600; margin-bottom:6px; display:block;">
-              Add any name directly to group (no login required):
-            </label>
-            <div style="display:flex; gap:8px;">
-              <input type="text" id="input-new-member-name" placeholder="Type name (e.g. Roommate, Priya)" style="flex:1;">
-              <button type="button" id="btn-add-custom-member" class="btn btn-primary" data-call="addMemberToActiveGroup" style="white-space:nowrap;">+ Add member</button>
+            <!-- Add Member by Name Directly -->
+            <div style="background:var(--box-bg); padding:12px 14px; border-radius:12px; border:1px solid var(--line); margin-bottom:14px;">
+              <label for="input-new-member-name" style="font-size:0.85rem; font-weight:600; margin-bottom:6px; display:block;">
+                Add any name directly to group (no login required):
+              </label>
+              <div style="display:flex; gap:8px;">
+                <input type="text" id="input-new-member-name" placeholder="Type name (e.g. Roommate, Priya)" style="flex:1;">
+                <button type="button" id="btn-add-custom-member" class="btn btn-primary" data-call="addMemberToActiveGroup" style="white-space:nowrap;">+ Add member</button>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <label style="margin-bottom:0;">Group members (<span id="member-count">0</span>):</label>
-              <span style="font-size:0.75rem; color:var(--muted);">Click × to remove</span>
+            <div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <label style="margin-bottom:0;">Group members (<span id="member-count">0</span>):</label>
+                <span style="font-size:0.75rem; color:var(--muted);">Click × to remove</span>
+              </div>
+              <div id="members-container" class="chip-container"></div>
             </div>
-            <div id="members-container" class="chip-container"></div>
           </div>
         </div>
       </div>
@@ -964,7 +970,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v42";
+    const APP_BUILD = "v43";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -989,6 +995,7 @@
     let currentExpenseScope = "group";
     let selectedDirectFriend = "";
     let selectedFriendDetailId = "";
+    let managedGroupId = "";
     let historyFilterType = "all";
 
     const CATEGORY_ICONS = {
@@ -1628,6 +1635,9 @@
 
     const groupSelector = document.getElementById("group-selector");
     const groupTabs = document.getElementById("group-tabs");
+    const manageGroupSelect = document.getElementById("manage-group-select");
+    const groupManagementBody = document.getElementById("group-management-body");
+    const groupManagementHint = document.getElementById("group-management-hint");
     const expenseGroupSelect = document.getElementById("expense-group-select");
     const btnNewGroupModal = document.getElementById("btn-new-group-inline");
     const btnRenameGroup = document.getElementById("btn-rename-group");
@@ -2669,8 +2679,23 @@
       });
     }
 
-    function switchActiveGroup(groupId) {
+    function renderManageGroupSelector() {
+      if (!manageGroupSelect) return;
+      const entries = Object.entries(appState.groups || {}).filter(([, group]) => group && group.name);
+      const current = managedGroupId && appState.groups[managedGroupId] ? managedGroupId : "";
+      managedGroupId = current;
+      if (current && appState.activeGroupId !== current) appState.activeGroupId = current;
+      manageGroupSelect.innerHTML = `<option value="">Choose a group...</option>` +
+        entries.map(([id, group]) => `<option value="${escapeHtml(id)}">${escapeHtml(group.name)}</option>`).join("");
+      manageGroupSelect.value = current;
+      const hasManaged = Boolean(current);
+      if (groupManagementBody) groupManagementBody.hidden = !hasManaged;
+      if (groupManagementHint) groupManagementHint.hidden = hasManaged;
+    }
+
+    function switchActiveGroup(groupId, options = {}) {
       if (!groupId || !appState.groups[groupId]) return;
+      if (!options.keepManaged) managedGroupId = "";
       appState.activeGroupId = groupId;
       if (typeof cancelEditMode === "function") cancelEditMode();
       saveState();
@@ -2684,6 +2709,19 @@
       });
     }
 
+    if (manageGroupSelect) {
+      manageGroupSelect.addEventListener("change", (e) => {
+        const id = e.target.value;
+        if (!id || !appState.groups[id]) {
+          managedGroupId = "";
+          renderAll();
+          return;
+        }
+        managedGroupId = id;
+        switchActiveGroup(id, { keepManaged: true });
+      });
+    }
+
     if (expenseGroupSelect) {
       expenseGroupSelect.addEventListener("change", (e) => {
         switchActiveGroup(e.target.value);
@@ -2693,11 +2731,11 @@
     if (btnRenameGroup) {
       btnRenameGroup.addEventListener("click", async () => {
         const g = getGroup();
-        const newName = await askPrompt({ message: "Rename active group:", defaultValue: g.name });
+        const newName = await askPrompt({ message: "Rename managed group:", defaultValue: g.name });
         if (newName && newName.trim()) {
           g.name = newName.trim();
           saveState();
-          renderGroupSelector();
+          renderAll();
         }
       });
     }
@@ -2709,6 +2747,7 @@
         if (await askConfirm({ message: `Delete group "${g.name}" from your account? Other members keep their copy.` })) {
           appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(g.id)]));
           delete appState.groups[g.id];
+          if (managedGroupId === g.id) managedGroupId = "";
           appState.activeGroupId = Object.keys(appState.groups)[0] || null;
           persistLocalState();
           saveDeletedGroupsToCloud();
@@ -4780,6 +4819,7 @@
       renderDirectFriendDropdown();
       applyTheme();
       renderGroupSelector();
+      renderManageGroupSelector();
 
       const groups = Object.values(appState.groups);
       const g = getGroup();
@@ -4789,12 +4829,8 @@
       if (homeGroupStats) homeGroupStats.textContent = groups.length
         ? `${(g.transactions || []).filter(tx => tx.type === "expense").length} expenses`
         : "No groups yet";
-      const chooseHint = document.getElementById("group-choose-hint");
-      const emptyHint = document.getElementById("group-empty-hint");
       const manageCard = document.getElementById("group-management-card");
-      if (chooseHint) chooseHint.hidden = !(groups.length && !g.id);
-      if (emptyHint) emptyHint.hidden = groups.length > 0;
-      if (manageCard) manageCard.hidden = !g.id;
+      if (manageCard) manageCard.hidden = groups.length === 0;
       if (currencySelect && document.activeElement !== currencySelect) {
         const known = ["₹", "$", "€", "£", "¥"];
         [...currencySelect.options].forEach((option) => { if (option.dataset.extra === "1") option.remove(); });
