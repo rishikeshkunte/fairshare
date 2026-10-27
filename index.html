@@ -885,7 +885,7 @@
     import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, stripReceiptBytes, newId } from "./js/money.js";
     import { toast, askConfirm, askPrompt } from "./js/ui.js";
     import { compressImage, safeImageSrc } from "./js/receipts.js";
-    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, finishRedirectSignIn, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
+    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
     import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, mergePairLedger, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
 
     document.body.addEventListener("click", (event) => {
@@ -909,6 +909,11 @@
     let fx = null;
     let currentUser = null;
     let authActionInProgress = false;
+    let authListenerAttached = false;
+    let cloudSyncUid = null;
+    const APP_BUILD = "v33";
+    window.FAIRSHARE_BUILD = APP_BUILD;
+    console.info("[FairShare] build", APP_BUILD);
 
     function requestsCol() {
       return fx.storeMod.collection(fx.db, "friend_requests");
@@ -1228,6 +1233,39 @@
       }
     }
 
+    // A malformed local cache must never be able to block sign-in. Keep valid
+    // records, drop only unusable ones, and guarantee the shapes the rest of
+    // the app (and the auth restore path) expects.
+    function sanitizeState() {
+      appState.friends = (Array.isArray(appState.friends) ? appState.friends : [])
+        .filter(friend => friend && typeof friend === "object" && friend.name);
+      appState.directTransactions = (Array.isArray(appState.directTransactions) ? appState.directTransactions : [])
+        .filter(tx => tx && typeof tx === "object");
+      appState.deletedTransactions = (Array.isArray(appState.deletedTransactions) ? appState.deletedTransactions : [])
+        .filter(Boolean);
+      appState.deletedGroups = (Array.isArray(appState.deletedGroups) ? appState.deletedGroups : []).map(String);
+      const groups = {};
+      const source = appState.groups && typeof appState.groups === "object" ? appState.groups : {};
+      Object.entries(source).forEach(([id, group]) => {
+        if (!group || typeof group !== "object") return;
+        const members = (Array.isArray(group.members) ? group.members : [])
+          .filter(member => typeof member === "string" && member);
+        groups[id] = {
+          ...group,
+          id: group.id || id,
+          members: members.length ? members : ["You"],
+          memberLinks: group.memberLinks && typeof group.memberLinks === "object" ? group.memberLinks : {},
+          transactions: (Array.isArray(group.transactions) ? group.transactions : [])
+            .filter(tx => tx && typeof tx === "object"),
+          deletedTransactions: (Array.isArray(group.deletedTransactions) ? group.deletedTransactions : [])
+            .filter(Boolean),
+          simplifyDebts: group.simplifyDebts !== false
+        };
+      });
+      appState.groups = groups;
+      if (appState.activeGroupId && !appState.groups[appState.activeGroupId]) appState.activeGroupId = null;
+    }
+
     function applySavedState(saved, assumePaise = false) {
       appState = emptyState(appState.theme);
       if (!saved) return false;
@@ -1254,6 +1292,7 @@
         else if (assumePaise) appState.schemaVersion = 9;
         if (parsed.activeGroupId && appState.groups[parsed.activeGroupId]) appState.activeGroupId = parsed.activeGroupId;
         appState = migrateMoney(appState);
+        sanitizeState();
         return true;
       } catch (e) {
         console.error("Could not parse saved state:", e);
@@ -4420,6 +4459,7 @@
       const previousUser = currentUser;
       if (persist && previousUser) persistLocalState(previousUser);
       currentUser = null;
+      cloudSyncUid = null;
       [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeFriendsRosterListener]
         .forEach(unsubscribe => { if (typeof unsubscribe === "function") unsubscribe(); });
       unsubscribeFriendsRosterListener = null;
@@ -4443,15 +4483,34 @@
           if (previousUser) persistLocalState(previousUser);
           updateAuthUI(null);
           currentUser = user;
-          loadUserState(user);
-          materializeRecurring();
-          Object.values(appState.groups || {}).forEach(addGroupMembersToRoster);
+          // Loading the local cache must never leave a signed-in user stuck on
+          // the privacy gate. A bad cache or render error is logged, then the
+          // authenticated UI is shown anyway and cloud sync continues.
+          try {
+            loadUserState(user);
+            materializeRecurring();
+            Object.values(appState.groups || {}).forEach(addGroupMembersToRoster);
+          } catch (err) {
+            console.error("Local state restore note:", err);
+          }
         } else {
           currentUser = user;
         }
         updateAuthUI(user);
-        renderAll();
-        if (switchedUser) syncUserCloud(user);
+        try {
+          renderAll();
+        } catch (err) {
+          console.error("Render note:", err);
+          updateAuthUI(user);
+        }
+        if (fx && (switchedUser || cloudSyncUid !== user.uid)) {
+          try {
+            syncUserCloud(user);
+            cloudSyncUid = user.uid;
+          } catch (err) {
+            console.error("Cloud sync note:", err);
+          }
+        }
       } else {
         enterSignedOutState(true);
       }
@@ -4462,15 +4521,17 @@
       if (ensureCloudPromise) return ensureCloudPromise;
       ensureCloudPromise = (async () => {
         fx = await loadFirebase(firebaseConfig);
-        const redirectResult = await finishRedirectSignIn(fx).catch((err) => {
-          console.warn("Redirect sign-in note:", err);
-          return null;
-        });
-        watchAuth(fx, applyAuthState);
-        // Mobile redirect sign-in can return a credential before the initial
-        // onAuthStateChanged callback. Apply it so the privacy gate opens.
-        const authenticatedUser = redirectResult?.user || fx.auth.currentUser;
-        if (authenticatedUser) applyAuthState(authenticatedUser);
+        // Register the auth listener before any other async work. Persisted
+        // sessions must restore even if redirect/popup completion is slow.
+        if (!authListenerAttached) {
+          watchAuth(fx, applyAuthState);
+          authListenerAttached = true;
+        }
+        // This build signs in with popup only. Do not call getRedirectResult on
+        // startup: a stale pending-redirect record from an older build can make
+        // Firebase initialization hang, which previously left the gate stuck
+        // and made the login button appear to do nothing until site data was cleared.
+        if (fx.auth.currentUser) applyAuthState(fx.auth.currentUser);
         return fx;
       })().catch((err) => {
         ensureCloudPromise = null;
@@ -4506,10 +4567,48 @@
       if (friendsStack) friendsStack.classList.toggle("signed-out", !user);
     }
 
+    function authErrorMessage(error) {
+      const code = error?.code || "";
+      switch (code) {
+        case "auth/unauthorized-domain":
+          return "This site is not authorized for Google sign-in. Add it under Firebase Authentication - Authorized domains, then try again.";
+        case "auth/popup-blocked":
+          return "Your browser blocked the Google sign-in window. Allow pop-ups for this site, then try again.";
+        case "auth/popup-closed-by-user":
+        case "auth/cancelled-popup-request":
+          return "Google sign-in was closed before it finished. Please try again.";
+        case "auth/operation-not-supported-in-this-environment":
+        case "auth/web-storage-unsupported":
+          return "This browser is blocking the storage Google sign-in needs. Allow site data (or try Chrome), reload, then sign in.";
+        case "auth/network-request-failed":
+          return "The network dropped during Google sign-in. Check your connection and try again.";
+        case "fairshare/sign-in-timeout":
+          return "Google sign-in did not finish. Close any Google window, then try again.";
+        default:
+          return "Google sign-in did not finish. Please try again.";
+      }
+    }
+
     window.handleAuthClick = async function() {
+      const gate = document.getElementById("auth-gate");
+      // A restored session can exist while the gate is still visible if state
+      // hydration failed. Re-apply the signed-in UI instead of opening a
+      // sign-out confirmation that sits behind the gate.
+      if (currentUser && gate && !gate.hidden) {
+        applyAuthState(currentUser);
+        return;
+      }
       try {
-        await ensureCloud();
+        await Promise.race([
+          ensureCloud(),
+          new Promise((_, reject) => {
+            const error = new Error("Firebase did not load.");
+            error.code = "fairshare/cloud-timeout";
+            setTimeout(() => reject(error), 15000);
+          })
+        ]);
       } catch (err) {
+        if (!fx) ensureCloudPromise = null;
         toast("Google is unreachable. FairShare still works on this device.");
         return;
       }
@@ -4521,26 +4620,34 @@
         try {
           await signOutGoogle(fx);
         } catch (error) {
-          console.error("Sign-out error:", error);
-          toast(error?.message || "Could not sign out. Please try again.");
+          console.error("Sign-out error:", error?.code || error);
+          toast("Could not sign out. Please try again.");
           return;
         }
         enterSignedOutState(false);
       } else {
         setCloudIntent(true);
         authActionInProgress = true;
+        let timeoutId = 0;
         try {
-          const credential = await signInGoogle(fx);
+          const credential = await Promise.race([
+            signInGoogle(fx),
+            new Promise((_, reject) => {
+              timeoutId = setTimeout(() => {
+                const error = new Error("Sign-in timed out.");
+                error.code = "fairshare/sign-in-timeout";
+                reject(error);
+              }, 60000);
+            })
+          ]);
           const signedInUser = credential?.user || fx.auth.currentUser;
           if (signedInUser) applyAuthState(signedInUser);
           else toast("Google sign-in completed without a user session. Please try again.");
         } catch (error) {
-          console.error("Auth error:", error);
-          const code = error?.code || "";
-          if (code === "auth/unauthorized-domain") {
-            toast("Add this site under Firebase Authentication → Authorized domains, then try again.");
-          } else toast(error?.message || "Google sign-in did not finish.");
+          console.error("Auth error:", error?.code || error);
+          toast(authErrorMessage(error));
         } finally {
+          clearTimeout(timeoutId);
           authActionInProgress = false;
         }
       }
