@@ -30,9 +30,9 @@ test("home screen has separate review and settle actions and no invite-link butt
   const pageTwo = html.indexOf("PAGE 2: ADD / EDIT EXPENSE", homeStart);
   assert.ok(homeStart >= 0 && pageTwo > homeStart, "home section can be located");
   const home = html.slice(homeStart, pageTwo);
-  assert.match(home, />Review balances<\/button>/);
-  assert.match(home, /data-call="openSettleUp">Settle up<\/button>/);
-  assert.doesNotMatch(html, />Invite link<\/button>/i);
+  assert.match(home, /Review balances/);
+  assert.match(home, /Settle up/);
+  assert.doesNotMatch(home, />Invite link<\/button>/i);
 });
 
 test("floating expense action is anchored to the bottom-left on desktop and mobile", () => {
@@ -181,14 +181,31 @@ test("friends roster includes group balances alongside 1-on-1 balances", () => {
   assert.match(css, /\.friend-group-badge\.negative/);
 });
 
-test("friend invite link can be generated and copied in the app", () => {
-  assert.match(html, /data-call="copyInviteLink"/);
+test("secure invite links can be created, copied, accepted, and revoked", () => {
+  assert.match(html, /data-call="createFriendInvite"/);
+  assert.match(html, /data-call="createGroupInvite"/);
   assert.match(html, /id="invite-link-note"/);
-  assert.match(html, /function activeGroupInviteUrl\(\)/);
-  assert.match(html, /window\.copyInviteLink = async function\(\)/);
-  assert.match(html, /navigator\.clipboard\.writeText\(inviteUrl\)/);
-  assert.match(html, /requireGroupForInvite\(\)/);
-  assert.match(html, /This link joins/);
+  assert.match(html, /id="invites-list"/);
+  assert.match(html, /function newInviteToken\(\)/);
+  assert.match(html, /async function createInvite\(type, group\)/);
+  assert.match(html, /window\.createFriendInvite = async function\(\)/);
+  assert.match(html, /window\.createGroupInvite = async function\(\)/);
+  assert.match(html, /window\.revokeInvite = async function\(token\)/);
+  assert.match(html, /window\.acceptInvite = async function\(\)/);
+  assert.match(html, /window\.declineInvite = function\(\)/);
+  assert.match(html, /48 \* 60 \* 60 \* 1000/);
+  assert.match(html, /Old invite links are no longer supported/);
+});
+
+test("invite rules validate tokens, expiry, revocation, and use", () => {
+  assert.match(rules, /match \/invites\/\{token\}/);
+  assert.match(rules, /validGroupInvite/);
+  assert.match(rules, /validFriendInvite/);
+  assert.match(rules, /expiresAt > request\.time/);
+  assert.match(rules, /revoked == false/);
+  assert.match(rules, /uses == resource\.data\.uses \+ 1/);
+  assert.match(rules, /lastJoinToken/);
+  assert.match(rules, /inviteToken/);
 });
 
 test("group management requires an explicit group selection", () => {

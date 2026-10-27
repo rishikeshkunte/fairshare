@@ -134,6 +134,6 @@ test("phone contact entry is removed and sign-in copy says Gmail", () => {
 });
 
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v44"/);
+  assert.match(sw, /const CACHE = "fairshare-v45"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });
