@@ -104,7 +104,29 @@ test("cloud sync status is visible without exposing account data", () => {
   assert.match(listener, /snapshot\.size/);
 });
 
+test("group deletions sync across devices of the same account", () => {
+  const save = between(html, "function saveDeletedGroupsToCloud()", "function listenToFriendsRoster");
+  assert.match(save, /user_profiles", currentUser\.uid/);
+  assert.match(save, /cloudData\.deletedGroups/);
+  assert.match(save, /deletedGroups: merged/);
+
+  const listener = between(html, "function listenToFriendsRoster(user)", "\n    // --- DOM Elements");
+  assert.match(listener, /cloudData\.deletedGroups/);
+  assert.match(listener, /delete appState\.groups\[groupId\]/);
+  assert.match(listener, /saveDeletedGroupsToCloud\(\)/);
+
+  const del = between(html, "btnDeleteGroup.addEventListener", "// Modal Create Group");
+  assert.match(del, /saveDeletedGroupsToCloud\(\)/);
+});
+
+test("an old invite cannot resurrect a group deleted on another device", () => {
+  const invite = between(html, "window.acceptGroupInvite = function()", "window.declineGroupInvite");
+  assert.match(invite, /deletedGroups \|\| \[\]\)\.includes/);
+  assert.match(invite, /stays hidden on all your devices/);
+  assert.doesNotMatch(invite, /deletedGroups = \(appState\.deletedGroups/);
+});
+
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v34"/);
+  assert.match(sw, /const CACHE = "fairshare-v35"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });
