@@ -554,6 +554,7 @@
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button type="button" class="btn btn-settle" data-call="openGroupSettleUp">Settle up</button>
+              <button type="button" class="btn btn-secondary" data-call="createGroupInvite">Invite link</button>
               <button type="button" class="btn btn-primary" data-call="openGroupExpenseForm">+ Add expense</button>
             </div>
           </div>
@@ -598,6 +599,15 @@
     <div class="card account-settings-card">
       <h2>Preferences & tools</h2>
       <div id="account-actions-slot"></div>
+    </div>
+    <div class="card" id="invites-card" style="margin-top:16px;">
+      <div class="card-header-row">
+        <div>
+          <h2>Invite links</h2>
+          <span style="font-size:0.82rem; color:var(--muted);">Secure links expire after 48 hours. Revoke any active link.</span>
+        </div>
+      </div>
+      <div id="invites-list" style="margin-top:12px;"></div>
     </div>
   </section>
 
@@ -744,12 +754,12 @@
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Invite link:</span>
-              <button type="button" class="btn btn-primary" data-call="copyInviteLink">Copy invite link</button>
+              <button type="button" class="btn btn-primary" data-call="createFriendInvite">Copy friend invite link</button>
               <button type="button" class="btn btn-secondary" data-call="openInviteInGmail">Open in Gmail</button>
               <button type="button" class="btn btn-secondary" data-call="shareViaWhatsApp">Share via WhatsApp</button>
             </div>
             <p id="invite-link-note" style="font-size:0.75rem; color:var(--muted); margin:8px 0 0; line-height:1.4;">
-              Create or select a group to generate an invite link.
+              Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from Account -> Invite links.
             </p>
           </div>
 
@@ -883,8 +893,8 @@
         A friend invited you to join their shared group.
       </p>
       <div style="display:flex; justify-content:center; gap:10px;">
-        <button type="button" class="btn btn-secondary" data-call="declineGroupInvite" style="padding:8px 16px;">✕ Decline</button>
-        <button type="button" class="btn btn-primary" data-call="acceptGroupInvite" style="padding:8px 20px; font-weight:700;">✓ Approve & join</button>
+        <button type="button" class="btn btn-secondary" data-call="declineInvite" style="padding:8px 16px;">✕ Decline</button>
+        <button type="button" class="btn btn-primary" data-call="acceptInvite" style="padding:8px 20px; font-weight:700;">✓ Approve & continue</button>
       </div>
     </div>
   </div>
@@ -974,7 +984,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v44";
+    const APP_BUILD = "v45";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -4864,9 +4874,7 @@
         : "No groups yet";
       const inviteNote = document.getElementById("invite-link-note");
       if (inviteNote) {
-        inviteNote.textContent = g.id
-          ? `This link joins "${g.name}". It is reusable, does not expire, and the recipient must sign in with Gmail to sync.`
-          : "Create or select a group to generate an invite link.";
+        inviteNote.textContent = "Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from Account -> Invite links.";
       }
       const manageCard = document.getElementById("group-management-card");
       if (manageCard) manageCard.hidden = groups.length === 0;
@@ -4892,6 +4900,7 @@
       renderCategoryChart();
       renderTransactions();
       renderFriendsRoster();
+      renderInvites();
     }
 
     // --- Firebase Auth & Firestore Sync (loaded only for sign-in) ---
@@ -4904,7 +4913,7 @@
       if (persist && previousUser) persistLocalState(previousUser);
       currentUser = null;
       cloudSyncUid = null;
-      [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeFriendsRosterListener]
+      [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeFriendsRosterListener, unsubInvitesListener]
         .forEach(unsubscribe => { if (typeof unsubscribe === "function") unsubscribe(); });
       unsubscribeFriendsRosterListener = null;
       unsubIncomingRequests = null;
@@ -4912,6 +4921,11 @@
       unsubscribeGroupListener = null;
       unsubscribeDirectListener = null;
       unsubscribeUserGroupsListener = null;
+      unsubInvitesListener = null;
+      localInvites = [];
+      const inviteModal = document.getElementById("group-invite-modal");
+      if (inviteModal) inviteModal.classList.remove("active");
+      clearPendingInvite();
       clearSensitiveState();
       updateAuthUI(null);
       renderAll();
@@ -5116,6 +5130,8 @@
       // Friend contacts belong to the signed-in account, not to a particular group
       // or browser's local storage.
       listenToFriendsRoster(user);
+      listenToInvites(user);
+      processPendingInvite();
 
       // 1. Listen for incoming friend requests
       if (unsubIncomingRequests) unsubIncomingRequests();
@@ -5555,6 +5571,295 @@
       }
     };
 
+    // --- Secure token invites (multi-use, 48h expiry, revocable) ---
+    let pendingInviteToken = "";
+    let pendingInviteData = null;
+    let unsubInvitesListener = null;
+    let localInvites = [];
+
+    function newInviteToken() {
+      const bytes = new Uint8Array(18);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes).map(byte => byte.toString(16).padStart(2, "0")).join("");
+    }
+
+    function inviteUrlFor(token) {
+      return `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(token)}#friends`;
+    }
+
+    function inviteExpiryMs(invite) {
+      const value = invite?.expiresAt;
+      if (!value) return 0;
+      if (typeof value.toMillis === "function") return value.toMillis();
+      if (typeof value === "number") return value;
+      return 0;
+    }
+
+    async function createInvite(type, group) {
+      if (!fx || !currentUser) {
+        toast("Sign in with Gmail to create invite links.");
+        return "";
+      }
+      if (type === "group" && !group?.id) {
+        toast("Create or select a group first.");
+        return "";
+      }
+      const token = newInviteToken();
+      const myEmail = (currentUser.email || "").toLowerCase().trim();
+      const myName = currentUser.displayName || myEmail.split("@")[0];
+      try {
+        await fx.storeMod.setDoc(fx.storeMod.doc(fx.db, "invites", token), {
+          type,
+          groupId: type === "group" ? group.id : null,
+          groupName: type === "group" ? group.name : null,
+          createdByUid: currentUser.uid,
+          createdByEmail: myEmail,
+          createdByName: myName,
+          createdAt: serverTimestamp(fx),
+          expiresAt: fx.storeMod.Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000),
+          revoked: false,
+          uses: 0
+        });
+        return token;
+      } catch (err) {
+        console.error("Invite create note:", err?.code || err);
+        toast("Could not create the invite link. Please try again.");
+        return "";
+      }
+    }
+
+    async function copyInviteToken(token, label) {
+      const url = inviteUrlFor(token);
+      try {
+        await navigator.clipboard.writeText(url);
+        toast(`${label} copied. It expires in 48 hours. Revoke it from Account -> Invite links.`);
+      } catch {
+        await askPrompt({ message: `${label}:`, defaultValue: url });
+      }
+    }
+
+    window.createFriendInvite = async function() {
+      const token = await createInvite("friend");
+      if (token) await copyInviteToken(token, "Friend invite link");
+    };
+
+    window.createGroupInvite = async function() {
+      const g = requireGroupForInvite();
+      if (!g) return;
+      const token = await createInvite("group", g);
+      if (token) await copyInviteToken(token, `Invite link for "${g.name}"`);
+    };
+
+    window.openInviteInGmail = async function() {
+      const token = await createInvite("friend");
+      if (!token) return;
+      const inputEl = document.getElementById("input-friend-email");
+      const toEmail = (inputEl ? inputEl.value : "").trim();
+      const myName = myInviteName();
+      const subject = encodeURIComponent(`Connect with ${myName} on FairShare`);
+      const body = encodeURIComponent(`Hey! I am using FairShare to track and split expenses. Connect with me using this link:\n${inviteUrlFor(token)}\n\nThe link expires in 48 hours. Sign in with Gmail to sync.\n\nCheers`);
+      window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`, "_blank");
+    };
+
+    window.shareViaWhatsApp = async function() {
+      const token = await createInvite("friend");
+      if (!token) return;
+      const text = encodeURIComponent(`Hey! Connect with me on FairShare to track and split expenses: ${inviteUrlFor(token)} (expires in 48 hours)`);
+      window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+    };
+
+    window.revokeInvite = async function(token) {
+      if (!fx || !currentUser) return;
+      const invite = localInvites.find(item => item.id === token);
+      const target = invite?.type === "group" ? `the group "${invite.groupName}"` : "a friend connection";
+      if (!(await askConfirm({ title: "Revoke invite link", message: `Revoke this link for ${target}? It will stop working immediately. People who already joined keep access.`, confirmLabel: "Revoke" }))) return;
+      try {
+        await fx.storeMod.updateDoc(fx.storeMod.doc(fx.db, "invites", token), {
+          revoked: true,
+          revokedAt: serverTimestamp(fx)
+        });
+        toast("Invite link revoked.");
+      } catch (err) {
+        console.error("Invite revoke note:", err?.code || err);
+        toast("Could not revoke the invite link. Please try again.");
+      }
+    };
+
+    function renderInvites() {
+      const list = document.getElementById("invites-list");
+      if (!list) return;
+      if (!currentUser) {
+        list.innerHTML = `<div style="color:var(--muted); font-size:0.85rem;">Sign in with Gmail to create and manage invite links.</div>`;
+        return;
+      }
+      if (!localInvites.length) {
+        list.innerHTML = `<div style="color:var(--muted); font-size:0.85rem;">No invite links yet. Create one from Add friends or a group.</div>`;
+        return;
+      }
+      list.innerHTML = "";
+      localInvites.forEach(invite => {
+        const expiresMs = inviteExpiryMs(invite);
+        const expired = expiresMs <= Date.now();
+        const status = invite.revoked ? "Revoked" : (expired ? "Expired" : "Active");
+        const active = status === "Active";
+        const hoursLeft = Math.max(0, Math.ceil((expiresMs - Date.now()) / 3600000));
+        const target = invite.type === "group" ? `Group: ${invite.groupName || "group"}` : "Friend connection";
+        const row = document.createElement("div");
+        row.className = "settlement-card";
+        row.style.marginBottom = "8px";
+        row.innerHTML = `
+          <div>
+            <strong>${escapeHtml(target)}</strong>
+            <span style="font-size:0.78rem; color:var(--muted); display:block;">${active ? `Expires in ${hoursLeft}h` : status} • ${Number(invite.uses) || 0} use(s)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="settle-badge" style="background:${active ? "var(--success-bg)" : "var(--table-header-bg)"}; color:${active ? "var(--positive)" : "var(--muted)"};">${status}</span>
+            ${active ? `<button type="button" class="btn btn-secondary" data-call="revokeInvite" data-arg="${escapeHtml(invite.id)}" style="padding:4px 8px; font-size:0.75rem;">Revoke</button>` : ""}
+          </div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    function listenToInvites(user) {
+      if (!fx || !user) return;
+      if (unsubInvitesListener) unsubInvitesListener();
+      unsubInvitesListener = watchQuery(fx, "invites", "createdByUid", "==", user.uid, (snapshot) => {
+        localInvites = [];
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data() || {};
+          data.id = docSnap.id;
+          localInvites.push(data);
+        });
+        localInvites.sort((a, b) => inviteExpiryMs(b) - inviteExpiryMs(a));
+        renderInvites();
+      }, (err) => console.warn("Invite list note:", err?.code || err));
+    }
+
+    function clearPendingInvite() {
+      pendingInviteToken = "";
+      pendingInviteData = null;
+      try { sessionStorage.removeItem("fairshare_pending_invite"); } catch { /* ignore */ }
+    }
+
+    async function processPendingInvite() {
+      if (!pendingInviteToken) {
+        try { pendingInviteToken = sessionStorage.getItem("fairshare_pending_invite") || ""; } catch { /* ignore */ }
+      }
+      if (!pendingInviteToken || pendingInviteData || !fx || !currentUser) return;
+      const token = pendingInviteToken;
+      try {
+        const snap = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "invites", token));
+        if (!snap.exists()) throw new Error("missing");
+        const data = snap.data() || {};
+        if (data.revoked || inviteExpiryMs(data) <= Date.now()) {
+          clearPendingInvite();
+          toast("This invite link has expired or was revoked.");
+          return;
+        }
+        if (data.type !== "group" && data.type !== "friend") throw new Error("type");
+        pendingInviteData = { token, ...data };
+        const modal = document.getElementById("group-invite-modal");
+        const title = document.getElementById("invite-modal-title");
+        const desc = document.getElementById("invite-modal-desc");
+        const inviter = data.createdByName || data.createdByEmail || "A friend";
+        if (title) title.textContent = data.type === "group" ? "Group invitation" : "Friend invitation";
+        if (desc) {
+          desc.textContent = data.type === "group"
+            ? `${inviter} invited you to join "${data.groupName || "their group"}". This link expires in 48 hours and can be used by multiple people.`
+            : `${inviter} wants to connect with you on FairShare. This link expires in 48 hours and can be used by multiple people.`;
+        }
+        if (modal) modal.classList.add("active");
+      } catch (err) {
+        console.warn("Invite read note:", err?.code || err?.message || err);
+        clearPendingInvite();
+        toast("This invite link is invalid or unavailable.");
+      }
+    }
+
+    window.acceptInvite = async function() {
+      const invite = pendingInviteData;
+      if (!invite || !fx || !currentUser) return;
+      const myEmail = (currentUser.email || "").toLowerCase().trim();
+      const myEmailNorm = normalizeEmail(myEmail);
+      const myName = currentUser.displayName || myEmail.split("@")[0];
+      const token = invite.token;
+      try {
+        const batch = fx.storeMod.writeBatch(fx.db);
+        if (invite.type === "group") {
+          if (!invite.groupId) throw new Error("missing group");
+          if ((appState.deletedGroups || []).includes(String(invite.groupId))) {
+            throw new Error("group-deleted");
+          }
+          batch.update(fx.storeMod.doc(fx.db, "groups", invite.groupId), {
+            memberEmails: fx.storeMod.arrayUnion(myEmail, myEmailNorm),
+            members: fx.storeMod.arrayUnion(myName),
+            lastJoinToken: token,
+            lastJoinAt: serverTimestamp(fx),
+            updatedAt: serverTimestamp(fx),
+            updatedBy: myEmail
+          });
+        } else {
+          batch.set(fx.storeMod.doc(fx.db, "friend_requests", newId()), {
+            fromEmail: invite.createdByEmail,
+            fromName: invite.createdByName || (invite.createdByEmail || "").split("@")[0],
+            toEmail: myEmail,
+            toName: myName,
+            status: "accepted",
+            acceptedByName: myName,
+            inviteToken: token,
+            createdAt: serverTimestamp(fx),
+            updatedAt: serverTimestamp(fx)
+          });
+        }
+        batch.update(fx.storeMod.doc(fx.db, "invites", token), {
+          uses: fx.storeMod.increment(1),
+          lastUsedAt: serverTimestamp(fx),
+          lastUsedBy: myEmail
+        });
+        await batch.commit();
+        const modal = document.getElementById("group-invite-modal");
+        if (modal) modal.classList.remove("active");
+        if (invite.type === "group") {
+          toast(`Joined "${invite.groupName || "the group"}". It will appear in Groups.`);
+          clearPendingInvite();
+          navigateTo("groups");
+        } else {
+          addApprovedFriend(invite.createdByEmail, invite.createdByName || (invite.createdByEmail || "").split("@")[0]);
+          saveState();
+          clearPendingInvite();
+          toast("Friend connection added.");
+          renderAll();
+        }
+      } catch (err) {
+        console.error("Invite accept note:", err?.code || err);
+        toast(err?.message === "group-deleted"
+          ? "This group is deleted for your account."
+          : "Could not accept this invite. It may have expired or been revoked.");
+      }
+    };
+
+    window.declineInvite = function() {
+      const modal = document.getElementById("group-invite-modal");
+      if (modal) modal.classList.remove("active");
+      clearPendingInvite();
+      toast("Invite declined.");
+    };
+
+    function checkInviteInURL() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("joinGroup")) {
+        window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || "#friends"));
+        toast("Old invite links are no longer supported. Ask for a new secure invite.");
+      }
+      const token = params.get("invite");
+      if (!token) return;
+      try { sessionStorage.setItem("fairshare_pending_invite", token); } catch { /* ignore */ }
+      pendingInviteToken = token;
+      window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || "#friends"));
+      processPendingInvite();
+    }
+
     function materializeRecurring() {
       const now = Date.now();
       const advance = (stamp, freq) => {
@@ -5631,7 +5936,7 @@
 
     const initialPage = window.location.hash.replace("#", "") || "home";
     navigateTo(initialPage);
-    checkGroupInviteInURL();
+    checkInviteInURL();
   </script>
 </body>
 </html>

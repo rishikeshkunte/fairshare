@@ -22,6 +22,28 @@ service cloud.firestore {
         && data.memberEmails is list
         && email() in data.memberEmails;
     }
+    function inviteRef(token) {
+      return /databases/$(database)/documents/invites/$(token);
+    }
+    function inviteDoc(token) {
+      return get(inviteRef(token)).data;
+    }
+    function validInvite(token, type) {
+      return token is string
+        && token.size() >= 16
+        && exists(inviteRef(token))
+        && inviteDoc(token).type == type
+        && inviteDoc(token).revoked == false
+        && inviteDoc(token).expiresAt > request.time;
+    }
+    function validGroupInvite(token, groupId) {
+      return validInvite(token, "group")
+        && inviteDoc(token).groupId == groupId;
+    }
+    function validFriendInvite(token, inviterEmail) {
+      return validInvite(token, "friend")
+        && inviteDoc(token).createdByEmail == inviterEmail;
+    }
 
     // Each signed-in account owns its saved friends roster, independent of groups.
     match /user_profiles/{userId} {
@@ -40,7 +62,26 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.memberEmails is list
         && email() in request.resource.data.memberEmails;
-      allow update, delete: if isMember(resource.data);
+      allow update: if isMember(resource.data);
+      // A signed-in recipient of a valid, unexpired, unrevoked group invite may
+      // add themselves. They cannot change the group's name, currency, ledger,
+      // or remove existing members in this write.
+      allow update: if signedIn()
+        && request.resource.data.memberEmails is list
+        && email() in request.resource.data.memberEmails
+        && request.resource.data.lastJoinToken is string
+        && validGroupInvite(request.resource.data.lastJoinToken, groupId)
+        && resource.data.memberEmails is list
+        && request.resource.data.memberEmails.hasAll(resource.data.memberEmails)
+        && request.resource.data.memberEmails.size() <= resource.data.memberEmails.size() + 2
+        && request.resource.data.members is list
+        && resource.data.members is list
+        && request.resource.data.members.hasAll(resource.data.members)
+        && request.resource.data.members.size() <= resource.data.members.size() + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'memberEmails', 'members', 'lastJoinToken', 'lastJoinAt', 'updatedAt', 'updatedBy'
+           ]);
+      allow delete: if isMember(resource.data);
     }
 
     match /direct_pairs/{pairId} {
@@ -103,11 +144,23 @@ service cloud.firestore {
     }
 
     match /friend_requests/{requestId} {
-      allow create: if signedIn()
-        && request.resource.data.fromEmail == email()
-        && request.resource.data.toEmail is string
-        && request.resource.data.toEmail != email()
-        && request.resource.data.status == "pending";
+      allow create: if signedIn() && (
+        (
+          request.resource.data.fromEmail == email()
+          && request.resource.data.toEmail is string
+          && request.resource.data.toEmail != email()
+          && request.resource.data.status == "pending"
+        ) || (
+          // A recipient of a valid friend invite may create the accepted
+          // connection directly. The invite proves the inviter's identity.
+          request.resource.data.status == "accepted"
+          && request.resource.data.toEmail == email()
+          && request.resource.data.fromEmail is string
+          && request.resource.data.fromEmail != email()
+          && request.resource.data.inviteToken is string
+          && validFriendInvite(request.resource.data.inviteToken, request.resource.data.fromEmail)
+        )
+      );
       allow read: if signedIn() && (
         resource.data.fromEmail == email() || resource.data.toEmail == email()
       );
@@ -124,6 +177,48 @@ service cloud.firestore {
         )
       );
       allow delete: if signedIn() && resource.data.fromEmail == email();
+    }
+
+    // Token-based, multi-use, expiring, revocable invite links.
+    match /invites/{token} {
+      // The token is the secret. Any signed-in user who has it may read the
+      // invite so the acceptance screen can show who invited them.
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.createdByUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByEmail == email()
+        && request.resource.data.revoked == false
+        && request.resource.data.uses == 0
+        && request.resource.data.type in ["group", "friend"]
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt < request.time + duration.value(7, 'd')
+        && (
+          request.resource.data.type == "friend"
+          || (
+            request.resource.data.type == "group"
+            && request.resource.data.groupId is string
+            && exists(/databases/$(database)/documents/groups/$(request.resource.data.groupId))
+            && email() in get(/databases/$(database)/documents/groups/$(request.resource.data.groupId)).data.memberEmails
+          )
+        );
+      allow update: if signedIn() && (
+        // Creator can revoke at any time.
+        (
+          resource.data.createdByUid == request.auth.uid
+          && request.resource.data.revoked == true
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revoked', 'revokedAt'])
+        ) || (
+          // Recipient can record a use while the invite is active.
+          resource.data.revoked == false
+          && resource.data.expiresAt > request.time
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uses', 'lastUsedAt', 'lastUsedBy'])
+          && request.resource.data.uses == resource.data.uses + 1
+          && request.resource.data.lastUsedBy == email()
+        )
+      );
+      allow delete: if signedIn() && resource.data.createdByUid == request.auth.uid;
     }
   }
 }
