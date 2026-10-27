@@ -148,6 +148,23 @@ test("home does not duplicate a direct-only friend balances card", () => {
   assert.match(html, /across groups & 1-on-1/);
 });
 
+test("friends page shows a selected friend's 1-on-1 ledger", () => {
+  assert.match(html, /id="friend-detail-card"/);
+  assert.match(html, /id="friend-detail-total"/);
+  assert.match(html, /id="friend-detail-share"/);
+  assert.match(html, /id="friend-detail-balance"/);
+  assert.match(html, /id="friend-detail-records"/);
+  assert.match(html, /data-call="openFriendDetail"/);
+  assert.match(html, /data-call="friendDetailAddExpense"/);
+  assert.match(html, /data-call="friendDetailSettle"/);
+  const detail = html.slice(html.indexOf("function renderFriendDetail()"), html.indexOf("window.openFriendDetail"));
+  assert.match(detail, /directBalanceForFriend\(friend\.name\)/);
+  assert.match(detail, /getFriendGroupBalances\(friend\)/);
+  assert.match(detail, /tx\.shares\?\.You/);
+  assert.match(detail, /friend-detail-records/);
+  assert.match(html, /renderFriendDetail\(\);/);
+});
+
 test("friends roster includes group balances alongside 1-on-1 balances", () => {
   assert.match(html, /function findGroupMemberForFriend\(group, friend\)/);
   const helper = html.slice(html.indexOf("function getFriendGroupBalances(friend)"), html.indexOf("function renderFriendsRoster()"));
