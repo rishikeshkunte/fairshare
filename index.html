@@ -1207,7 +1207,7 @@
     const LEGACY_STATE_KEYS = ["fairshare_state_v9", "fairshare_state_v8", "fairshare_state_v7", "fairshare_state_v6"];
 
     function emptyState(theme = "light") {
-      return { theme, activeGroupId: null, friends: [], directTransactions: [], deletedTransactions: [], deletedGroups: [], groups: {} };
+      return { theme, schemaVersion: 9, activeGroupId: null, friends: [], directTransactions: [], deletedTransactions: [], deletedGroups: [], groups: {} };
     }
 
     function stateKeyFor(user = currentUser) {
@@ -1218,13 +1218,16 @@
       try {
         localStorage.setItem("fairshare_theme", appState.theme || "light");
         const key = stateKeyFor(user);
-        if (key) localStorage.setItem(key, JSON.stringify(appState));
+        if (key) {
+          appState.schemaVersion = 9;
+          localStorage.setItem(key, JSON.stringify(appState));
+        }
       } catch (e) {
         console.warn("Could not save local state:", e);
       }
     }
 
-    function applySavedState(saved) {
+    function applySavedState(saved, assumePaise = false) {
       appState = emptyState(appState.theme);
       if (!saved) return false;
       try {
@@ -1247,6 +1250,7 @@
           });
         }
         if (parsed.schemaVersion) appState.schemaVersion = parsed.schemaVersion;
+        else if (assumePaise) appState.schemaVersion = 9;
         if (parsed.activeGroupId && appState.groups[parsed.activeGroupId]) appState.activeGroupId = parsed.activeGroupId;
         appState = migrateMoney(appState);
         return true;
@@ -1273,7 +1277,7 @@
           try { saved = localStorage.getItem(legacyKey); } catch { /* ignore */ }
         }
       }
-      const applied = applySavedState(saved);
+      const applied = applySavedState(saved, !legacyKey || legacyKey === "fairshare_state_v9");
       if (applied) {
         persistLocalState(user);
         if (legacyKey) {
