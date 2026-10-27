@@ -162,6 +162,9 @@ test("friends page shows a selected friend's 1-on-1 ledger", () => {
   assert.match(detail, /getFriendGroupBalances\(friend\)/);
   assert.match(detail, /tx\.shares\?\.You/);
   assert.match(detail, /friend-detail-records/);
+  assert.match(detail, /data-arg2="\$\{escapeHtml\(item\.name\)\}"/);
+  assert.match(html, /window\.openFriendGroup = function\(groupId, groupName\)/);
+  assert.match(html, /navigateTo\("groups"\);\s*try \{\s*switchActiveGroup\(id\)/);
   assert.match(html, /renderFriendDetail\(\);/);
 });
 
