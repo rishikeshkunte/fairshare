@@ -573,6 +573,43 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
 #chart-area[data-chart="bar"] .chart-wrapper { grid-template-columns: minmax(0, 1fr); }
 #chart-area[data-chart="bar"] #chart-visual { display: block !important; }
 #chart-area[data-chart="bar"] .chart-legend { display: none; }
+.analytics-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.analytics-toolbar .tab-group { margin-bottom:0; flex-wrap:wrap; }
+#chart-area[data-view="people"] .chart-wrapper,
+#chart-area[data-view="trend"] .chart-wrapper { grid-template-columns:minmax(0,1fr); }
+#chart-area[data-view="people"] .chart-legend,
+#chart-area[data-view="trend"] .chart-legend { display:none; }
+.people-chart { display:flex; flex-direction:column; gap:14px; width:100%; }
+.people-legend { display:flex; flex-wrap:wrap; gap:14px; font-size:.78rem; color:var(--muted); }
+.people-legend span { display:flex; align-items:center; gap:6px; }
+.people-legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+.people-legend i.paid { background:var(--primary); }
+.people-legend i.share { background:var(--marigold); }
+.people-row { border-top:1px solid var(--line); padding-top:10px; }
+.people-row:first-of-type { border-top:0; padding-top:0; }
+.people-head { display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:6px; }
+.people-head strong { font-size:.92rem; }
+.people-net { font-family:var(--mono); font-size:.78rem; font-weight:700; color:var(--muted); }
+.people-net.positive { color:var(--positive); }
+.people-net.negative { color:var(--negative); }
+.people-bar-line { display:grid; grid-template-columns:42px minmax(0,1fr) auto; align-items:center; gap:8px; font-size:.72rem; color:var(--muted); }
+.people-bar-track { height:9px; border-radius:99px; background:var(--box-bg); overflow:hidden; }
+.people-bar { height:100%; border-radius:99px; min-width:2px; }
+.people-bar.paid { background:var(--primary); }
+.people-bar.share { background:var(--marigold); }
+.people-bar-val { font-family:var(--mono); color:var(--text); white-space:nowrap; }
+.analytics-footnote { margin:14px 0 0; font-size:.75rem; color:var(--muted); line-height:1.4; }
+.trend-wrap { width:100%; }
+.trend-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.trend-summary > div { background:var(--box-bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+.trend-summary span { display:block; font-size:.68rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; }
+.trend-summary strong { display:block; margin-top:4px; font-family:var(--mono); font-size:.95rem; }
+.trend-svg { display:block; width:100%; height:auto; overflow:visible; }
+@media (max-width: 640px) {
+  .trend-summary { grid-template-columns:1fr; }
+  .people-bar-line { grid-template-columns:38px minmax(0,1fr); }
+  .people-bar-val { grid-column:2; text-align:right; }
+}
 
 .empty-state { text-align: center; color: var(--muted); padding: 28px 12px; }
 
