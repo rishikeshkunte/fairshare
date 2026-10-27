@@ -594,6 +594,8 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
   z-index: 50; align-items: center; justify-content: center; padding: 20px;
 }
 .modal-backdrop.active { display: flex; }
+/* Dialogs must render above the privacy gate (z-index 1000). */
+#app-dialog { z-index: 1150; }
 .modal-content {
   background: var(--surface-solid); color: var(--text); border-radius: 20px; border: 1px solid var(--line);
   box-shadow: var(--shadow-lg); width: min(560px, 100%); max-height: min(86vh, 760px); overflow: auto; padding: 20px; position: relative;
