@@ -451,17 +451,6 @@
       </div>
     </div>
 
-    <!-- Direct 1-on-1 Friend Balances Card -->
-    <div class="card" id="direct-balances-card" style="margin-top:20px;">
-      <div class="card-header-row">
-        <div>
-          <h2>Direct 1-on-1 friend balances</h2>
-          <span style="font-size:0.82rem; color:var(--muted);">Non-group expenses and direct IOUs with individual friends</span>
-        </div>
-        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="friends" style="padding:6px 12px; font-size:0.8rem;">Manage friends →</button>
-      </div>
-      <div id="direct-balances-list" style="margin-top:12px;"></div>
-    </div>
   </section>
 
   <!-- ================= PAGE 4: EXPENSE HISTORY ================= -->
@@ -936,7 +925,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v39";
+    const APP_BUILD = "v40";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1571,7 +1560,6 @@
         renderFriendsRoster();
         renderFriendPickerDropdown();
         renderDirectFriendDropdown();
-        renderDirectBalances();
         if (localChanged) refreshDirectListeners();
         if (groupsChanged) {
           if (removedActive) listenToCloudGroup(appState.activeGroupId);
@@ -3831,6 +3819,11 @@
       });
 
       items.sort((a, b) => b.amount - a.amount);
+      if (dashSettleDesc) {
+        dashSettleDesc.textContent = items.length
+          ? `${items.length} open debt${items.length === 1 ? "" : "s"} across groups & 1-on-1`
+          : "Fully settled up";
+      }
       if (!items.length) {
         container.innerHTML = `<span style="font-size:0.82rem;color:var(--muted);">No open debts</span>`;
         return;
@@ -4492,85 +4485,6 @@
       });
     }
 
-    // 1-on-1 Direct Friend Balances Calculator
-    function renderDirectBalances() {
-      const container = document.getElementById("direct-balances-list");
-      if (!container) return;
-      container.innerHTML = "";
-
-      if (!currentUser) {
-        container.innerHTML = `<div style="text-align:center; padding:16px; color:var(--muted); font-size:0.85rem;">Sign in to view 1-on-1 balances.</div>`;
-        return;
-      }
-
-      const cur = getGroup().currency;
-      const directBalances = {};
-      appState.friends.forEach(f => directBalances[f.name] = 0);
-
-      (appState.directTransactions || []).forEach(t => {
-        if (t.type === "expense" && t.friend) {
-          if (directBalances[t.friend] === undefined) directBalances[t.friend] = 0;
-          const myShare = (t.shares && t.shares["You"]) || 0;
-          const friendShare = (t.shares && t.shares[t.friend]) || 0;
-          if (t.payer === "You") {
-            directBalances[t.friend] += friendShare;
-          } else if (t.payer === t.friend) {
-            directBalances[t.friend] -= myShare;
-          }
-        } else if (t.type === "settlement" && t.friend) {
-          if (directBalances[t.friend] === undefined) directBalances[t.friend] = 0;
-          if (t.payer === t.friend && t.receiver === "You") {
-            directBalances[t.friend] -= t.amount;
-          } else if (t.payer === "You" && t.receiver === t.friend) {
-            directBalances[t.friend] += t.amount;
-          }
-        }
-      });
-
-      if (appState.friends.length === 0) {
-        container.innerHTML = `<div style="text-align:center; padding:16px; color:var(--muted); font-size:0.85rem;">No friends added yet. Add a contact or connect by email to start direct splitting.</div>`;
-        return;
-      }
-
-      appState.friends.forEach(f => {
-        const bal = directBalances[f.name] || 0;
-        const row = document.createElement("div");
-        row.className = "settlement-card";
-        row.style.marginBottom = "8px";
-
-        let statusText = "";
-        let badgeColor = "var(--muted)";
-        let badgeBg = "var(--table-header-bg)";
-
-        if (Math.abs(bal) < 0.01) {
-          statusText = `Settled up (${formatMoney(0, cur)})`;
-          badgeColor = "var(--muted)";
-        } else if (bal > 0) {
-          statusText = `Owes you ${formatMoney(bal, cur)}`;
-          badgeColor = "var(--positive)";
-          badgeBg = "var(--success-bg)";
-        } else {
-          statusText = `You owe ${formatMoney(Math.abs(bal), cur)}`;
-          badgeColor = "var(--negative)";
-          badgeBg = "var(--danger-bg)";
-        }
-
-        row.innerHTML = `
-          <div>
-            <strong>${escapeHtml(f.name)}</strong> ${f.email ? '<span style="font-size:0.75rem; color:var(--muted); display:block;">' + escapeHtml(f.email) + '</span>' : ''}
-            <span style="display:inline-block; margin-top:3px; padding:2px 8px; border-radius:4px; font-size:0.8rem; font-weight:700; color:${badgeColor}; background:${badgeBg};">
-              ${statusText}
-            </span>
-          </div>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn btn-secondary" data-call="quickStartDirectExpense" data-arg="${escapeHtml(f.id)}" style="padding:6px 10px; font-size:0.78rem;">Split bill</button>
-            ${Math.abs(bal) >= 1 ? `<button type="button" class="btn btn-settle" data-call="quickStartDirectSettle" data-arg="${escapeHtml(f.id)}" data-arg2="${bal}" style="padding:6px 10px; font-size:0.78rem;">Settle</button>` : ''}
-          </div>
-        `;
-        container.appendChild(row);
-      });
-    }
-
     function renderMembers() {
       const g = getGroup();
       if (memberCountSpan) memberCountSpan.textContent = g.members.length;
@@ -4658,7 +4572,6 @@
 
     function renderAll() {
       renderDirectFriendDropdown();
-      renderDirectBalances();
       applyTheme();
       renderGroupSelector();
 
