@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="FairShare splits group expenses, simplifies who owes whom, and tracks spending. It works offline, with optional Google sign-in.">
+  <meta name="description" content="FairShare splits group expenses, simplifies who owes whom, and tracks spending. It works offline, with optional Gmail sign-in.">
   <meta name="theme-color" content="#2F4E3F">
   <link rel="canonical" href="https://rishikeshkunte.github.io/fairshare/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="FairShare — group expense tracker">
-  <meta property="og:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Google sync is optional.">
+  <meta property="og:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Gmail sync is optional.">
   <meta property="og:url" content="https://rishikeshkunte.github.io/fairshare/">
   <meta property="og:image" content="https://rishikeshkunte.github.io/fairshare/icons/icon-512.png">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="FairShare — group expense tracker">
-  <meta name="twitter:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Google sync is optional.">
+  <meta name="twitter:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Gmail sync is optional.">
   <meta name="twitter:image" content="https://rishikeshkunte.github.io/fairshare/icons/icon-512.png">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -33,7 +33,8 @@
       <span class="eyebrow">Private by account</span>
       <h1>FairShare</h1>
       <p>Sign in to view your groups, expenses, balances, and receipts.</p>
-      <button type="button" class="btn btn-primary" data-call="handleAuthClick">Sign in with Google</button>
+      <button type="button" class="btn btn-primary" data-call="handleAuthClick">Sign in with Gmail</button>
+      <p class="auth-gate-note">FairShare only uses your Gmail address and display name for sign-in. It does not read your Gmail messages, Drive, or contacts.</p>
       <p class="auth-gate-note">Your data is visible only while you are signed in on this device.</p>
     </div>
   </div>
@@ -584,7 +585,7 @@
         <div class="card" style="padding:14px 18px; margin-bottom:16px; background:var(--box-bg);">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
             <div>
-              <span style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--muted); display:block;">Your Google account</span>
+              <span style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--muted); display:block;">Your Gmail account</span>
               <div style="margin-top:2px;">
                 <strong id="my-display-account" style="font-size:1rem; color:var(--text);">Not signed in</strong>
               </div>
@@ -675,7 +676,7 @@
           <div class="card-header-row">
             <div>
               <h2>Incoming friend requests <span id="incoming-badge-count" class="badge-count" style="display:none;">0</span></h2>
-              <span style="font-size:0.8rem; color:var(--muted);">Approve or decline requests sent to your Google email</span>
+              <span style="font-size:0.8rem; color:var(--muted);">Approve or decline requests sent to your Gmail address</span>
             </div>
             <button type="button" class="btn btn-secondary" id="btn-check-requests" data-call="checkIncomingRequestsManual" data-needs-auth disabled style="padding:6px 12px; font-size:0.8rem;">
               <span aria-hidden="true">🔄</span> Check now <span class="auth-pill">Needs sign-in</span>
@@ -688,18 +689,18 @@
           </div>
         </div>
 
-        <!-- Add by Mobile Number or Email -->
+        <!-- Add friend by Gmail -->
         <div class="card">
           <div class="card-header-row">
             <div>
               <h2>Add friends</h2>
-              <span style="font-size:0.8rem; color:var(--muted);">Connect via Google email or save mobile contacts</span>
+              <span style="font-size:0.8rem; color:var(--muted);">Connect by Gmail address for live cloud sync</span>
             </div>
           </div>
 
-          <!-- Option A: Google Email Connect -->
+          <!-- Connect by Gmail address -->
           <div style="background:var(--box-bg); padding:14px; border-radius:12px; border:1px solid var(--line); margin-bottom:14px;">
-            <label for="input-friend-email">Connect by Google email (live cloud sync)</label>
+            <label for="input-friend-email">Connect by Gmail address (live cloud sync)</label>
             <div style="display:flex; gap:8px; margin-bottom:8px;">
               <input type="email" id="input-friend-email" placeholder="e.g. friend@gmail.com" style="flex:1;">
               <button type="button" id="btn-send-friend-request" class="btn btn-primary" data-call="sendFriendRequest" data-needs-auth disabled style="white-space:nowrap;">In-App request <span class="auth-pill">Needs sign-in</span></button>
@@ -708,27 +709,6 @@
               <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Direct messaging:</span>
               <button type="button" class="btn btn-secondary" data-call="openInviteInGmail">Open in Gmail</button>
               <button type="button" class="btn btn-secondary" data-call="shareViaWhatsApp">Share via WhatsApp</button>
-            </div>
-          </div>
-
-          <!-- Option B: Mobile Number -->
-          <div style="background:var(--box-bg); padding:14px; border-radius:12px; border:1px solid var(--line); margin-bottom:14px;">
-            <label style="font-size:0.85rem; font-weight:700;">Add friend by mobile number</label>
-            <div style="display:flex; gap:6px; margin-bottom:8px;">
-              <select id="input-country-code" style="width:96px; padding:10px; font-weight:600;">
-                <option value="+91" selected>🇮🇳 +91</option>
-                <option value="+1">🇺🇸 +1</option>
-                <option value="+44">🇬🇧 +44</option>
-                <option value="+971">🇦🇪 +971</option>
-                <option value="+65">🇸🇬 +65</option>
-                <option value="+61">🇦🇺 +61</option>
-                <option value="+49">🇩🇪 +49</option>
-              </select>
-              <input type="tel" id="input-mobile-number" placeholder="Mobile number" style="flex:1;">
-            </div>
-            <div style="display:flex; gap:8px;">
-              <input type="text" id="input-mobile-name" placeholder="Display name (optional)" style="flex:1;">
-              <button type="button" class="btn btn-secondary" data-call="addFriendByMobile" style="white-space:nowrap;">+ Save contact</button>
             </div>
           </div>
 
@@ -746,7 +726,7 @@
           <div class="card-header-row">
             <div>
               <h2>Friends &amp; contacts (<span id="global-friends-count">0</span>)</h2>
-              <span style="font-size:0.8rem; color:var(--muted);">Approved Google connections and saved local contacts</span>
+              <span style="font-size:0.8rem; color:var(--muted);">Approved Gmail connections and saved local contacts</span>
             </div>
           </div>
 
@@ -766,7 +746,7 @@
   </section>
 
   <footer class="app-footer">
-    <p>Privacy: FairShare stores your ledger in this browser. Google sign-in is optional and is used only to sync groups you belong to, friend requests, and receipt photos. Receipts stay on this device until you are signed in. Nothing here is sold or used for ads.</p>
+    <p>Privacy: FairShare stores your ledger in this browser. Gmail sign-in is optional and is used only to sync groups you belong to, friend requests, and receipt photos. Receipts stay on this device until you are signed in. Nothing here is sold or used for ads.</p>
   </footer>
   </main>
   </div>
@@ -914,7 +894,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v35";
+    const APP_BUILD = "v36";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1483,7 +1463,7 @@
 
     // Account-wide group deletions. deletedGroups lives on user_profiles/{uid}
     // so a group deleted on one device stays deleted on every device signed in
-    // with the same Google account, while other members keep their own copy.
+    // with the same Gmail account, while other members keep their own copy.
     function saveDeletedGroupsToCloud() {
       if (!fx || !currentUser || !currentUser.uid) return;
       if (deletedGroupsWriteInFlight) {
@@ -1876,49 +1856,6 @@
       if (inputEl) inputEl.value = "";
     };
 
-    // Mobile Number Feature
-    window.addFriendByMobile = function() {
-      if (!currentUser) {
-        toast("Sign in to manage your saved friends.");
-        return;
-      }
-      const codeEl = document.getElementById("input-country-code");
-      const numEl = document.getElementById("input-mobile-number");
-      const nameEl = document.getElementById("input-mobile-name");
-
-      const code = codeEl ? codeEl.value : "+91";
-      const rawNum = numEl ? numEl.value.replace(/[^0-9]/g, "") : "";
-      const optionalName = nameEl ? nameEl.value.trim() : "";
-
-      if (rawNum.length < 7 || rawNum.length > 15) {
-        toast("Please enter a valid mobile number (7 to 15 digits).");
-        return;
-      }
-
-      const formattedPhone = `${code} ${rawNum}`;
-      const displayName = optionalName || formattedPhone;
-
-      if (appState.friends.some(f => f.phone && f.phone.replace(/[^0-9]/g, "") === (code + rawNum).replace(/[^0-9]/g, ""))) {
-        toast(`Mobile number ${formattedPhone} is already in your friends roster.`);
-        return;
-      }
-
-      appState.friends.push({
-        id: "f_mob_" + Date.now(),
-        name: displayName,
-        phone: formattedPhone,
-        type: "mobile"
-      });
-
-      saveState();
-      renderFriendsRoster();
-      renderFriendPickerDropdown();
-
-      if (numEl) numEl.value = "";
-      if (nameEl) nameEl.value = "";
-      toast(`Saved ${displayName} to your friends roster!`);
-    };
-
     window.renameFriendPrompt = async function(friendId) {
       if (!currentUser) {
         toast("Sign in to manage your saved friends.");
@@ -1960,7 +1897,7 @@
 
     window.copyMyEmail = async function() {
       if (!currentUser || !currentUser.email) {
-        toast("Please sign in with Google (top right) first to copy your verified account email.");
+        toast("Please sign in with Gmail (top right) first to copy your verified account email.");
         return;
       }
       try {
@@ -1977,7 +1914,7 @@
 
     window.checkIncomingRequestsManual = async function() {
       if (!fx || !currentUser) {
-        toast("Please sign in with Google first.");
+        toast("Please sign in with Gmail first.");
         return;
       }
       const myEmail = (currentUser.email || "").toLowerCase().trim();
@@ -2013,7 +1950,7 @@
       const inputEl = document.getElementById("input-friend-email");
       const rawInput = (inputEl ? inputEl.value : "").trim();
       if (!rawInput) {
-        toast("Please enter your friend's Google email address.");
+        toast("Please enter your friend's Gmail address.");
         return;
       }
 
@@ -2024,7 +1961,7 @@
       }
 
       if (!currentUser || !currentUser.email) {
-        toast("Please sign in with Google first.");
+        toast("Please sign in with Gmail first.");
         return;
       }
 
@@ -2243,7 +2180,7 @@
         if (!currentUser) {
           incomingRequestsContainer.innerHTML = `
             <div style="text-align:center; color:var(--muted); padding:16px; background:var(--box-bg); border-radius:10px; font-size:0.85rem;">
-              Sign in with Google to view incoming connection requests.
+              Sign in with Gmail to view incoming connection requests.
             </div>`;
         } else if (count === 0) {
           incomingRequestsContainer.innerHTML = `
@@ -3007,7 +2944,7 @@
       const inviteUrl = `${window.location.origin}${window.location.pathname}?joinGroup=${encodeURIComponent(g.id)}&groupName=${encodeURIComponent(g.name)}&by=${encodeURIComponent(myName)}#friends`;
 
       const subject = encodeURIComponent(`Split expenses on FairShare with ${myName}`);
-      const body = encodeURIComponent(`Hey! I am using FairShare to track and split our expenses.\n\nOpen this link to join "${g.name}":\n${inviteUrl}\n\nSign in with Google after opening the link if you want the expenses to sync live.\n\nCheers`);
+      const body = encodeURIComponent(`Hey! I am using FairShare to track and split our expenses.\n\nOpen this link to join "${g.name}":\n${inviteUrl}\n\nSign in with Gmail after opening the link if you want the expenses to sync live.\n\nCheers`);
 
       window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`, '_blank');
     };
@@ -4662,21 +4599,21 @@
       const code = error?.code || "";
       switch (code) {
         case "auth/unauthorized-domain":
-          return "This site is not authorized for Google sign-in. Add it under Firebase Authentication - Authorized domains, then try again.";
+          return "This site is not authorized for Gmail sign-in. Add it under Firebase Authentication - Authorized domains, then try again.";
         case "auth/popup-blocked":
-          return "Your browser blocked the Google sign-in window. Allow pop-ups for this site, then try again.";
+          return "Your browser blocked the Gmail sign-in window. Allow pop-ups for this site, then try again.";
         case "auth/popup-closed-by-user":
         case "auth/cancelled-popup-request":
-          return "Google sign-in was closed before it finished. Please try again.";
+          return "Gmail sign-in was closed before it finished. Please try again.";
         case "auth/operation-not-supported-in-this-environment":
         case "auth/web-storage-unsupported":
-          return "This browser is blocking the storage Google sign-in needs. Allow site data (or try Chrome), reload, then sign in.";
+          return "This browser is blocking the storage Gmail sign-in needs. Allow site data (or try Chrome), reload, then sign in.";
         case "auth/network-request-failed":
-          return "The network dropped during Google sign-in. Check your connection and try again.";
+          return "The network dropped during Gmail sign-in. Check your connection and try again.";
         case "fairshare/sign-in-timeout":
-          return "Google sign-in did not finish. Close any Google window, then try again.";
+          return "Gmail sign-in did not finish. Close any Gmail window, then try again.";
         default:
-          return "Google sign-in did not finish. Please try again.";
+          return "Gmail sign-in did not finish. Please try again.";
       }
     }
 
@@ -4700,7 +4637,7 @@
         ]);
       } catch (err) {
         if (!fx) ensureCloudPromise = null;
-        toast("Google is unreachable. FairShare still works on this device.");
+        toast("Gmail sign-in is unreachable. FairShare still works on this device.");
         return;
       }
       if (currentUser) {
@@ -4733,7 +4670,7 @@
           ]);
           const signedInUser = credential?.user || fx.auth.currentUser;
           if (signedInUser) applyAuthState(signedInUser);
-          else toast("Google sign-in completed without a user session. Please try again.");
+          else toast("Gmail sign-in completed without a user session. Please try again.");
         } catch (error) {
           console.error("Auth error:", error?.code || error);
           toast(authErrorMessage(error));
@@ -4790,7 +4727,7 @@
           renderFriendRequestsUI();
         }, (err) => console.warn("Outgoing requests note:", err));
 
-      // 3. Discover and live-sync every group this Google account belongs to.
+      // 3. Discover and live-sync every group this Gmail account belongs to.
       if (unsubscribeUserGroupsListener) unsubscribeUserGroupsListener();
       unsubscribeUserGroupsListener = watchQuery(fx, "groups", "memberEmails", "array-contains", myEmail, (snapshot) => {
         let changed = false;
@@ -5053,7 +4990,7 @@
       if (!friend || !friend.email) {
         if (!options.quiet && friendName && !missingEmailNoted.has(friendName)) {
           missingEmailNoted.add(friendName);
-          toast(`Add ${friendName}'s Google email on the Friends page so this 1-on-1 can sync.`);
+          toast(`Add ${friendName}'s Gmail address on the Friends page so this 1-on-1 can sync.`);
         }
         return;
       }
@@ -5121,7 +5058,7 @@
         const title = document.getElementById("invite-modal-title");
         const desc = document.getElementById("invite-modal-desc");
         if (title) title.textContent = `Join "${groupName}"`;
-        if (desc) desc.textContent = `${byName}${byEmail ? " (" + byEmail + ")" : ""} invited you to join "${groupName}". Sign in with Google if you want expenses to sync live.`;
+        if (desc) desc.textContent = `${byName}${byEmail ? " (" + byEmail + ")" : ""} invited you to join "${groupName}". Sign in with Gmail if you want expenses to sync live.`;
         if (modal) modal.classList.add("active");
       }
     }
@@ -5176,7 +5113,7 @@
       window.history.replaceState({}, document.title, window.location.pathname + "#friends");
       toast(currentUser
         ? `Joined "${name}". Expenses sync with ${by} while you stay signed in.`
-        : `Joined "${name}" on this device. Sign in with Google to sync live.`);
+        : `Joined "${name}" on this device. Sign in with Gmail to sync live.`);
     };
 
     window.declineGroupInvite = function() {

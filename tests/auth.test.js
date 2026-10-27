@@ -126,7 +126,14 @@ test("an old invite cannot resurrect a group deleted on another device", () => {
   assert.doesNotMatch(invite, /deletedGroups = \(appState\.deletedGroups/);
 });
 
+test("phone contact entry is removed and sign-in copy says Gmail", () => {
+  assert.doesNotMatch(html, /addFriendByMobile|input-mobile-number|input-mobile-name/i);
+  assert.doesNotMatch(html, /Add friend by mobile number/i);
+  assert.match(html, /Sign in with Gmail/);
+  assert.doesNotMatch(html, />Sign in with Google</);
+});
+
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v35"/);
+  assert.match(sw, /const CACHE = "fairshare-v36"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });
