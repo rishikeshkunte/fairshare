@@ -596,6 +596,9 @@
           <div style="margin-top:6px; font-size:0.78rem; color:var(--muted);">
             Sign in to connect seamlessly with friends via email and sync live across devices.
           </div>
+          <div id="cloud-sync-status" style="margin-top:4px; font-size:0.78rem; color:var(--muted);">
+            Cloud sync: waiting for sign-in
+          </div>
         </div>
 
         <!-- Group Management -->
@@ -911,7 +914,7 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
-    const APP_BUILD = "v33";
+    const APP_BUILD = "v34";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1255,6 +1258,8 @@
           id: group.id || id,
           members: members.length ? members : ["You"],
           memberLinks: group.memberLinks && typeof group.memberLinks === "object" ? group.memberLinks : {},
+          memberEmails: (Array.isArray(group.memberEmails) ? group.memberEmails : [])
+            .filter(email => typeof email === "string" && email),
           transactions: (Array.isArray(group.transactions) ? group.transactions : [])
             .filter(tx => tx && typeof tx === "object"),
           deletedTransactions: (Array.isArray(group.deletedTransactions) ? group.deletedTransactions : [])
@@ -1372,14 +1377,20 @@
       memberLinks[getMyGroupMemberName(g)] = myEmail;
       // Retain linked members discovered from the shared group even if they are
       // not in this browser's local friend roster.
-      const memberEmails = [myEmail, myEmailNorm, ...Object.values(memberLinks).flatMap(email => [
-        String(email || "").toLowerCase().trim(),
-        normalizeEmail(email)
-      ])];
+      const memberEmails = new Set([
+        ...(Array.isArray(g.memberEmails) ? g.memberEmails : []),
+        myEmail,
+        myEmailNorm,
+        ...Object.values(memberLinks).flatMap(email => [
+          String(email || "").toLowerCase().trim(),
+          normalizeEmail(email)
+        ])
+      ]);
       (appState.friends || []).forEach(friend => {
         if (!friend.email || !g.members.includes(friend.name)) return;
         const friendEmail = (friend.email || "").toLowerCase().trim();
-        memberEmails.push(friendEmail, normalizeEmail(friendEmail));
+        memberEmails.add(friendEmail);
+        memberEmails.add(normalizeEmail(friendEmail));
         memberLinks[friend.name] = friendEmail;
       });
       g.memberLinks = memberLinks;
@@ -1388,12 +1399,20 @@
       fx.storeMod.runTransaction(fx.db, async transaction => {
         const snapshot = await transaction.get(groupRef);
         const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
+        // Never drop a member's discovery email. A save from one device used to
+        // replace memberEmails with only that device's addresses, which made the
+        // group disappear from other members' group lists.
+        (Array.isArray(cloudData.memberEmails) ? cloudData.memberEmails : []).forEach(email => {
+          if (typeof email === "string" && email) memberEmails.add(email);
+        });
         const merged = mergePairLedger({
           localTransactions: stripReceiptBytes(g.transactions),
           remoteTransactions: cloudData.transactions || [],
           localDeleted: g.deletedTransactions || [],
           remoteDeleted: cloudData.deletedTransactions || []
         });
+        const finalMemberEmails = Array.from(memberEmails).filter(Boolean);
+        g.memberEmails = finalMemberEmails;
         transaction.set(groupRef, {
           id: g.id,
           schemaVersion: 9,
@@ -1402,7 +1421,7 @@
           members: g.members,
           simplifyDebts: g.simplifyDebts !== false,
           memberLinks,
-          memberEmails: Array.from(new Set(memberEmails)),
+          memberEmails: finalMemberEmails,
           transactions: merged.transactions,
           deletedTransactions: merged.deletedTransactions,
           updatedAt: serverTimestamp(fx),
@@ -1487,6 +1506,7 @@
     const btnExportCsv = document.getElementById("btn-export-csv");
 
     const myDisplayAccount = document.getElementById("my-display-account");
+    const cloudSyncStatus = document.getElementById("cloud-sync-status");
     const inputNewMemberName = document.getElementById("input-new-member-name");
     const newFriendName = document.getElementById("new-friend-name");
     const friendsListContainer = document.getElementById("friends-list-container");
@@ -4540,11 +4560,16 @@
       return ensureCloudPromise;
     }
 
+    function setCloudSyncStatus(text) {
+      if (cloudSyncStatus) cloudSyncStatus.textContent = text;
+    }
+
     function updateAuthUI(user) {
       const authGate = document.getElementById("auth-gate");
       const appShell = document.getElementById("app-shell");
       if (authGate) authGate.hidden = Boolean(user);
       if (appShell) appShell.hidden = !user;
+      setCloudSyncStatus(user ? "Cloud sync: connecting..." : "Cloud sync: waiting for sign-in");
       const authBtn = document.getElementById("auth-btn-label");
       if (!authBtn) return;
       if (user) {
@@ -4724,6 +4749,7 @@
               currency: cloudData.currency || "₹",
               members: Array.isArray(cloudData.members) ? cloudData.members : ["You"],
               memberLinks: cloudData.memberLinks || {},
+              memberEmails: Array.isArray(cloudData.memberEmails) ? cloudData.memberEmails : [],
               simplifyDebts: cloudData.simplifyDebts !== false,
               transactions: mergePairLedger({
                 localTransactions: [],
@@ -4761,6 +4787,10 @@
               localGroup.memberLinks = cloudData.memberLinks;
               changed = true;
             }
+            if (Array.isArray(cloudData.memberEmails) && JSON.stringify(localGroup.memberEmails || []) !== JSON.stringify(cloudData.memberEmails)) {
+              localGroup.memberEmails = cloudData.memberEmails;
+              changed = true;
+            }
             if (typeof cloudData.simplifyDebts === "boolean" && localGroup.simplifyDebts !== cloudData.simplifyDebts) {
               localGroup.simplifyDebts = cloudData.simplifyDebts;
               changed = true;
@@ -4768,11 +4798,15 @@
           }
           addGroupMembersToRoster(appState.groups[groupId]);
         });
+        setCloudSyncStatus(`Cloud sync: ${snapshot.size} group(s)`);
         if (changed) {
           persistLocalState();
           renderAll();
         }
-      }, (err) => console.warn("Cloud group discovery note:", err));
+      }, (err) => {
+        console.warn("Cloud group discovery note:", err?.code || err);
+        setCloudSyncStatus(`Cloud sync failed: ${err?.code || "unknown error"}`);
+      });
 
       // 4. Listen to the active group for live updates.
       if (g.id) listenToCloudGroup(g.id);
@@ -4780,6 +4814,72 @@
       // 5. Bilateral 1-on-1 pair listeners are keyed by the same canonical pair id
       // used by every writer, while rules derive membership from the auth token.
       refreshDirectListeners();
+
+      // 6. Upload groups that exist only in this device's UID cache so the same
+      // account can see them on every browser. Existing cloud groups are left alone.
+      pushLocalGroupsToCloud(user);
+    }
+
+    async function pushLocalGroupsToCloud(user) {
+      if (!fx || !user) return;
+      const myEmail = (user.email || "").toLowerCase().trim();
+      const myEmailNorm = normalizeEmail(myEmail);
+      for (const group of Object.values(appState.groups || {})) {
+        if (!group || !group.id) continue;
+        if ((appState.deletedGroups || []).includes(group.id)) continue;
+        try {
+          const groupRef = fx.storeMod.doc(fx.db, "groups", group.id);
+          const created = await fx.storeMod.runTransaction(fx.db, async (transaction) => {
+            const snapshot = await transaction.get(groupRef);
+            if (snapshot.exists()) return false;
+            const memberLinks = { ...(group.memberLinks || {}) };
+            memberLinks[getMyGroupMemberName(group)] = myEmail;
+            const emails = new Set([myEmail, myEmailNorm]);
+            (Array.isArray(group.memberEmails) ? group.memberEmails : []).forEach(email => {
+              if (typeof email === "string" && email) emails.add(email);
+            });
+            Object.values(memberLinks).forEach(email => {
+              const value = String(email || "").toLowerCase().trim();
+              if (!value) return;
+              emails.add(value);
+              emails.add(normalizeEmail(value));
+            });
+            (appState.friends || []).forEach(friend => {
+              if (!friend.email || !(group.members || []).includes(friend.name)) return;
+              const email = String(friend.email).toLowerCase().trim();
+              if (!email) return;
+              emails.add(email);
+              emails.add(normalizeEmail(email));
+              memberLinks[friend.name] = email;
+            });
+            const finalEmails = Array.from(emails).filter(Boolean);
+            group.memberLinks = memberLinks;
+            group.memberEmails = finalEmails;
+            transaction.set(groupRef, {
+              id: group.id,
+              schemaVersion: 9,
+              name: group.name || "Shared group",
+              currency: group.currency || "₹",
+              members: Array.isArray(group.members) && group.members.length ? group.members : ["You"],
+              simplifyDebts: group.simplifyDebts !== false,
+              memberLinks,
+              memberEmails: finalEmails,
+              transactions: stripReceiptBytes(group.transactions || []),
+              deletedTransactions: Array.isArray(group.deletedTransactions) ? group.deletedTransactions : [],
+              updatedAt: serverTimestamp(fx),
+              updatedBy: myEmail
+            }, { merge: true });
+            return true;
+          });
+          if (created) {
+            persistLocalState();
+            renderAll();
+          }
+        } catch (err) {
+          // A group the signed-in account cannot read/update is left untouched.
+          console.warn("Local group upload note:", err?.code || err?.message || err);
+        }
+      }
     }
 
     function listenToCloudGroup(groupId) {
@@ -4808,6 +4908,7 @@
           group.deletedTransactions = merged.deletedTransactions;
           if (Array.isArray(cloudData.members)) group.members = cloudData.members;
           if (cloudData.memberLinks) group.memberLinks = cloudData.memberLinks;
+          if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
           if (cloudData.currency) group.currency = cloudData.currency;
           if (cloudData.name) group.name = cloudData.name;
           if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
@@ -4970,9 +5071,13 @@
           name: name,
           currency: "₹",
           members: [by],
+          memberLinks: byEmail ? { [by]: byEmail } : {},
+          memberEmails: byEmail ? [String(byEmail).toLowerCase().trim(), normalizeEmail(byEmail)] : [],
           simplifyDebts: true,
           transactions: []
         };
+      } else if (byEmail) {
+        appState.groups[id].memberLinks = { ...(appState.groups[id].memberLinks || {}), [by]: byEmail };
       }
 
       const myName = currentUser ? (currentUser.displayName || currentUser.email.split("@")[0]) : "You";
