@@ -60,7 +60,7 @@ Shares are computed in `computeSplitShares` and must add up to the amount.
 | Percentages | The percents must add up to 100 within half a percent |
 | Shares / ratio | Each person gets `amount × their weight / sum of weights` |
 
-Group expenses are stored on the active group. 1-on-1 expenses are stored in `directTransactions` and do not change the group balance sheet. They do appear in History, Analytics, the home feed, CSV export, and the Direct 1-on-1 list. A 1-on-1 bill with a Google friend also syncs to that friend's account. A local name or mobile number does not.
+Group expenses are stored on the active group. 1-on-1 expenses are stored in `directTransactions` and do not change the group balance sheet. They do appear in History, Analytics, the home feed, and the Direct 1-on-1 list. A 1-on-1 bill with a Google friend also syncs to that friend's account. A local name or mobile number does not.
 
 ## How balances work
 
@@ -75,13 +75,11 @@ The home standing aggregates balances across groups and direct 1-on-1 ledgers. G
 
 Changing the currency symbol does not convert existing numbers. A dinner of 900 stays 900 if you switch from ₹ to $.
 
-## History, charts, and export
+## History and charts
 
 History searches description, payer, category, and notes, and highlights the match. **Clear all** wipes the active group's transactions and the 1-on-1 list after a confirmation. It does not delete groups or friends.
 
 Analytics sums expense amounts by category for the active group and for 1-on-1 bills. **Load sample demo data** replaces the active group's expenses with five sample bills so the charts can be tried on an empty group.
-
-**Export CSV** downloads the active group's transactions plus 1-on-1 bills. Columns: ID, date, scope, type, description, notes, amount, currency, payer, receiver or split participants, and category.
 
 ## Groups and friends
 

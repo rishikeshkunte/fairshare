@@ -366,10 +366,10 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
   cursor: pointer; transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 .btn:hover { background: var(--primary-hover); transform: translateY(-1px); }
-.btn-secondary, .btn-export {
+.btn-secondary {
   background: var(--surface-solid); color: var(--text); border-color: var(--line);
 }
-.btn-secondary:hover, .btn-export:hover { background: var(--hover-item); }
+.btn-secondary:hover { background: var(--hover-item); }
 .btn-settle { background: var(--success); color: white; }
 .btn-settle:hover { filter: brightness(1.05); }
 .btn-block { width: 100%; }
@@ -681,7 +681,6 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
   .app-header { flex-direction: row; align-items: center; flex: 1; }
   .header-actions { flex-direction: row; width: auto; }
   .header-actions .btn { width: auto; padding: 8px 10px; }
-  .header-actions .btn span.label-long { display: none; }
   .dock-group { min-width: 160px; }
   .global-theme-toggle-slot { flex:0 0 auto; }
   .global-theme-toggle-slot .btn { width:auto; min-height:40px; padding:8px 10px; }

@@ -72,12 +72,11 @@ test("friend management and group member picker require sign-in", () => {
   assert.match(html, /window\.quickStartDirectSettle = async function\(friendIdOrName, currentBal\)[\s\S]*?if \(!currentUser\)[\s\S]*?Sign in to view or settle 1-on-1 balances/);
 });
 
-test("signed-out summaries, details, trash, and exports exclude cached 1-on-1 data", () => {
+test("signed-out summaries, details, and trash exclude cached 1-on-1 data", () => {
   assert.match(html, /function renderHomeAllDebts\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
   assert.match(html, /function renderCategoryChart\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
   assert.match(html, /function renderDeletedTransactions\(\)[\s\S]*?filter\(item => currentUser \|\| item\.location !== "direct"\)/);
   assert.match(html, /window\.openDetailModal = function\(id\)[\s\S]*?found\.where === "direct" && !currentUser[\s\S]*?Sign in to view 1-on-1 transaction details/);
-  assert.match(html, /if \(btnExportCsv\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
 });
 
 test("group discovery rules restrict reads to signed-in group members", () => {
@@ -195,6 +194,11 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
   assert.match(html, /window\.declineInvite = function\(\)/);
   assert.match(html, /48 \* 60 \* 60 \* 1000/);
   assert.match(html, /Old invite links are no longer supported/);
+});
+
+test("CSV export and non-working analytics views are removed", () => {
+  assert.doesNotMatch(html, /btn-export-csv|Export CSV|data-analytics-view|Per person|Over time|analyticsView/);
+  assert.match(html, /Spending by category/);
 });
 
 test("self-invites and duplicate connections are rejected", () => {
