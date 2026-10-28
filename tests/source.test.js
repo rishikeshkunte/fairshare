@@ -50,7 +50,7 @@ test("empty state prompts group creation and blocks group payments without a gro
 });
 
 test("signed-out state hides cached friends and direct activity", () => {
-  assert.match(html, /const visibleFriends = appState\.friends \|\| \[\]/);
+  assert.match(html, /const visibleFriends = getVisibleFriends\(\)/);
   assert.doesNotMatch(html.slice(html.indexOf("function renderFriendsRoster()"), html.indexOf("function renderFriendRequestsUI")), /Sign in to see your saved friends/);
   assert.match(html, /scope === "friend" && !currentUser[\s\S]*?Sign in to access your saved friends/);
   assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see saved friends/);
@@ -59,7 +59,7 @@ test("signed-out state hides cached friends and direct activity", () => {
 });
 
 test("create-group modal never renders cached friends while signed out", () => {
-  assert.match(html, /const friendsForGroup = currentUser \? appState\.friends : \[\]/);
+  assert.match(html, /const friendsForGroup = currentUser \? getVisibleFriends\(\) : \[\]/);
   assert.match(html, /if \(!currentUser\)[\s\S]*?Sign in to see your saved friends[\s\S]*?friendsForGroup\.forEach/);
 });
 
@@ -354,7 +354,7 @@ test("friend roster re-renders immediately when authentication changes", () => {
   assert.ok(apply.indexOf("updateAuthUI(user);") >= 0, "signed-in UI is applied");
   assert.ok(apply.indexOf("updateAuthUI(user);") < apply.indexOf("syncUserCloud(user);"));
   assert.ok(apply.indexOf("renderAll();") < apply.indexOf("syncUserCloud(user);"));
-  assert.match(html, /function renderFriendsRoster\(\)[\s\S]*?const visibleFriends = appState\.friends \|\| \[\]/);
+  assert.match(html, /function renderFriendsRoster\(\)[\s\S]*?const visibleFriends = getVisibleFriends\(\)/);
 });
 
 
@@ -379,7 +379,7 @@ test("friends roster displays existing contacts independently of auth rendering"
   const start = html.indexOf("function renderFriendsRoster()");
   const end = html.indexOf("\n    function ", start + 10);
   const roster = html.slice(start, end);
-  assert.match(roster, /const visibleFriends = appState\.friends \|\| \[\]/);
+  assert.match(roster, /const visibleFriends = getVisibleFriends\(\)/);
   assert.doesNotMatch(roster, /if \(!currentUser\)[\s\S]*?Sign in to see your saved friends/);
   assert.match(roster, /No saved friends yet/);
 });
@@ -568,4 +568,14 @@ test("group creation and CSV import confirm success and open group-scoped activi
   assert.match(html, /created successfully/);
   assert.match(html, /actionLabel: "View activity"/);
   assert.match(html, /data-call="openGroupExpensesHistory">View activity/);
+});
+
+test("group-only contacts are hidden from Friends unless explicitly connected", () => {
+  assert.match(html, /function cleanupGroupOnlyFriends\(\)/);
+  assert.match(html, /incomingRequestsLoaded = true/);
+  assert.match(html, /outgoingRequestsLoaded = true/);
+  assert.match(html, /friend\.hidden = true/);
+  assert.match(html, /function getVisibleFriends\(\)/);
+  assert.match(html, /const visibleFriends = getVisibleFriends\(\)/);
+  assert.match(html, /cleanupGroupOnlyFriends\(\);/);
 });

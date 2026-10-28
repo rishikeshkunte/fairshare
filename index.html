@@ -1040,7 +1040,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v71";
+    const APP_BUILD = "v72";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1190,6 +1190,10 @@
       if (!currentUser) return "You";
       const name = String(currentUser.displayName || (currentUser.email || "").split("@")[0] || "You").trim();
       return name || "You";
+    }
+
+    function getVisibleFriends() {
+      return (appState.friends || []).filter(friend => !friend.hidden);
     }
 
     function displayGroupMember(group, name) {
@@ -1342,8 +1346,15 @@
       ].filter(Boolean).map(name => name.toLowerCase());
       group.members.forEach(member => {
         const friend = friendFor(member);
-        let email = normalizeEmail(friend?.email || oldLinks[member] || "");
-        if (!friend && myEmail && selfNames.includes(String(member).toLowerCase())) {
+        const linked = normalizeEmail(oldLinks[member] || "");
+        let email = "";
+        if (linked && myEmail && linked === myEmail) {
+          email = myEmail;
+        } else if (friend?.email) {
+          email = normalizeEmail(friend.email);
+        } else if (linked) {
+          email = linked;
+        } else if (myEmail && selfNames.includes(String(member).toLowerCase())) {
           email = myEmail;
         }
         emailByMember.set(member, email);
@@ -1362,6 +1373,25 @@
         selfMember = candidate;
         changed = true;
       }
+
+      const selfAliases = new Set(["You", selfMember]);
+      const selfLooksLikeAlias = friends.some(friend =>
+        friend.name !== selfMember && Array.isArray(friend.aliases) && friend.aliases.includes(selfMember)
+      );
+      if (selfMember !== displayName && (selfMember === "You" || selfLooksLikeAlias)) {
+        let targetSelfName = displayName;
+        if (group.members.includes(targetSelfName) && targetSelfName !== selfMember) {
+          targetSelfName = group.members.includes("You") ? "You" : `${displayName} (you)`;
+        }
+        if (targetSelfName !== selfMember) {
+          group.members = Array.from(new Set(group.members.map(member => member === selfMember ? targetSelfName : member)));
+          emailByMember.set(targetSelfName, myEmail);
+          emailByMember.delete(selfMember);
+          selfMember = targetSelfName;
+          changed = true;
+        }
+      }
+      selfAliases.add(selfMember);
 
       // Collapse duplicate member identities that share an email.
       const preferred = new Map();
@@ -1415,6 +1445,8 @@
         if (!name) return name;
         if (group.members.includes(name)) return name;
         if (name === "You") return selfMember;
+        if (selfAliases.has(name)) return selfMember;
+        if (myEmail && selfNames.includes(String(name).toLowerCase())) return selfMember;
         const friend = friendFor(name);
         if (friend?.email) {
           const member = group.members.find(item => normalizeEmail(links[item] || "") === normalizeEmail(friend.email));
@@ -1458,6 +1490,24 @@
       };
       (group.transactions || []).forEach(renameTx);
       (group.deletedTransactions || []).forEach(item => renameTx(item?.transaction));
+
+      const allMembersLinked = group.members.every(member => links[member]);
+      if (allMembersLinked) {
+        const allowed = new Set(Object.values(links).filter(Boolean).map(email => normalizeEmail(email)));
+        if (myEmail) allowed.add(myEmail);
+        const currentEmails = Array.isArray(group.memberEmails) ? group.memberEmails : [];
+        const nextEmails = currentEmails.filter(email => allowed.has(normalizeEmail(email)));
+        Object.values(links).forEach(email => {
+          if (email && !nextEmails.some(item => normalizeEmail(item) === normalizeEmail(email))) nextEmails.push(email);
+        });
+        if (myEmail && currentUser?.email && !nextEmails.some(item => normalizeEmail(item) === myEmail)) {
+          nextEmails.push(currentUser.email);
+        }
+        if (JSON.stringify(nextEmails) !== JSON.stringify(currentEmails)) {
+          group.memberEmails = nextEmails;
+          changed = true;
+        }
+      }
 
       return changed;
     }
@@ -2019,6 +2069,7 @@
         renderFriendsRoster();
         renderFriendPickerDropdown();
         renderDirectFriendDropdown();
+        cleanupGroupOnlyFriends();
         if (localChanged) refreshDirectListeners();
         if (groupsChanged) {
           if (removedActive) listenToCloudGroup(appState.activeGroupId);
@@ -2361,6 +2412,10 @@
     // --- Members & Friends Management ---
     let localIncomingRequests = [];
     let localOutgoingRequests = [];
+    let incomingRequestsLoaded = false;
+    let outgoingRequestsLoaded = false;
+    let incomingAcceptedEmails = new Set();
+    let outgoingAcceptedEmails = new Set();
     let unsubIncomingRequests = null;
     let unsubOutgoingRequests = null;
 
@@ -2809,6 +2864,10 @@
           existing.name = nm;
           changed = true;
         }
+        if (existing.hidden) {
+          existing.hidden = false;
+          changed = true;
+        }
       } else {
         appState.friends.push({
           id: newId(),
@@ -2833,6 +2892,59 @@
           syncDirectPairExpense(linked.name, { quiet: true });
         }
       }
+    }
+
+    function cleanupGroupOnlyFriends() {
+      if (!currentUser || !incomingRequestsLoaded || !outgoingRequestsLoaded) return false;
+      const accepted = new Set([...incomingAcceptedEmails, ...outgoingAcceptedEmails].map(normalizeEmail));
+      const groupEmails = new Set();
+      Object.values(appState.groups || {}).forEach(group => {
+        Object.values(group.memberLinks || {}).forEach(email => {
+          if (email) groupEmails.add(normalizeEmail(email));
+        });
+        (group.memberEmails || []).forEach(email => {
+          if (email) groupEmails.add(normalizeEmail(email));
+        });
+      });
+      const directNames = new Set(
+        (appState.directTransactions || [])
+          .filter(tx => tx.friend)
+          .map(tx => canonicalFriendName(tx.friend))
+      );
+      const myEmail = normalizeEmail(currentUser.email || "");
+      let changed = false;
+      appState.friends.forEach(friend => {
+        if (!friend?.email) return;
+        const email = normalizeEmail(friend.email);
+        if (email && email === myEmail) return;
+        const connected = accepted.has(email) || directNames.has(friend.name);
+        if (connected) {
+          if (friend.hidden) {
+            friend.hidden = false;
+            changed = true;
+          }
+          return;
+        }
+        if (groupEmails.has(email) && !friend.hidden) {
+          friend.hidden = true;
+          changed = true;
+        }
+      });
+      if (changed) {
+        if (selectedDirectFriend && appState.friends.some(friend =>
+          friend.name === selectedDirectFriend && friend.hidden
+        )) {
+          selectedDirectFriend = "";
+        }
+        persistLocalState();
+        saveFriendsRosterToCloud();
+        renderFriendsRoster();
+        renderDirectFriendDropdown();
+        renderFriendPickerDropdown();
+        renderFriendDetail();
+        renderAll();
+      }
+      return changed;
     }
 
     function addGroupMembersToRoster(group) {
@@ -2979,7 +3091,7 @@
     }
 
     function renderFriendsRoster() {
-      const visibleFriends = appState.friends || [];
+      const visibleFriends = getVisibleFriends();
       if (globalFriendsCount) globalFriendsCount.textContent = visibleFriends.length;
       if (dashFriendsDesc) dashFriendsDesc.textContent = `${visibleFriends.length} friends`;
       if (!friendsListContainer) return;
@@ -3082,7 +3194,7 @@
     function renderFriendDetail() {
       const card = document.getElementById("friend-detail-card");
       if (!card) return;
-      const friends = appState.friends || [];
+      const friends = getVisibleFriends();
       if (!friends.length) {
         card.hidden = true;
         return;
@@ -3249,7 +3361,7 @@
         return;
       }
       if (btnAddFriendToGroup) btnAddFriendToGroup.disabled = false;
-      const availableFriends = appState.friends.filter(f => !g.members.includes(f.name));
+      const availableFriends = getVisibleFriends().filter(f => !g.members.includes(f.name));
       availableFriends.forEach(f => {
         const opt = document.createElement("option");
         opt.value = f.name;
@@ -3403,7 +3515,7 @@
         if (modalGroupName) modalGroupName.value = "";
         if (modalFriendsCheckboxes) {
           modalFriendsCheckboxes.innerHTML = "";
-          const friendsForGroup = currentUser ? appState.friends : [];
+          const friendsForGroup = currentUser ? getVisibleFriends() : [];
           if (!currentUser) {
             modalFriendsCheckboxes.innerHTML = `<span style="font-size:0.8rem; color:var(--muted);">Sign in to see your saved friends.</span>`;
           } else if (friendsForGroup.length === 0) {
@@ -4032,13 +4144,14 @@
         selectedDirectFriend = "";
         return;
       }
-      if (appState.friends.length === 0) {
+      const selectableFriends = getVisibleFriends();
+      if (selectableFriends.length === 0) {
         selectEl.innerHTML = `<option value="">No saved friends yet</option>`;
         selectedDirectFriend = "";
         return;
       }
 
-      appState.friends.forEach((f, idx) => {
+      selectableFriends.forEach((f, idx) => {
         const opt = document.createElement("option");
         opt.value = f.name;
         opt.textContent = `${f.name}${f.email ? ' (' + f.email + ')' : (f.phone ? ' (' + f.phone + ')' : '')}`;
@@ -6908,31 +7021,41 @@
       if (unsubIncomingRequests) unsubIncomingRequests();
       unsubIncomingRequests = watchQuery(fx, "friend_requests", "toEmail", "==", myEmail, (snapshot) => {
           localIncomingRequests = [];
+          incomingAcceptedEmails = new Set();
+          incomingRequestsLoaded = true;
           snapshot.forEach(doc => {
             const data = doc.data();
             data.id = doc.id;
+            if (data.status === "accepted" && data.fromEmail) {
+              incomingAcceptedEmails.add(normalizeEmail(data.fromEmail));
+            }
             if (data.status === "pending") {
               localIncomingRequests.push(data);
             }
           });
           renderFriendRequestsUI();
+          cleanupGroupOnlyFriends();
         }, (err) => console.warn("Incoming requests note:", err));
 
       // 2. Listen for outgoing friend requests
       if (unsubOutgoingRequests) unsubOutgoingRequests();
       unsubOutgoingRequests = watchQuery(fx, "friend_requests", "fromEmail", "==", myEmail, (snapshot) => {
           localOutgoingRequests = [];
+          outgoingAcceptedEmails = new Set();
+          outgoingRequestsLoaded = true;
           snapshot.forEach(doc => {
             const data = doc.data();
             data.id = doc.id;
             localOutgoingRequests.push(data);
 
             if (data.status === "accepted") {
+              if (data.toEmail) outgoingAcceptedEmails.add(normalizeEmail(data.toEmail));
               const friendName = data.acceptedByName || data.toEmail.split("@")[0];
               addApprovedFriend(data.toEmail, friendName);
             }
           });
           renderFriendRequestsUI();
+          cleanupGroupOnlyFriends();
         }, (err) => console.warn("Outgoing requests note:", err));
 
       // 3. Discover and live-sync every group this Gmail account belongs to.
