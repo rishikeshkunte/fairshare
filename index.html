@@ -1010,7 +1010,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v55";
+    const APP_BUILD = "v56";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1153,6 +1153,79 @@
         if (friend) return friend.name;
       }
       return group.members.includes("You") ? "You" : (group.members[0] || "You");
+    }
+
+    function myGroupSelfName() {
+      if (!currentUser) return "You";
+      const name = String(currentUser.displayName || (currentUser.email || "").split("@")[0] || "You").trim();
+      return name || "You";
+    }
+
+    function displayGroupMember(group, name) {
+      if (!name) return "";
+      return name === getMyGroupMemberName(group) ? "You" : name;
+    }
+
+    function transactionDisplayName(tx, name) {
+      if (!name) return "";
+      if (tx && tx.groupId) {
+        return displayGroupMember(appState.groups[tx.groupId] || getGroup(), name);
+      }
+      return name;
+    }
+
+    // Older groups stored the creator as a literal "You" member. Replace that
+    // placeholder with the creator's display name on the creator's device so
+    // other accounts see "Rishikesh owes ..." instead of another "You".
+    function migrateGroupSelfName(group) {
+      if (!group || !Array.isArray(group.members)) return false;
+      const myName = getMyGroupMemberName(group);
+      const actual = myGroupSelfName();
+      if (myName !== "You" || actual === "You" || !group.members.includes("You")) return false;
+      let changed = false;
+      const renamedMembers = [];
+      group.members.forEach(name => {
+        const next = name === "You" ? actual : name;
+        if (!renamedMembers.includes(next)) renamedMembers.push(next);
+      });
+      if (JSON.stringify(renamedMembers) !== JSON.stringify(group.members)) {
+        group.members = renamedMembers;
+        changed = true;
+      }
+      if (group.memberLinks && Object.prototype.hasOwnProperty.call(group.memberLinks, "You")) {
+        const email = group.memberLinks.You;
+        delete group.memberLinks.You;
+        if (!group.memberLinks[actual]) group.memberLinks[actual] = email;
+        changed = true;
+      }
+      const migrateTx = tx => {
+        if (!tx || typeof tx !== "object") return;
+        let txChanged = false;
+        if (tx.payer === "You") {
+          tx.payer = actual;
+          txChanged = true;
+        }
+        if (tx.receiver === "You") {
+          tx.receiver = actual;
+          txChanged = true;
+        }
+        if (tx.shares && Object.prototype.hasOwnProperty.call(tx.shares, "You")) {
+          const share = Number(tx.shares.You) || 0;
+          delete tx.shares.You;
+          tx.shares[actual] = (Number(tx.shares[actual]) || 0) + share;
+          txChanged = true;
+        }
+        if (txChanged) {
+          tx.updatedAt = Date.now();
+          if (!tx.timestamp) tx.timestamp = Date.now();
+          changed = true;
+        }
+      };
+      (group.transactions || []).forEach(migrateTx);
+      (group.deletedTransactions || []).forEach(item => {
+        if (item) migrateTx(item.transaction);
+      });
+      return changed;
     }
 
     function escapeHtml(value) {
@@ -2333,15 +2406,22 @@
     function addGroupMembersToRoster(group) {
       if (!currentUser || !group) return;
       const myName = getMyGroupMemberName(group);
+      // Group membership must not create friendships. Only enrich an existing
+      // roster contact with an email that the group knows about.
       (group.members || []).forEach(member => {
-        if (!member || member === "You" || member === myName) return;
+        if (!member || member === myName) return;
         const email = (group.memberLinks || {})[member] || "";
+        if (!email) return;
         const existing = appState.friends.find(friend =>
           friend.name === member
-          || (email && normalizeEmail(friend.email || "") === normalizeEmail(email))
+          || normalizeEmail(friend.email || "") === normalizeEmail(email)
         );
-        if (!existing || (email && !normalizeEmail(existing.email || ""))) {
-          addApprovedFriend(email, member);
+        if (existing && !normalizeEmail(existing.email || "")) {
+          existing.email = String(email).toLowerCase().trim();
+          existing.approved = true;
+          existing.type = "google";
+          saveState();
+          renderFriendsRoster();
         }
       });
     }
@@ -2938,7 +3018,7 @@
         const selectedFriends = Array.from(document.querySelectorAll(".modal-friend-check:checked")).map(cb => cb.value);
 
         const newId = "group_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-        const members = ["You", ...selectedFriends];
+        const members = [myGroupSelfName(), ...selectedFriends];
 
         appState.groups[newId] = {
           id: newId,
@@ -3188,13 +3268,16 @@
       const participants = currentExpenseScope === "group" 
         ? g.members 
         : (selectedDirectFriend ? ["You", selectedDirectFriend] : ["You"]);
+      const participantLabel = (name) => currentExpenseScope === "group"
+        ? displayGroupMember(g, name)
+        : name;
 
       if (currentSplitMode === "equal") {
         html += `<div style="font-size:0.85rem; color:var(--muted); margin-bottom:8px;">Choose who owes part of this bill. The payer is recorded separately:</div>`;
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><input type="checkbox" class="split-equal-check" value="${escapeHtml(m)}" checked onchange="updateEqualPreview()"> ${escapeHtml(m)}</label>
+              <label><input type="checkbox" class="split-equal-check" value="${escapeHtml(m)}" checked onchange="updateEqualPreview()"> ${escapeHtml(participantLabel(m))}</label>
               <span class="equal-share" data-member="${escapeHtml(m)}" style="font-size:0.88rem; font-weight:600; color:var(--muted);">${cur}0.00</span>
             </div>
           `;
@@ -3204,7 +3287,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label>${escapeHtml(m)}</label>
+              <label>${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <span>${cur}</span>
                 <input type="number" step="0.01" class="split-exact-input" data-member="${escapeHtml(m)}" placeholder="0.00" style="width:100px; padding:6px;" oninput="updateExactPreview()">
@@ -3218,7 +3301,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label>${escapeHtml(m)}</label>
+              <label>${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <input type="number" step="0.01" class="split-percent-input" data-member="${escapeHtml(m)}" placeholder="0" style="width:70px; padding:6px;" oninput="updatePercentPreview()">
                 <span>%</span>
@@ -3232,7 +3315,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label>${escapeHtml(m)}</label>
+              <label>${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <input type="number" step="1" min="0" class="split-ratio-input" data-member="${escapeHtml(m)}" value="1" style="width:70px; padding:6px;" oninput="updateRatioPreview()">
                 <span>share(s)</span>
@@ -3988,12 +4071,13 @@
           g.members.forEach(name => {
             const opt = document.createElement("option");
             opt.value = name;
-            opt.textContent = name;
+            opt.textContent = displayGroupMember(g, name);
             inspectSelect.appendChild(opt);
           });
         }
 
         g.members.forEach(m => {
+          const displayName = displayGroupMember(g, m);
           const spent = totalSpentByPerson[m] || 0;
           const bal = balances[m] || 0;
           const shareOwed = g.transactions.reduce((sum, t) => {
@@ -4004,7 +4088,7 @@
           const balClass = bal > 0.009 ? "text-success" : (bal < -0.009 ? "text-danger" : "text-muted bal");
 
           tr.innerHTML = `
-            <td><div class="member-cell"><span class="avatar">${escapeHtml(m.slice(0,1).toUpperCase())}</span><strong>${escapeHtml(m)}</strong></div></td>
+            <td><div class="member-cell"><span class="avatar">${escapeHtml(displayName.slice(0,1).toUpperCase())}</span><strong>${escapeHtml(displayName)}</strong></div></td>
             <td style="text-align:right;">${formatMoney(spent, cur)}</td>
             <td style="text-align:right;">${formatMoney(shareOwed, cur)}</td>
             <td style="text-align:right;"><span class="${balClass}">${formatSignedMoney(bal, cur)}</span></td>
@@ -4092,7 +4176,7 @@
             row.className = "settlement-card";
             row.innerHTML = `
               <div>
-                <strong>${escapeHtml(debt.from)}</strong> owes <strong>${escapeHtml(debt.to)}</strong>
+                <strong>${escapeHtml(displayGroupMember(g, debt.from))}</strong> owes <strong>${escapeHtml(displayGroupMember(g, debt.to))}</strong>
                 <span style="font-size:0.78rem; color:var(--muted); display:block;">Suggested settlement</span>
               </div>
               <span class="settle-badge">${formatMoney(debt.amount, cur)}</span>
@@ -4116,9 +4200,11 @@
           item.className = "transaction-item";
           item.onclick = () => window.openDetailModal(tx.id);
           const letter = tx.type === "settlement" ? "S" : (tx.category || "O").slice(0, 1).toUpperCase();
+          const displayPayer = displayGroupMember(g, tx.payer);
+          const displayReceiver = displayGroupMember(g, tx.receiver);
           const detail = tx.type === "settlement"
-            ? `${escapeHtml(tx.payer)} paid ${escapeHtml(tx.receiver)}`
-            : `Paid by ${escapeHtml(tx.payer)}`;
+            ? `${escapeHtml(displayPayer)} paid ${escapeHtml(displayReceiver)}`
+            : `Paid by ${escapeHtml(displayPayer)}`;
           item.innerHTML = `
             <div style="display:flex; align-items:center; gap:10px;">
               <div class="cat-badge-icon">${letter}</div>
@@ -4183,7 +4269,7 @@
           return;
         }
         if (dashSettleDesc) dashSettleDesc.textContent = `${edges.length} separate debts`;
-        paintPreview(`${edges[0].from} → ${edges[0].to}`);
+        paintPreview(`${displayGroupMember(g, edges[0].from)} → ${displayGroupMember(g, edges[0].to)}`);
         edges.forEach(d => appendSettlementRow(d, cur));
         return;
       }
@@ -4198,7 +4284,7 @@
       }
 
       if (dashSettleDesc) dashSettleDesc.textContent = `${debts.length} optimal debt settlements`;
-      paintPreview(`${debts[0].from} pays ${debts[0].to}`);
+      paintPreview(`${displayGroupMember(g, debts[0].from)} pays ${displayGroupMember(g, debts[0].to)}`);
 
       debts.forEach(d => appendSettlementRow(d, cur));
     }
@@ -4212,8 +4298,11 @@
           ? simplifiedDebts(netBalances(group))
           : pairwiseDebts(group);
         debts.forEach(debt => items.push({
-          from: debt.from, to: debt.to, amount: debt.amount,
-          currency: group.currency, context: group.name
+          from: displayGroupMember(group, debt.from),
+          to: displayGroupMember(group, debt.to),
+          amount: debt.amount,
+          currency: group.currency,
+          context: group.name
         }));
       });
 
@@ -4259,7 +4348,8 @@
       const card = document.createElement("div");
       card.className = "settlement-card";
       const info = document.createElement("div");
-      info.innerHTML = `<strong>${escapeHtml(d.from)}</strong> owes <strong>${escapeHtml(d.to)}</strong><span style="font-size:0.8rem; color:var(--muted); display:block;">Suggested settlement</span>`;
+      const group = getGroup();
+      info.innerHTML = `<strong>${escapeHtml(displayGroupMember(group, d.from))}</strong> owes <strong>${escapeHtml(displayGroupMember(group, d.to))}</strong><span style="font-size:0.8rem; color:var(--muted); display:block;">Suggested settlement</span>`;
       const actions = document.createElement("div");
       actions.style.display = "flex";
       actions.style.alignItems = "center";
@@ -4314,12 +4404,13 @@
         }
       });
 
+      const memberLabel = displayGroupMember(g, name);
       let listHtml = rows.length
-        ? rows.map(t => `<div style="display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--line);"><div><strong>${escapeHtml(t.desc)}</strong><div style="font-size:0.78rem; color:var(--muted);">${escapeHtml(t.date)} • ${escapeHtml(t.payer)}</div></div><div style="font-weight:700;">${formatMoney(t.amount, cur)}</div></div>`).join("")
-        : `<div style="color:var(--muted); padding:8px 0;">No records for ${escapeHtml(name)} in this group yet.</div>`;
+        ? rows.map(t => `<div style="display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--line);"><div><strong>${escapeHtml(t.desc)}</strong><div style="font-size:0.78rem; color:var(--muted);">${escapeHtml(t.date)} • ${escapeHtml(displayGroupMember(g, t.payer))}</div></div><div style="font-weight:700;">${formatMoney(t.amount, cur)}</div></div>`).join("")
+        : `<div style="color:var(--muted); padding:8px 0;">No records for ${escapeHtml(memberLabel)} in this group yet.</div>`;
 
       body.innerHTML = `
-        <h3 style="margin-top:0;">${escapeHtml(name)}</h3>
+        <h3 style="margin-top:0;">${escapeHtml(memberLabel)}</h3>
         <div class="summary-grid" style="margin-bottom:12px;">
           <div class="metric-box"><div class="metric-label">Paid</div><div class="metric-val">${formatMoney(paid, cur)}</div></div>
           <div class="metric-box"><div class="metric-label">Share</div><div class="metric-val">${formatMoney(share, cur)}</div></div>
@@ -4568,6 +4659,9 @@
               <span><i class="share"></i>Share of expenses</span>
             </div>
             ${peopleRows.map(person => {
+              const memberLabel = analyticsScope === "direct"
+                ? person.name
+                : displayGroupMember(getGroup(), person.name);
               const paidPct = (person.paid / max) * 100;
               const sharePct = (person.share / max) * 100;
               const net = person.net;
@@ -4577,7 +4671,7 @@
               return `
                 <div class="people-row">
                   <div class="people-head">
-                    <strong>${escapeHtml(person.name)}</strong>
+                    <strong>${escapeHtml(memberLabel)}</strong>
                     <span class="people-net ${net > 0 ? "positive" : (net < 0 ? "negative" : "")}">Net ${netText}</span>
                   </div>
                   <div class="people-bar-line">
@@ -4599,7 +4693,10 @@
       }
       if (chartLegend) chartLegend.innerHTML = "";
       const dash = document.getElementById("dash-analytics-desc");
-      if (dash) dash.textContent = `${peopleRows[0].name} has the largest share`;
+      const topLabel = analyticsScope === "direct"
+        ? peopleRows[0].name
+        : displayGroupMember(getGroup(), peopleRows[0].name);
+      if (dash) dash.textContent = `${topLabel} has the largest share`;
     }
 
     function expenseMonthKey(tx) {
@@ -4796,6 +4893,8 @@
           item.onclick = () => openDetailModal(tx.id);
 
           const letter = tx.type === "settlement" ? "S" : (tx.category || "O").slice(0, 1).toUpperCase();
+          const payerLabel = transactionDisplayName(tx, tx.payer);
+          const receiverLabel = transactionDisplayName(tx, tx.receiver);
 
           item.innerHTML = `
             <div style="display:flex; align-items:center; gap:12px;">
@@ -4804,7 +4903,7 @@
                 <strong>${highlight(tx.desc, searchQuery)}</strong>
                 ${tx.receipt || tx.receiptUrl ? '<span class="cat-badge">Receipt</span>' : ""}
                 <span class="transaction-meta">
-                  ${escapeHtml(tx.sourceGroup || "")} • ${tx.type === "settlement" ? `${highlight(tx.payer, searchQuery)} paid ${highlight(tx.receiver, searchQuery)}` : `Paid by <strong>${highlight(tx.payer, searchQuery)}</strong>`}
+                  ${escapeHtml(tx.sourceGroup || "")} • ${tx.type === "settlement" ? `${highlight(payerLabel, searchQuery)} paid ${highlight(receiverLabel, searchQuery)}` : `Paid by <strong>${highlight(payerLabel, searchQuery)}</strong>`}
                   ${tx.notes ? " • " + highlight(tx.notes, searchQuery) : ""}
                 </span>
               </div>
@@ -4836,7 +4935,7 @@
                 <div class="cat-badge-icon">${letter}</div>
                 <div>
                   <strong>${escapeHtml(tx.desc)}</strong>
-                  <span class="transaction-meta">${escapeHtml(tx.date)} • ${escapeHtml(tx.sourceGroup || g.name)} • ${escapeHtml(tx.payer)}</span>
+                  <span class="transaction-meta">${escapeHtml(tx.date)} • ${escapeHtml(tx.sourceGroup || g.name)} • ${escapeHtml(transactionDisplayName(tx, tx.payer))}</span>
                 </div>
               </div>
               <div>
@@ -4975,6 +5074,8 @@
       const g = found.where === "group" ? found.group : getGroup();
       const cur = g.currency;
       const scopeLabel = found.where === "direct" ? `1-on-1 with ${tx.friend || "a friend"}` : g.name;
+      const payerLabel = found.where === "group" ? displayGroupMember(g, tx.payer) : tx.payer;
+      const receiverLabel = found.where === "group" ? displayGroupMember(g, tx.receiver) : tx.receiver;
       let html = "";
 
       if (tx.type === "settlement") {
@@ -4987,11 +5088,11 @@
           <div style="background:var(--box-bg); padding:14px; border-radius:12px; margin-bottom:16px;">
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
               <span style="color:var(--muted);">Paid by:</span>
-              <strong>${escapeHtml(tx.payer)}</strong>
+              <strong>${escapeHtml(payerLabel)}</strong>
             </div>
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
               <span style="color:var(--muted);">Received by:</span>
-              <strong>${escapeHtml(tx.receiver)}</strong>
+              <strong>${escapeHtml(receiverLabel)}</strong>
             </div>
             <div style="display:flex; justify-content:space-between; font-size:1.1rem; font-weight:700; border-top:1px dashed var(--line); padding-top:8px;">
               <span>Amount settled:</span>
@@ -5017,7 +5118,7 @@
           <div style="background:var(--box-bg); padding:12px 14px; border-radius:12px; margin-bottom:14px;">
             <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
               <span style="color:var(--muted);">Paid by:</span>
-              <strong>${escapeHtml(tx.payer)}</strong>
+              <strong>${escapeHtml(payerLabel)}</strong>
             </div>
             <div style="display:flex; justify-content:space-between;">
               <span style="color:var(--muted);">Split method:</span>
@@ -5053,10 +5154,11 @@
         const shares = tx.shares || {};
         for (const [member, share] of Object.entries(shares)) {
           const isPayer = member === tx.payer;
+          const memberLabel = found.where === "group" ? displayGroupMember(g, member) : member;
           html += `
             <tr style="border-bottom:1px solid var(--line);">
               <td style="padding:8px 10px;">
-                <strong>${escapeHtml(member)}</strong> ${isPayer ? '<span style="font-size:0.75rem; color:var(--primary);">(Payer)</span>' : ''}
+                <strong>${escapeHtml(memberLabel)}</strong> ${isPayer ? '<span style="font-size:0.75rem; color:var(--primary);">(Payer)</span>' : ''}
               </td>
               <td style="padding:8px 10px; text-align:right; font-family:var(--mono);">${formatMoney(share, cur)}</td>
             </tr>
@@ -5122,7 +5224,7 @@
           const chip = document.createElement("span");
           chip.className = "chip";
           const label = document.createElement("span");
-          label.textContent = name;
+          label.textContent = displayGroupMember(g, name);
           chip.appendChild(label);
 
           const linkedEmail = (g.memberLinks || {})[name];
@@ -5154,11 +5256,12 @@
         g.members.forEach((name) => {
           const chip = document.createElement("span");
           chip.className = "chip";
+          const displayName = displayGroupMember(g, name);
           const avatar = document.createElement("span");
           avatar.className = "avatar";
-          avatar.textContent = name.slice(0, 1).toUpperCase();
+          avatar.textContent = displayName.slice(0, 1).toUpperCase();
           chip.appendChild(avatar);
-          chip.appendChild(document.createTextNode(name));
+          chip.appendChild(document.createTextNode(displayName));
           homeMembersChips.appendChild(chip);
         });
       }
@@ -5169,19 +5272,18 @@
         g.members.forEach((name) => {
           const opt = document.createElement("option");
           opt.value = name;
-          opt.textContent = name;
+          opt.textContent = displayGroupMember(g, name);
           payerSelect.appendChild(opt);
         });
-        if (curPayer && g.members.includes(curPayer)) {
-          payerSelect.value = curPayer;
-        }
+        const myName = getMyGroupMemberName(g);
+        payerSelect.value = (curPayer && g.members.includes(curPayer)) ? curPayer : myName;
       }
 
       if (settlePayer) {
         const curVal = settlePayer.value;
         settlePayer.innerHTML = "";
         g.members.forEach((name) => {
-          const opt = document.createElement("option"); opt.value = name; opt.textContent = name;
+          const opt = document.createElement("option"); opt.value = name; opt.textContent = displayGroupMember(g, name);
           settlePayer.appendChild(opt);
         });
         if (curVal && g.members.includes(curVal)) settlePayer.value = curVal;
@@ -5190,7 +5292,7 @@
         const curVal = settleReceiver.value;
         settleReceiver.innerHTML = "";
         g.members.forEach((name) => {
-          const opt = document.createElement("option"); opt.value = name; opt.textContent = name;
+          const opt = document.createElement("option"); opt.value = name; opt.textContent = displayGroupMember(g, name);
           settleReceiver.appendChild(opt);
         });
         if (curVal && g.members.includes(curVal)) settleReceiver.value = curVal;
@@ -5200,7 +5302,7 @@
         const curVal = filterMemberSelect.value;
         filterMemberSelect.innerHTML = `<option value="all">All members</option>`;
         g.members.forEach((name) => {
-          const opt = document.createElement("option"); opt.value = name; opt.textContent = name;
+          const opt = document.createElement("option"); opt.value = name; opt.textContent = displayGroupMember(g, name);
           filterMemberSelect.appendChild(opt);
         });
         filterMemberSelect.value = curVal || "all";
@@ -5303,6 +5405,11 @@
           // authenticated UI is shown anyway and cloud sync continues.
           try {
             loadUserState(user);
+            let migratedSelfName = false;
+            Object.values(appState.groups || {}).forEach(group => {
+              if (migrateGroupSelfName(group)) migratedSelfName = true;
+            });
+            if (migratedSelfName) persistLocalState();
             materializeRecurring();
             Object.values(appState.groups || {}).forEach(addGroupMembersToRoster);
           } catch (err) {
@@ -5769,6 +5876,7 @@
       for (const group of Object.values(appState.groups || {})) {
         if (!group || !group.id) continue;
         if ((appState.deletedGroups || []).includes(group.id)) continue;
+        const migratedSelfName = migrateGroupSelfName(group);
         try {
           const groupRef = fx.storeMod.doc(fx.db, "groups", group.id);
           const created = await fx.storeMod.runTransaction(fx.db, async (transaction) => {
@@ -5786,17 +5894,26 @@
               });
               const cloudTransactions = cloudData.transactions || [];
               const cloudDeleted = cloudData.deletedTransactions || [];
-              const changed = JSON.stringify(merged.transactions) !== JSON.stringify(cloudTransactions)
+              const changed = migratedSelfName
+                || JSON.stringify(merged.transactions) !== JSON.stringify(cloudTransactions)
                 || JSON.stringify(merged.deletedTransactions) !== JSON.stringify(cloudDeleted);
               group.transactions = preserveLocalReceipts(merged.transactions, localTransactions);
               group.deletedTransactions = merged.deletedTransactions;
               if (!changed) return false;
-              transaction.set(groupRef, {
+              const write = {
                 transactions: stripReceiptBytes(merged.transactions),
                 deletedTransactions: merged.deletedTransactions,
                 updatedAt: serverTimestamp(fx),
                 updatedBy: myEmail
-              }, { merge: true });
+              };
+              if (migratedSelfName) {
+                const memberLinks = { ...(cloudData.memberLinks || {}), ...(group.memberLinks || {}) };
+                delete memberLinks.You;
+                write.members = group.members;
+                write.memberLinks = memberLinks;
+                group.memberLinks = memberLinks;
+              }
+              transaction.set(groupRef, write, { merge: true });
               return true;
             }
             const memberLinks = { ...(group.memberLinks || {}) };
