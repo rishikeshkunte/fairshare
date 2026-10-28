@@ -249,6 +249,14 @@ test("account offers sync repair and app refresh without clearing login", () => 
   assert.match(html, /addEventListener\("online"/);
 });
 
+test("settlement scope distinguishes the active group from overall standing", () => {
+  assert.match(html, /id="settlement-scope-note"/);
+  assert.match(html, /group is settled\. Your overall balance still includes other groups or 1-on-1 expenses/);
+  assert.match(html, /Active group: \$\{g\.name\}/);
+  assert.match(html, /balances-group-scope/);
+  assert.match(html, /settlementHeaderLabel\.textContent = .*g\.name/);
+});
+
 test("friends page lists friends first and selects a friend for details", () => {
   const start = html.indexOf("function organizeNavigationPages()");
   const end = html.indexOf("// The floating button", start);
