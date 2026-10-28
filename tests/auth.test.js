@@ -92,7 +92,8 @@ test("group membership emails are preserved instead of replaced", () => {
 
 test("local-only groups are uploaded on sign-in", () => {
   const push = between(html, "async function pushLocalGroupsToCloud(user)", "\n    function listenToCloudGroup");
-  assert.match(push, /if \(snapshot\.exists\(\)\) return false/);
+  assert.match(push, /if \(snapshot\.exists\(\)\) \{/);
+  assert.match(push, /Reconcile both directions/);
   assert.match(push, /memberEmails: finalEmails/);
   assert.match(html, /pushLocalGroupsToCloud\(user\)/);
 });
@@ -134,6 +135,6 @@ test("phone contact entry is removed and sign-in copy says Gmail", () => {
 });
 
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v51"/);
+  assert.match(sw, /const CACHE = "fairshare-v52"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });
