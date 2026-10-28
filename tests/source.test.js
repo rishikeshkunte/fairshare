@@ -387,7 +387,9 @@ test("friends roster displays existing contacts independently of auth rendering"
 test("simplify debts toggle persists its selected mode and re-renders settlements", () => {
   assert.match(html, /toggleSimplify\.onchange = \(\) => \{[\s\S]*?g\.simplifyDebts = toggleSimplify\.checked;[\s\S]*?saveState\(\);[\s\S]*?renderAll\(\);/);
   assert.match(html, /const simplified = g\.simplifyDebts !== false/);
-  assert.match(html, /if \(!simplified\)[\s\S]*?const edges = pairwiseDebts\(g\)/);
+  assert.match(html, /function allOpenSettlementItems\(\)/);
+  assert.match(html, /group\.simplifyDebts !== false[\s\S]*?simplifiedDebts\(netBalances\(group\)\)[\s\S]*?: pairwiseDebts\(group\)/);
+  assert.match(html, /directBalancesByFriend\(\)/);
   assert.match(html, /const debtors = \[\];[\s\S]*?const creditors = \[\];[\s\S]*?const debts = \[\]/);
 });
 

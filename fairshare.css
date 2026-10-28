@@ -1449,3 +1449,111 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .you-hero { padding: 18px; border-radius: 18px; }
   .you-links { gap: 8px; }
 }
+
+/* People navigation and theme picker */
+.people-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  background: var(--box-bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.people-tab {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.people-tab:hover { color: var(--text); }
+.people-tab.active {
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.global-theme-toggle-slot { position: relative; }
+.theme-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  min-width: 184px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-solid);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+}
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.theme-option:hover { background: var(--hover-item); }
+.theme-option.is-current { background: var(--box-bg); }
+.theme-option.is-current::after {
+  content: "Current";
+  margin-left: auto;
+  font-size: .64rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.theme-swatch {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.theme-swatch-light { background: #F6F4EE; }
+.theme-swatch-dark { background: #131A30; border-color: #4F6BFF; }
+.theme-swatch-black { background: #000000; border-color: #FF7A1A; }
+
+/* Unified settlements: groups and 1-on-1, split by currency */
+.settlement-context {
+  display: block;
+  margin-top: 2px;
+  font-size: .75rem;
+  color: var(--muted);
+}
+.settlement-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.settlement-currency-title {
+  margin: 6px 0 0;
+  font-size: .7rem;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (max-width: 860px) {
+  .global-theme-toggle-slot .theme-menu { left: auto; right: 0; }
+  .mobile-nav-item { font-size: .54rem; }
+}
+@media (max-width: 600px) {
+  .people-switch { display: flex; width: 100%; }
+  .people-tab { flex: 1 1 0; text-align: center; }
+  .settlement-actions { flex-wrap: wrap; justify-content: flex-end; }
+}
