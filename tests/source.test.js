@@ -521,7 +521,14 @@ test("renaming a contact propagates to direct ledgers and group display names", 
 
 test("suggested settlements and direct balances use the renamed contact, not an alias", () => {
   assert.match(html, /function canonicalFriendName\(name\)/);
-  assert.match(html, /item\.name === name \|\| \(Array\.isArray\(item\.aliases\) && item\.aliases\.includes\(name\)\)/);
+  assert.match(html, /Array\.isArray\(item\.aliases\) && item\.aliases\.includes\(name\)/);
   assert.match(html, /const friend = canonicalFriendName\(tx\.friend\)/);
   assert.match(html, /canonicalFriendName\(name\) === target/);
+});
+
+test("old 1-on-1 names resolve through group links and reconcile direct keys", () => {
+  assert.match(html, /function reconcileDirectFriendNames\(\)/);
+  assert.match(html, /for \(const group of Object\.values\(appState\.groups \|\| \{\}\)\)/);
+  assert.match(html, /if \(reconcileDirectFriendNames\(\)\) persistLocalState\(\)/);
+  assert.match(html, /const linkedEmail = group\?\.memberLinks\?\.\[name\]/);
 });

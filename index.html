@@ -987,7 +987,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v66";
+    const APP_BUILD = "v67";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -4516,10 +4516,62 @@
 
     function canonicalFriendName(name) {
       if (!name || name === "You") return name;
-      const friend = (appState.friends || []).find(item =>
-        item.name === name || (Array.isArray(item.aliases) && item.aliases.includes(name))
+      const friends = appState.friends || [];
+      const aliasFriend = friends.find(item =>
+        Array.isArray(item.aliases) && item.aliases.includes(name)
       );
-      return friend?.name || name;
+      if (aliasFriend?.name) return aliasFriend.name;
+
+      // A rename can predate aliases. Resolve the old name through any group
+      // memberLinks entry that points at the same Gmail address.
+      for (const group of Object.values(appState.groups || {})) {
+        const linkedEmail = group?.memberLinks?.[name];
+        if (!linkedEmail) continue;
+        const linkedFriend = friends.find(item =>
+          item.email && normalizeEmail(item.email) === normalizeEmail(linkedEmail)
+        );
+        if (linkedFriend?.name) return linkedFriend.name;
+      }
+
+      const named = friends.find(item => item.name === name);
+      return named?.name || name;
+    }
+
+    function reconcileDirectFriendNames() {
+      let changed = false;
+      const renameTx = tx => {
+        if (!tx || typeof tx !== "object") return;
+        let txChanged = false;
+        const friend = canonicalFriendName(tx.friend);
+        if (tx.friend && friend !== tx.friend) { tx.friend = friend; txChanged = true; }
+        const payer = canonicalFriendName(tx.payer);
+        if (tx.payer && payer !== tx.payer) { tx.payer = payer; txChanged = true; }
+        const receiver = canonicalFriendName(tx.receiver);
+        if (tx.receiver && receiver !== tx.receiver) { tx.receiver = receiver; txChanged = true; }
+        if (tx.shares) {
+          const next = {};
+          let sharesChanged = false;
+          Object.entries(tx.shares).forEach(([key, value]) => {
+            const canonical = canonicalFriendName(key);
+            if (canonical !== key) sharesChanged = true;
+            next[canonical] = (next[canonical] || 0) + (Number(value) || 0);
+          });
+          if (sharesChanged) { tx.shares = next; txChanged = true; }
+        }
+        if (txChanged) {
+          tx.updatedAt = Date.now();
+          if (!tx.timestamp) tx.timestamp = Date.now();
+          changed = true;
+        }
+      };
+      (appState.directTransactions || []).forEach(renameTx);
+      (appState.deletedTransactions || []).forEach(item => {
+        if (!item) return;
+        const friend = canonicalFriendName(item.friend);
+        if (item.friend && friend !== item.friend) item.friend = friend;
+        renameTx(item.transaction);
+      });
+      return changed;
     }
 
     function directBalancesByFriend() {
@@ -5687,6 +5739,7 @@
     function renderAll() {
       const activeGroupForRepair = appState.groups[appState.activeGroupId];
       if (activeGroupForRepair && migrateGroupSelfName(activeGroupForRepair)) persistLocalState();
+      if (reconcileDirectFriendNames()) persistLocalState();
       renderDirectFriendDropdown();
       applyTheme();
       renderGroupSelector();
