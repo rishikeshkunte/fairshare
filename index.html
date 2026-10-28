@@ -1003,7 +1003,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v58";
+    const APP_BUILD = "v59";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -5904,7 +5904,14 @@
               });
               const cloudTransactions = cloudData.transactions || [];
               const cloudDeleted = cloudData.deletedTransactions || [];
+              const cloudMembers = Array.isArray(cloudData.members) ? cloudData.members : [];
+              // Push a repaired member list even when the ledger itself matches.
+              // Never push a placeholder over a clean cloud list.
+              const membersNeedRepair = cloudMembers.length > 0
+                && !group.members.includes("You")
+                && JSON.stringify(group.members) !== JSON.stringify(cloudMembers);
               const changed = migratedSelfName
+                || membersNeedRepair
                 || JSON.stringify(merged.transactions) !== JSON.stringify(cloudTransactions)
                 || JSON.stringify(merged.deletedTransactions) !== JSON.stringify(cloudDeleted);
               group.transactions = preserveLocalReceipts(merged.transactions, localTransactions);
@@ -5916,7 +5923,7 @@
                 updatedAt: serverTimestamp(fx),
                 updatedBy: myEmail
               };
-              if (migratedSelfName) {
+              if (migratedSelfName || membersNeedRepair) {
                 const memberLinks = { ...(cloudData.memberLinks || {}), ...(group.memberLinks || {}) };
                 delete memberLinks.You;
                 write.members = group.members;
