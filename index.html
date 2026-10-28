@@ -756,7 +756,7 @@
         </div>
 
         <!-- Add friend by Gmail -->
-        <div class="card">
+        <div class="card" id="add-friends-card">
           <div class="card-header-row">
             <div>
               <h2>Add friends</h2>
@@ -800,7 +800,7 @@
             </div>
           </div>
 
-          <div style="background:var(--box-bg); padding:12px; border-radius:10px; border:1px solid var(--line); margin-bottom:14px;">
+          <div id="quick-add-friend-block" style="background:var(--box-bg); padding:12px; border-radius:10px; border:1px solid var(--line); margin-bottom:14px;">
             <label for="new-friend-name">Quick add name (local):</label>
             <div style="display:flex; gap:8px;">
               <input type="text" id="new-friend-name" placeholder="Type name (e.g. Vikram)" style="flex:1;">
@@ -814,6 +814,10 @@
 
         <!-- Selected friend: 1-on-1 ledger -->
         <div class="card friend-detail-card" id="friend-detail-card" hidden>
+          <div class="form-group" style="margin-bottom:10px;">
+            <label for="friend-detail-select">Selected friend</label>
+            <select id="friend-detail-select"></select>
+          </div>
           <div class="card-header-row">
             <div>
               <h2 id="friend-detail-name" style="margin:0;">1-on-1 expenses</h2>
@@ -1005,7 +1009,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v53";
+    const APP_BUILD = "v54";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1665,6 +1669,7 @@
     const inputNewMemberName = document.getElementById("input-new-member-name");
     const newFriendName = document.getElementById("new-friend-name");
     const friendsListContainer = document.getElementById("friends-list-container");
+    const friendDetailSelect = document.getElementById("friend-detail-select");
     const globalFriendsCount = document.getElementById("global-friends-count");
 
     const groupSelector = document.getElementById("group-selector");
@@ -1828,6 +1833,20 @@
       if (columns[0]) columns[0].remove();
       if (friendsWorkspace) friendsWorkspace.classList.add("single-column");
       friendsPage?.querySelector(".page-back-bar")?.remove();
+
+      // Friends page: roster first, selected friend details next, then requests
+      // and add-friend tools at the bottom.
+      const friendsStack = document.getElementById("friends-stack");
+      const rosterCard = document.getElementById("card-roster");
+      const friendDetailCard = document.getElementById("friend-detail-card");
+      const addFriendsCard = document.getElementById("add-friends-card");
+      const quickAddBlock = document.getElementById("quick-add-friend-block");
+      if (friendsStack && rosterCard) {
+        friendsStack.prepend(rosterCard);
+        if (friendDetailCard) rosterCard.after(friendDetailCard);
+        if (addFriendsCard && quickAddBlock) addFriendsCard.appendChild(quickAddBlock);
+      }
+
       const headerActions = document.querySelector(".app-header .header-actions");
       if (accountActionsSlot && headerActions) accountActionsSlot.appendChild(headerActions);
       const themeToggle = document.getElementById("btn-theme-toggle");
@@ -2561,6 +2580,12 @@
         selectedFriendDetailId = friend.id;
       }
       card.hidden = false;
+      if (friendDetailSelect) {
+        friendDetailSelect.innerHTML = friends
+          .map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
+          .join("");
+        friendDetailSelect.value = friend.id;
+      }
       const cur = getGroup().currency;
       const nameEl = document.getElementById("friend-detail-name");
       if (nameEl) nameEl.textContent = friend.name;
@@ -2654,6 +2679,13 @@
       renderFriendDetail();
       document.getElementById("friend-detail-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
+
+    if (friendDetailSelect) {
+      friendDetailSelect.addEventListener("change", (event) => {
+        selectedFriendDetailId = event.target.value;
+        renderFriendDetail();
+      });
+    }
 
     window.friendDetailAddExpense = function() {
       const friend = appState.friends.find(f => String(f.id) === String(selectedFriendDetailId));
