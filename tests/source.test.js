@@ -539,3 +539,15 @@ test("suggested settlements default to the signed-in person's own debts", () => 
   assert.match(html, /item\.kind === "direct" \|\| item\.fromLabel === "You" \|\| item\.toLabel === "You"/);
   assert.match(html, /settlementVisibility === "all" \? allItems : allItems\.filter\(isMine\)/);
 });
+
+test("Splitwise CSV import creates groups, members, expenses, and settlements", () => {
+  assert.match(html, /id="btn-import-csv"/);
+  assert.match(html, /id="csv-import-modal"/);
+  assert.match(html, /function prepareCsvImport\(file\)/);
+  assert.match(html, /function csvSplit\(text\)/);
+  assert.match(html, /kind: "settlement", payer: positive\[0\], receiver: negative\[0\]/);
+  assert.match(html, /shares\[name\] = index === payerIndex \? amount - nets\[index\] : -nets\[index\]/);
+  assert.match(html, /window\.importCsvFile = function\(\)/);
+  assert.match(html, /importKey: key/);
+  assert.match(html, /saveState\(target\)/);
+});
