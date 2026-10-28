@@ -1557,3 +1557,33 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .people-tab { flex: 1 1 0; text-align: center; }
   .settlement-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
+
+/* Home keeps only the unique "Who pays whom" summary; tabs own the rest */
+.home-quick-grid { grid-template-columns: minmax(0, 1fr); }
+.home-debt-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 14px;
+  row-gap: 2px;
+  align-items: center;
+  min-height: 0;
+  padding: 18px 20px;
+}
+.home-debt-card .icon-badge {
+  grid-row: 1 / span 3;
+  margin-bottom: 0;
+}
+.home-debt-card .dash-card-title,
+.home-debt-card .dash-card-desc,
+.home-debt-card #home-debt-preview {
+  grid-column: 2;
+}
+.home-debt-card #home-debt-preview { margin-top: 4px; }
+@media (max-width: 980px) {
+  .home-quick-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .home-quick-grid { grid-template-columns: minmax(0, 1fr); }
+  .home-debt-card { padding: 16px; }
+}
