@@ -536,6 +536,7 @@
               <span id="group-expenses-meta" class="section-hint">0 members • 0 expenses</span>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary" data-call="openGroupExpensesHistory">View activity</button>
               <button type="button" class="btn btn-settle" data-call="openGroupSettleUp">Settle up</button>
               <button type="button" class="btn btn-secondary" data-call="createGroupInvite">Invite link</button>
               <button type="button" class="btn btn-primary" data-call="openGroupExpenseForm">+ Add expense</button>
@@ -1039,7 +1040,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v70";
+    const APP_BUILD = "v71";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -3898,7 +3899,18 @@
       saveState(target);
       renderAll();
       closeCsvImport();
-      toast(`Imported ${imported} record${imported === 1 ? "" : "s"} into ${target.name}.`);
+      navigateTo("groups");
+      const merged = Boolean(existing && mode === "merge");
+      toast(
+        merged
+          ? `Merged ${imported} record${imported === 1 ? "" : "s"} into "${target.name}" successfully.`
+          : `Group "${target.name}" created successfully with ${imported} record${imported === 1 ? "" : "s"}.`,
+        {
+          actionLabel: "View activity",
+          onAction: () => window.viewGroupActivity(target.id),
+          duration: 8000
+        }
+      );
     };
 
     if (csvImportConfirm) {
@@ -3935,6 +3947,10 @@
         closeNewGroupModal();
         renderAll();
         navigateTo("groups");
+        toast(`Group "${name}" created successfully.`, {
+          actionLabel: "View activity",
+          onAction: () => window.viewGroupActivity(newId)
+        });
       });
     }
 
@@ -5332,15 +5348,23 @@
       navigateTo("add-expense");
     };
 
-    window.openGroupExpensesHistory = function() {
-      const g = getGroup();
-      if (!g.id) return;
+    window.viewGroupActivity = function(groupId) {
+      const id = groupId || appState.activeGroupId;
+      if (!id || !appState.groups[id]) return;
+      appState.activeGroupId = id;
+      persistLocalState();
       navigateTo("history");
       renderTransactions();
       if (historyGroupSelect) {
-        historyGroupSelect.value = g.id;
+        historyGroupSelect.value = id;
         renderTransactions();
       }
+    };
+
+    window.openGroupExpensesHistory = function() {
+      const g = getGroup();
+      if (!g.id) return;
+      window.viewGroupActivity(g.id);
     };
 
     function canonicalFriendName(name) {
