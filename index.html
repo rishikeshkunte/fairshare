@@ -415,6 +415,7 @@
           <div class="settlement-title" id="settlement-header-label">Suggested debt settlements</div>
           <span style="font-size:0.75rem; color:var(--success-text); font-weight:600;">Click "Settle" to log payment</span>
         </div>
+        <p id="settlement-scope-note" class="group-hint" style="margin:8px 0 0;" hidden></p>
         <ul id="settlement-list" class="settlement-list"></ul>
       </div>
     </div>
@@ -1009,7 +1010,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v54";
+    const APP_BUILD = "v55";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -1814,7 +1815,7 @@
         balancesPage.querySelector(".btn-back-home")?.remove();
         const heading = document.createElement("div");
         heading.className = "home-section-heading";
-        heading.innerHTML = "<div><span class='eyebrow'>Your balances</span><h2>Balances & settlements</h2></div>";
+        heading.innerHTML = "<div><span class='eyebrow'>Your balances</span><h2>Balances & settlements</h2><span id='balances-group-scope' class='section-hint'>Active group</span></div>";
         balancesPage.prepend(heading);
         homePage.appendChild(balancesPage);
       }
@@ -4022,6 +4023,22 @@
       }
 
       renderDebtSimplification(balances, cur);
+
+      const scopeNote = document.getElementById("settlement-scope-note");
+      if (scopeNote) {
+        const groupOutstanding = Object.values(balances).some(value => Math.abs(Number(value)) >= 0.01);
+        const overallOutstanding = overallOwed + overallOwe;
+        if (!g.id && overallOutstanding >= 0.01) {
+          scopeNote.hidden = false;
+          scopeNote.textContent = "No group is selected. Your overall balance may include 1-on-1 expenses.";
+        } else if (!groupOutstanding && overallOutstanding >= 0.01) {
+          scopeNote.hidden = false;
+          scopeNote.textContent = `This "${g.name}" group is settled. Your overall balance still includes other groups or 1-on-1 expenses.`;
+        } else {
+          scopeNote.hidden = true;
+          scopeNote.textContent = "";
+        }
+      }
     }
 
     function renderGroupExpenseSummary() {
@@ -4151,7 +4168,7 @@
           : "Off: Shows each pair separately, without combining debts through other people.";
       }
       if (settlementHeaderLabel) {
-        settlementHeaderLabel.textContent = simplified ? "Suggested debt settlements" : "Pairwise balances";
+        settlementHeaderLabel.textContent = `${simplified ? "Suggested debt settlements" : "Pairwise balances"}${g.id ? ` — ${g.name}` : ""}`;
       }
 
       const debtPreview = document.getElementById("home-debt-preview");
@@ -5209,6 +5226,8 @@
       if (homeGroupStats) homeGroupStats.textContent = groups.length
         ? `${(g.transactions || []).filter(tx => tx.type === "expense").length} expenses`
         : "No groups yet";
+      const balancesScope = document.getElementById("balances-group-scope");
+      if (balancesScope) balancesScope.textContent = g.id ? `Active group: ${g.name}` : "No group selected";
       const inviteNote = document.getElementById("invite-link-note");
       if (inviteNote) {
         inviteNote.textContent = "Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from Account -> Invite links.";
