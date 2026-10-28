@@ -977,6 +977,7 @@
     import { compressImage, safeImageSrc } from "./js/receipts.js";
     import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
     import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, mergePairLedger, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
+    import { repairGroupNames } from "./js/groupnames.js";
 
     document.body.addEventListener("click", (event) => {
       const node = event.target.closest("[data-call]");
@@ -1002,7 +1003,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v57";
+    const APP_BUILD = "v58";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1167,58 +1168,17 @@
       return name;
     }
 
-    // Older groups stored the creator as a literal "You" member. Replace that
-    // placeholder with the creator's display name on the creator's device so
-    // other accounts see "Rishikesh owes ..." instead of another "You".
+    // Older groups stored the creator as a literal "You" member. Reconcile it
+    // with the real name on either side of a sync. Stale cloud member lists can
+    // otherwise overwrite a local rename while transactions keep real names,
+    // which silently drops payer and share keys during balance calculations.
     function migrateGroupSelfName(group) {
-      if (!group || !Array.isArray(group.members)) return false;
-      const myName = getMyGroupMemberName(group);
-      const actual = myGroupSelfName();
-      if (myName !== "You" || actual === "You" || !group.members.includes("You")) return false;
-      let changed = false;
-      const renamedMembers = [];
-      group.members.forEach(name => {
-        const next = name === "You" ? actual : name;
-        if (!renamedMembers.includes(next)) renamedMembers.push(next);
+      if (!group) return false;
+      return repairGroupNames(group, {
+        myEmail: currentUser?.email || "",
+        myName: currentUser ? myGroupSelfName() : "",
+        friends: appState.friends || []
       });
-      if (JSON.stringify(renamedMembers) !== JSON.stringify(group.members)) {
-        group.members = renamedMembers;
-        changed = true;
-      }
-      if (group.memberLinks && Object.prototype.hasOwnProperty.call(group.memberLinks, "You")) {
-        const email = group.memberLinks.You;
-        delete group.memberLinks.You;
-        if (!group.memberLinks[actual]) group.memberLinks[actual] = email;
-        changed = true;
-      }
-      const migrateTx = tx => {
-        if (!tx || typeof tx !== "object") return;
-        let txChanged = false;
-        if (tx.payer === "You") {
-          tx.payer = actual;
-          txChanged = true;
-        }
-        if (tx.receiver === "You") {
-          tx.receiver = actual;
-          txChanged = true;
-        }
-        if (tx.shares && Object.prototype.hasOwnProperty.call(tx.shares, "You")) {
-          const share = Number(tx.shares.You) || 0;
-          delete tx.shares.You;
-          tx.shares[actual] = (Number(tx.shares[actual]) || 0) + share;
-          txChanged = true;
-        }
-        if (txChanged) {
-          tx.updatedAt = Date.now();
-          if (!tx.timestamp) tx.timestamp = Date.now();
-          changed = true;
-        }
-      };
-      (group.transactions || []).forEach(migrateTx);
-      (group.deletedTransactions || []).forEach(item => {
-        if (item) migrateTx(item.transaction);
-      });
-      return changed;
     }
 
     function escapeHtml(value) {
@@ -1527,14 +1487,18 @@
       }
     }
 
-    function saveState() {
+    function saveState(targetGroup = null) {
+      // Repair placeholder member names before writing so a stale "You" member
+      // can never overwrite a real name that transactions already use.
+      const activeGroup = targetGroup || appState.groups[appState.activeGroupId];
+      if (activeGroup) migrateGroupSelfName(activeGroup);
       // Persist locally first, then sync the signed-in user's own friend roster
       // independently of groups. A roster must work even before a group exists.
       persistLocalState();
       if (fx && currentUser) saveFriendsRosterToCloud();
-      if (!(fx && currentUser && appState.groups[appState.activeGroupId])) return;
 
-      const g = getGroup();
+      const g = activeGroup;
+      if (!(fx && currentUser && g)) return;
       const myEmail = (currentUser.email || "").toLowerCase().trim();
       const myEmailNorm = normalizeEmail(myEmail);
       const memberLinks = { ...(g.memberLinks || {}) };
@@ -1577,12 +1541,20 @@
         });
         const finalMemberEmails = Array.from(memberEmails).filter(Boolean);
         g.memberEmails = finalMemberEmails;
+        // Never regress a clean cloud member list back to a "You" placeholder.
+        // If this device could not resolve the placeholder, keep the cloud names.
+        const cloudMembers = Array.isArray(cloudData.members) ? cloudData.members : [];
+        let membersToWrite = g.members;
+        if (membersToWrite.includes("You") && cloudMembers.length && !cloudMembers.includes("You")) {
+          membersToWrite = cloudMembers;
+          g.members = cloudMembers;
+        }
         transaction.set(groupRef, {
           id: g.id,
           schemaVersion: 9,
           name: g.name,
           currency: g.currency,
-          members: g.members,
+          members: membersToWrite,
           simplifyDebts: g.simplifyDebts !== false,
           memberLinks,
           memberEmails: finalMemberEmails,
@@ -5328,6 +5300,8 @@
     }
 
     function renderAll() {
+      const activeGroupForRepair = appState.groups[appState.activeGroupId];
+      if (activeGroupForRepair && migrateGroupSelfName(activeGroupForRepair)) persistLocalState();
       renderDirectFriendDropdown();
       applyTheme();
       renderGroupSelector();
@@ -6032,9 +6006,12 @@
           if (cloudData.currency) group.currency = cloudData.currency;
           if (cloudData.name) group.name = cloudData.name;
           if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
+          // A stale cloud member list must not leave payer/share keys orphaned.
+          const repairedNames = migrateGroupSelfName(group);
           addGroupMembersToRoster(group);
           persistLocalState();
           if (appState.activeGroupId === groupId) renderAll();
+          if (repairedNames) saveState(group);
         } else if (appState.activeGroupId === groupId) {
           // Only initialise the currently selected group. Never save whichever group
           // happens to be active from a callback for a different group.

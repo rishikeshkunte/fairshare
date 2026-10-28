@@ -83,7 +83,7 @@ test("dialogs render above the privacy gate", () => {
 });
 
 test("group membership emails are preserved instead of replaced", () => {
-  const save = between(html, "function saveState()", "\n    function syncUserCloud");
+  const save = between(html, "function saveState(", "\n    function syncUserCloud");
   assert.match(save, /cloudData\.memberEmails/);
   assert.match(save, /memberEmails\.add/);
   assert.match(save, /finalMemberEmails/);
@@ -135,6 +135,6 @@ test("phone contact entry is removed and sign-in copy says Gmail", () => {
 });
 
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v57"/);
+  assert.match(sw, /const CACHE = "fairshare-v58"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });
