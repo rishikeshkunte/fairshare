@@ -59,10 +59,11 @@ test("rebuilds a group whose member names and links were swapped by renames", ()
 
   const changed = repairGroupIdentity(group);
   assert.equal(changed, true);
-  assert.deepEqual(group.members, ["Zilconis", "Aryan Ahir", "Aman Shrivas", "Rishikesh Kunte"]);
-  assert.equal(group.memberLinks["Zilconis"], "kunterishikesh@gmail.com");
+  assert.deepEqual(group.members, ["Rishikesh Kunte", "Aryan Ahir", "Aman Shrivas"]);
+  assert.equal(group.memberLinks["Zilconis"], undefined);
   assert.equal(group.memberLinks["Rishikesh Kunte"], "rishikeshkunte@gmail.com");
   assert.equal(group.memberLinks.You, undefined);
+  assert.equal((group.memberEmails || []).includes("kunterishikesh@gmail.com"), false);
 
   for (const tx of group.transactions) {
     assert.ok(group.members.includes(tx.payer), `payer ${tx.payer} is a member`);
