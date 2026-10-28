@@ -227,8 +227,8 @@ test("group membership never creates friends and self names are display-mapped",
   assert.match(roster, /if \(existing && !normalizeEmail/);
   assert.match(html, /function migrateGroupSelfName\(group\)/);
   assert.match(html, /const members = \[myGroupSelfName\(\), \.\.\.selectedFriends\]/);
-  assert.match(html, /displayGroupMember\(g, debt\.from\)/);
-  assert.match(html, /displayGroupMember\(g, m\)/);
+  assert.match(html, /displayGroupMember\(group, debt\.from\)/);
+  assert.match(html, /displayGroupMember\(group, member\)/);
   assert.match(html, /transactionDisplayName\(tx, tx\.payer\)/);
 });
 
@@ -265,7 +265,7 @@ test("settlement scope distinguishes the active group from overall standing", ()
   assert.match(html, /group is settled\. Your overall balance still includes other groups or 1-on-1 expenses/);
   assert.match(html, /Active group: \$\{g\.name\}/);
   assert.match(html, /balances-group-scope/);
-  assert.match(html, /settlementHeaderLabel\.textContent = .*g\.name/);
+  assert.match(html, /settlementHeaderLabel\.textContent = .*data\.label/);
 });
 
 test("friends page lists friends first and selects a friend for details", () => {
@@ -385,9 +385,9 @@ test("friends roster displays existing contacts independently of auth rendering"
 });
 
 test("simplify debts toggle persists its selected mode and re-renders settlements", () => {
-  assert.match(html, /toggleSimplify\.onchange = \(\) => \{[\s\S]*?g\.simplifyDebts = toggleSimplify\.checked;[\s\S]*?saveState\(\);[\s\S]*?renderAll\(\);/);
-  assert.match(html, /const simplified = g\.simplifyDebts !== false/);
-  assert.match(html, /function allOpenSettlementItems\(\)/);
+  assert.match(html, /toggleSimplify\.onchange = \(\) => \{[\s\S]*?scopeGroup\.simplifyDebts = toggleSimplify\.checked;[\s\S]*?saveState\(\);[\s\S]*?renderAll\(\);/);
+  assert.match(html, /toggleSimplify\.checked = scopeGroup\.simplifyDebts !== false/);
+  assert.match(html, /function allOpenSettlementItems\(data = balancesScopeData\(\)\)/);
   assert.match(html, /group\.simplifyDebts !== false[\s\S]*?simplifiedDebts\(netBalances\(group\)\)[\s\S]*?: pairwiseDebts\(group\)/);
   assert.match(html, /directBalancesByFriend\(\)/);
   assert.match(html, /const debtors = \[\];[\s\S]*?const creditors = \[\];[\s\S]*?const debts = \[\]/);
@@ -499,4 +499,13 @@ test("receipt reconciliation preserves local receipt fields", () => {
 test("group reconciliation keeps merged tombstones instead of cloud-only tombstones", () => {
   assert.match(html, /localGroup\.deletedTransactions = merged\.deletedTransactions;/);
   assert.doesNotMatch(html, /\bdeletedTransactions\s*=\s*cloudData\.deletedTransactions\b/);
+});
+
+test("balances can scope to one group, all groups, or 1-on-1 and include people balances", () => {
+  assert.match(html, /id="balances-scope-select"/);
+  assert.match(html, /function balancesScopeData\(\)/);
+  assert.match(html, /balancesScope === "direct"/);
+  assert.match(html, /data\.includeDirect/);
+  assert.match(html, /function buildScopedPeople\(data\)/);
+  assert.match(html, /const balancesScopeLabel = document\.getElementById\("balances-group-scope"\)/);
 });

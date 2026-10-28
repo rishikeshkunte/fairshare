@@ -1587,3 +1587,25 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .home-quick-grid { grid-template-columns: minmax(0, 1fr); }
   .home-debt-card { padding: 16px; }
 }
+
+/* Balances scope picker */
+.balances-scope-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.balances-scope-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 240px;
+}
+.balances-scope-picker label { margin: 0; }
+.balances-scope-picker select { min-width: 240px; }
+@media (max-width: 600px) {
+  .balances-scope-picker, .balances-scope-picker select { min-width: 0; width: 100%; }
+  .balances-scope-bar { align-items: stretch; }
+}
