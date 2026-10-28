@@ -170,15 +170,6 @@
         <div id="home-debt-preview"></div>
       </button>
     </div>
-
-    <div class="card home-recent-card">
-      <div class="card-header-row">
-        <h2 style="margin:0;">Recent activity</h2>
-        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="history" style="padding:6px 10px; font-size:0.8rem;">View all →</button>
-      </div>
-      <div id="home-recent-empty" class="empty-state" style="padding:14px 0;">No expenses yet. Tap <strong>Add expense</strong> to log your first bill.</div>
-      <ul id="home-recent-list" class="transaction-list"></ul>
-    </div>
   </section>
 
   <!-- ================= PAGE 2: ADD / EDIT EXPENSE ================= -->
@@ -325,19 +316,27 @@
       <button type="button" id="btn-toggle-settle-form" class="btn btn-settle" style="padding:6px 12px; font-size:0.82rem;">+ Custom settlement</button>
     </div>
 
+    <div class="balances-scope-bar">
+      <div class="balances-scope-picker">
+        <label for="balances-scope-select">View</label>
+        <select id="balances-scope-select" aria-label="Choose balance scope"></select>
+      </div>
+      <p id="balances-scope-note" class="section-hint" hidden></p>
+    </div>
+
     <div class="balances-layout">
       <div class="balances-side">
         <div class="summary-grid">
           <div class="metric-box">
-            <div class="metric-label">Total group spend</div>
+            <div class="metric-label">Total spend</div>
             <div class="metric-val" id="total-spent">₹0.00</div>
           </div>
           <div class="metric-box">
-            <div class="metric-label">Expenses logged</div>
+            <div class="metric-label">Expenses</div>
             <div class="metric-val" id="total-expense-count">0</div>
           </div>
           <div class="metric-box">
-            <div class="metric-label">Settlements done</div>
+            <div class="metric-label">Settlements</div>
             <div class="metric-val" id="total-settle-count">0</div>
           </div>
         </div>
@@ -997,7 +996,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v62";
+    const APP_BUILD = "v63";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1775,6 +1774,8 @@
     const totalSpentEl = document.getElementById("total-spent");
     const totalExpenseCountEl = document.getElementById("total-expense-count");
     const totalSettleCountEl = document.getElementById("total-settle-count");
+    const balancesScopeSelect = document.getElementById("balances-scope-select");
+    const balancesScopeNote = document.getElementById("balances-scope-note");
     const memberSpendTbody = document.getElementById("member-spend-tbody");
     const toggleSimplify = document.getElementById("toggle-simplify");
     const simplifyDesc = document.getElementById("simplify-desc");
@@ -1798,6 +1799,7 @@
     let chartType = "pie";
     let analyticsView = "category";
     let analyticsScope = "active";
+    let balancesScope = "all";
 
     // History Filters
     let historyFilter = "all";
@@ -3979,43 +3981,229 @@
     }
 
     // --- Render Balances and Home Metrics ---
-    function renderBalancesAndSettlements() {
-      const g = getGroup();
-      const cur = g.currency;
+    function balancesScopeData() {
+      const active = getGroup();
+      const activeCurrency = active.currency || "₹";
+      const allGroups = Object.values(appState.groups || {}).filter(group => group && group.id);
 
-      const balances = netBalances(g);
-      const totalSpentByPerson = {};
-      g.members.forEach(m => { totalSpentByPerson[m] = 0; });
+      if (balancesScope === "direct") {
+        return { groups: [], includeDirect: true, currency: activeCurrency, label: "1-on-1 only", allGroups, singleGroup: null };
+      }
+      if (balancesScope.startsWith("group:")) {
+        const id = balancesScope.slice(6);
+        const group = appState.groups[id];
+        if (group) {
+          return {
+            groups: [group],
+            includeDirect: false,
+            currency: group.currency || activeCurrency,
+            label: `Group · ${group.name || "Group"}`,
+            allGroups,
+            singleGroup: group
+          };
+        }
+      }
+      const groups = allGroups.filter(group => (group.currency || "₹") === activeCurrency);
+      return { groups, includeDirect: true, currency: activeCurrency, label: "All groups & 1-on-1", allGroups, singleGroup: null };
+    }
+
+    function renderBalancesScopeSelect(data) {
+      if (!balancesScopeSelect) return;
+      if (balancesScope.startsWith("group:") && !appState.groups[balancesScope.slice(6)]) {
+        balancesScope = "all";
+      }
+      const groups = [...data.allGroups].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      balancesScopeSelect.innerHTML = `<option value="all">All groups &amp; 1-on-1</option><option value="direct">1-on-1 only</option>` +
+        groups.map(group => `<option value="group:${escapeHtml(group.id)}">${escapeHtml(group.name || "Group")}${group.id === appState.activeGroupId ? " (active)" : ""}</option>`).join("");
+      balancesScopeSelect.value = balancesScope;
+    }
+
+    function setBalancesScope(value) {
+      balancesScope = value || "all";
+      if (balancesScope.startsWith("group:")) {
+        const id = balancesScope.slice(6);
+        if (appState.groups[id] && appState.activeGroupId !== id) {
+          switchActiveGroup(id);
+          return;
+        }
+      }
+      renderAll();
+    }
+
+    if (balancesScopeSelect) {
+      balancesScopeSelect.addEventListener("change", (event) => setBalancesScope(event.target.value));
+    }
+
+    function buildScopedPeople(data) {
+      const people = new Map();
+      const ensure = (label) => {
+        let person = people.get(label);
+        if (!person) {
+          person = { label, paid: 0, share: 0, net: 0 };
+          people.set(label, person);
+        }
+        return person;
+      };
+
+      data.groups.forEach(group => {
+        const members = Array.isArray(group.members) ? group.members : [];
+        members.forEach(member => ensure(displayGroupMember(group, member)));
+        (group.transactions || []).forEach(tx => {
+          if (tx.type === "expense") {
+            const amount = Number(tx.amount) || 0;
+            if (members.includes(tx.payer)) {
+              const payer = ensure(displayGroupMember(group, tx.payer));
+              payer.paid += amount;
+              payer.net += amount;
+            }
+            Object.entries(tx.shares || {}).forEach(([member, share]) => {
+              if (!members.includes(member)) return;
+              const person = ensure(displayGroupMember(group, member));
+              const value = Number(share) || 0;
+              person.share += value;
+              person.net -= value;
+            });
+          } else if (tx.type === "settlement") {
+            const amount = Number(tx.amount) || 0;
+            if (members.includes(tx.payer)) ensure(displayGroupMember(group, tx.payer)).net += amount;
+            if (members.includes(tx.receiver)) ensure(displayGroupMember(group, tx.receiver)).net -= amount;
+          }
+        });
+      });
+
+      if (data.includeDirect) {
+        ensure("You");
+        (appState.directTransactions || []).forEach(tx => {
+          if (!tx || !tx.friend) return;
+          const friend = tx.friend;
+          ensure(friend);
+          const amount = Number(tx.amount) || 0;
+          if (tx.type === "expense") {
+            const myShare = Number(tx.shares?.["You"]) || 0;
+            const theirShare = Number(tx.shares?.[friend]) || 0;
+            if (tx.payer === friend) {
+              const friendPerson = ensure(friend);
+              friendPerson.paid += amount;
+              friendPerson.net += amount;
+              friendPerson.share += theirShare;
+              friendPerson.net -= theirShare;
+              const me = ensure("You");
+              me.share += myShare;
+              me.net -= myShare;
+            } else {
+              const me = ensure("You");
+              me.paid += amount;
+              me.net += amount;
+              me.share += myShare;
+              me.net -= myShare;
+              const friendPerson = ensure(friend);
+              friendPerson.share += theirShare;
+              friendPerson.net -= theirShare;
+            }
+          } else if (tx.type === "settlement") {
+            if (tx.payer) ensure(tx.payer).net += amount;
+            if (tx.receiver) ensure(tx.receiver).net -= amount;
+          }
+        });
+      }
+
+      return [...people.values()].sort((a, b) => {
+        if (a.label === "You") return -1;
+        if (b.label === "You") return 1;
+        return a.label.localeCompare(b.label);
+      });
+    }
+
+    function scopedMemberRecords(label, data) {
+      const rows = [];
+      data.groups.forEach(group => {
+        const members = Array.isArray(group.members) ? group.members : [];
+        (group.transactions || []).forEach(tx => {
+          const names = [tx.payer, tx.receiver, ...Object.keys(tx.shares || {})].filter(name => name && members.includes(name));
+          if (!names.some(name => displayGroupMember(group, name) === label)) return;
+          rows.push({ ...tx, _context: group.name || "Group", _currency: group.currency || data.currency });
+        });
+      });
+      if (data.includeDirect) {
+        (appState.directTransactions || []).forEach(tx => {
+          if (!tx || !tx.friend) return;
+          const names = [tx.payer, tx.receiver, tx.friend, ...Object.keys(tx.shares || {})];
+          if (!names.includes(label)) return;
+          rows.push({ ...tx, _context: "1-on-1", _currency: data.currency });
+        });
+      }
+      return rows.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+    }
+
+    function renderBalancesAndSettlements() {
+      const data = balancesScopeData();
+      renderBalancesScopeSelect(data);
+      const cur = data.currency;
+      const g = getGroup();
+      const homeCur = g.currency || "₹";
+      const groupOnly = Boolean(data.singleGroup);
+      const scopeGroup = data.singleGroup || g;
 
       let totalGroupSpend = 0;
       let expenseCount = 0;
       let settleCount = 0;
-
-      g.transactions.forEach(t => {
-        if (t.type === "expense") {
-          expenseCount++;
-          totalGroupSpend += t.amount;
-          if (totalSpentByPerson[t.payer] !== undefined) totalSpentByPerson[t.payer] += t.amount;
-        } else if (t.type === "settlement") {
-          settleCount++;
-        }
+      data.groups.forEach(group => {
+        (group.transactions || []).forEach(t => {
+          if (t.type === "expense") {
+            expenseCount++;
+            totalGroupSpend += Number(t.amount) || 0;
+          } else if (t.type === "settlement") {
+            settleCount++;
+          }
+        });
       });
+      if (data.includeDirect) {
+        (currentUser ? (appState.directTransactions || []) : []).forEach(t => {
+          if (t.type === "expense") {
+            expenseCount++;
+            totalGroupSpend += Number(t.amount) || 0;
+          } else if (t.type === "settlement") {
+            settleCount++;
+          }
+        });
+      }
 
       if (totalSpentEl) totalSpentEl.textContent = formatMoney(totalGroupSpend, cur);
       if (totalExpenseCountEl) totalExpenseCountEl.textContent = expenseCount;
       if (totalSettleCountEl) totalSettleCountEl.textContent = settleCount;
+      const activeExpenses = (g.transactions || []).filter(tx => tx.type === "expense");
+      const activeSpend = activeExpenses.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
       if (homeGroupStats) homeGroupStats.textContent = appState.groups[g.id]
-        ? `${g.members.length} members • ${expenseCount} expenses • ${formatMoney(totalGroupSpend, cur)}`
+        ? `${g.members.length} members • ${activeExpenses.length} expenses • ${formatMoney(activeSpend, homeCur)}`
         : "Create a group to start tracking shared expenses.";
-      if (dashHistoryDesc) dashHistoryDesc.textContent = `${expenseCount + settleCount} group records`;
+      if (dashHistoryDesc) dashHistoryDesc.textContent = `${expenseCount + settleCount} records`;
+      if (balancesScopeNote) {
+        if (balancesScope === "all") {
+          const excluded = data.allGroups.length - data.groups.length;
+          balancesScopeNote.hidden = false;
+          balancesScopeNote.textContent = excluded > 0
+            ? `Showing ${cur} groups and 1-on-1. ${excluded} group${excluded === 1 ? "" : "s"} in other currencies are excluded.`
+            : `Showing all ${cur} groups and 1-on-1.`;
+        } else if (balancesScope === "direct") {
+          balancesScopeNote.hidden = false;
+          balancesScopeNote.textContent = `Showing 1-on-1 balances in ${cur}.`;
+        } else {
+          balancesScopeNote.hidden = true;
+          balancesScopeNote.textContent = "";
+        }
+      }
       if (toggleSimplify) {
-        toggleSimplify.checked = g.simplifyDebts !== false;
+        toggleSimplify.checked = scopeGroup.simplifyDebts !== false;
         toggleSimplify.onchange = () => {
-          g.simplifyDebts = toggleSimplify.checked;
+          scopeGroup.simplifyDebts = toggleSimplify.checked;
           saveState();
           renderAll();
         };
+        const simplifyRow = toggleSimplify.closest(".toggle-row");
+        if (simplifyRow) simplifyRow.hidden = !groupOnly;
       }
+      if (btnToggleSettleForm) btnToggleSettleForm.hidden = !groupOnly;
+      if (!groupOnly && settleUpBox) settleUpBox.style.display = "none";
 
       // Executive Home Standings (incorporating Group + 1-on-1)
       let overallOwed = 0;
@@ -4066,47 +4254,44 @@
           homeStandingText.style.color = "var(--text)";
           if (homeStandingSub) homeStandingSub.textContent = "You neither owe nor are owed money.";
         } else if (netStanding > 0) {
-          homeStandingText.textContent = `You are owed ${formatMoney(netStanding, cur)}`;
+          homeStandingText.textContent = `You are owed ${formatMoney(netStanding, homeCur)}`;
           homeStandingText.style.color = "var(--positive)";
           if (homeStandingSub) homeStandingSub.textContent = "Overall positive balance across all friends & groups.";
         } else {
-          homeStandingText.textContent = `You owe ${formatMoney(Math.abs(netStanding), cur)}`;
+          homeStandingText.textContent = `You owe ${formatMoney(Math.abs(netStanding), homeCur)}`;
           homeStandingText.style.color = "var(--negative)";
           if (homeStandingSub) homeStandingSub.textContent = "Overall balance to pay across all friends & groups.";
         }
       }
-      if (homeOwedVal) homeOwedVal.textContent = formatMoney(overallOwed, cur);
-      if (homeOweVal) homeOweVal.textContent = formatMoney(overallOwe, cur);
+      if (homeOwedVal) homeOwedVal.textContent = formatMoney(overallOwed, homeCur);
+      if (homeOweVal) homeOweVal.textContent = formatMoney(overallOwe, homeCur);
 
-      // Member Balance Sheet Table
+      const balancesScopeLabel = document.getElementById("balances-group-scope");
+      if (balancesScopeLabel) balancesScopeLabel.textContent = data.label;
+
+      // Member Balance Sheet Table, scoped and including 1-on-1 people.
+      const people = buildScopedPeople(data);
       if (memberSpendTbody) {
         memberSpendTbody.innerHTML = "";
         const inspectSelect = document.getElementById("member-inspect-select");
         if (inspectSelect) {
-          inspectSelect.innerHTML = `<option value="">Inspect member...</option>`;
-          g.members.forEach(name => {
+          inspectSelect.innerHTML = `<option value="">Inspect person...</option>`;
+          people.forEach(person => {
             const opt = document.createElement("option");
-            opt.value = name;
-            opt.textContent = displayGroupMember(g, name);
+            opt.value = person.label;
+            opt.textContent = person.label;
             inspectSelect.appendChild(opt);
           });
         }
 
-        g.members.forEach(m => {
-          const displayName = displayGroupMember(g, m);
-          const spent = totalSpentByPerson[m] || 0;
-          const bal = balances[m] || 0;
-          const shareOwed = g.transactions.reduce((sum, t) => {
-            if (t.type === "expense" && t.shares && t.shares[m]) return sum + Number(t.shares[m]);
-            return sum;
-          }, 0);
+        people.forEach(person => {
+          const bal = person.net;
           const tr = document.createElement("tr");
           const balClass = bal > 0.009 ? "text-success" : (bal < -0.009 ? "text-danger" : "text-muted bal");
-
           tr.innerHTML = `
-            <td><div class="member-cell"><span class="avatar">${escapeHtml(displayName.slice(0,1).toUpperCase())}</span><strong>${escapeHtml(displayName)}</strong></div></td>
-            <td style="text-align:right;">${formatMoney(spent, cur)}</td>
-            <td style="text-align:right;">${formatMoney(shareOwed, cur)}</td>
+            <td><div class="member-cell"><span class="avatar">${escapeHtml(person.label.slice(0, 1).toUpperCase())}</span><strong>${escapeHtml(person.label)}</strong></div></td>
+            <td style="text-align:right;">${formatMoney(person.paid, cur)}</td>
+            <td style="text-align:right;">${formatMoney(person.share, cur)}</td>
             <td style="text-align:right;"><span class="${balClass}">${formatSignedMoney(bal, cur)}</span></td>
             <td style="text-align:center;"></td>
           `;
@@ -4116,24 +4301,29 @@
           statementBtn.style.padding = "4px 8px";
           statementBtn.style.fontSize = "0.75rem";
           statementBtn.textContent = "View";
-          statementBtn.addEventListener("click", () => openMemberStatement(m));
+          statementBtn.addEventListener("click", () => openMemberStatement(person.label));
           tr.lastElementChild.appendChild(statementBtn);
           memberSpendTbody.appendChild(tr);
         });
+
+        if (!people.length) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td colspan="5" style="text-align:center; color:var(--muted); padding:18px;">No balances in this view yet.</td>`;
+          memberSpendTbody.appendChild(tr);
+        }
       }
 
-      renderDebtSimplification(balances, cur);
+      renderDebtSimplification(data);
 
       const scopeNote = document.getElementById("settlement-scope-note");
       if (scopeNote) {
-        const groupOutstanding = Object.values(balances).some(value => Math.abs(Number(value)) >= 0.01);
         const overallOutstanding = overallOwed + overallOwe;
-        if (!g.id && overallOutstanding >= 0.01) {
+        const groupOutstanding = groupOnly
+          ? Object.values(netBalances(scopeGroup)).some(value => Math.abs(Number(value)) >= 0.01)
+          : false;
+        if (groupOnly && !groupOutstanding && overallOutstanding >= 0.01) {
           scopeNote.hidden = false;
-          scopeNote.textContent = "No group is selected. Your overall balance may include 1-on-1 expenses.";
-        } else if (!groupOutstanding && overallOutstanding >= 0.01) {
-          scopeNote.hidden = false;
-          scopeNote.textContent = `This "${g.name}" group is settled. Your overall balance still includes other groups or 1-on-1 expenses.`;
+          scopeNote.textContent = `This "${scopeGroup.name}" group is settled. Your overall balance still includes other groups or 1-on-1 expenses.`;
         } else {
           scopeNote.hidden = true;
           scopeNote.textContent = "";
@@ -4278,9 +4468,9 @@
       return out;
     }
 
-    function allOpenSettlementItems() {
+    function allOpenSettlementItems(data = balancesScopeData()) {
       const items = [];
-      Object.values(appState.groups || {}).forEach(group => {
+      data.groups.forEach(group => {
         if (!group) return;
         const debts = group.simplifyDebts !== false
           ? simplifiedDebts(netBalances(group))
@@ -4301,31 +4491,38 @@
         });
       });
 
-      const balances = directBalancesByFriend();
-      const directCurrency = getGroup().currency || "₹";
-      Object.entries(balances).forEach(([friend, balance]) => {
-        const rounded = Math.round(balance);
-        if (Math.abs(rounded) < 1) return;
-        const iOwe = rounded < 0;
-        items.push({
-          kind: "direct",
-          friendName: friend,
-          currency: directCurrency,
-          from: iOwe ? "You" : friend,
-          to: iOwe ? friend : "You",
-          fromLabel: iOwe ? "You" : friend,
-          toLabel: iOwe ? friend : "You",
-          amount: Math.abs(rounded),
-          signed: rounded
+      if (data.includeDirect) {
+        const balances = directBalancesByFriend();
+        const directCurrency = data.currency || getGroup().currency || "₹";
+        Object.entries(balances).forEach(([friend, balance]) => {
+          const rounded = Math.round(balance);
+          if (Math.abs(rounded) < 1) return;
+          const iOwe = rounded < 0;
+          items.push({
+            kind: "direct",
+            friendName: friend,
+            currency: directCurrency,
+            from: iOwe ? "You" : friend,
+            to: iOwe ? friend : "You",
+            fromLabel: iOwe ? "You" : friend,
+            toLabel: iOwe ? friend : "You",
+            amount: Math.abs(rounded),
+            signed: rounded
+          });
         });
-      });
+      }
       return items;
     }
 
     function settleSuggestedItem(item) {
       if (!item) return;
       if (item.kind === "group") {
-        if (item.groupId && item.groupId !== appState.activeGroupId) switchActiveGroup(item.groupId);
+        balancesScope = `group:${item.groupId}`;
+        if (item.groupId && item.groupId !== appState.activeGroupId) {
+          switchActiveGroup(item.groupId);
+        } else {
+          renderAll();
+        }
         quickSettlePrompt(item.from, item.to, item.amount);
         return;
       }
@@ -4354,24 +4551,22 @@
       return card;
     }
 
-    function renderDebtSimplification(balances, cur) {
+    function renderDebtSimplification(data) {
       if (!settlementListEl) return;
       settlementListEl.innerHTML = "";
-      const g = getGroup();
-      const simplified = g.simplifyDebts !== false;
 
       if (simplifyDesc) {
-        simplifyDesc.textContent = simplified
-          ? "On: minimizes payments for the active group. Other groups use their own setting."
-          : "Off: shows each pair separately for the active group. Other groups use their own setting.";
+        simplifyDesc.textContent = data.singleGroup
+          ? `Applies to ${data.singleGroup.name}. Other groups keep their own setting.`
+          : "Pick a single group to change its simplify setting. The all-groups view uses each group's own setting.";
       }
       if (settlementHeaderLabel) {
-        settlementHeaderLabel.textContent = `Suggested settlements — all groups & 1-on-1${g.id ? ` · active: ${g.name}` : ""}`;
+        settlementHeaderLabel.textContent = `Suggested settlements · ${data.label}`;
       }
 
-      const items = allOpenSettlementItems();
+      const items = allOpenSettlementItems(data);
       if (!items.length) {
-        settlementListEl.innerHTML = `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">Everyone is fully settled up across groups and 1-on-1.</div>`;
+        settlementListEl.innerHTML = `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">Everyone is fully settled up in this view.</div>`;
         return;
       }
 
@@ -4481,43 +4676,33 @@
       if (sel) sel.value = "";
     };
 
-    function openMemberStatement(name) {
-      const g = getGroup();
-      const cur = g.currency;
+    function openMemberStatement(label) {
+      const data = balancesScopeData();
+      const cur = data.currency;
       const body = document.getElementById("member-modal-body");
       const modal = document.getElementById("member-modal");
       if (!body || !modal) return;
 
-      let paid = 0;
-      let share = 0;
-      let net = 0;
-      const rows = [];
-      g.transactions.forEach(t => {
-        if (t.type === "expense") {
-          if (t.payer === name) paid += Number(t.amount) || 0;
-          const mine = t.shares && t.shares[name] ? Number(t.shares[name]) : 0;
-          share += mine;
-          if (t.payer === name) net += Number(t.amount) || 0;
-          net -= mine;
-          if (t.payer === name || mine > 0) rows.push(t);
-        } else if (t.type === "settlement" && (t.payer === name || t.receiver === name)) {
-          if (t.payer === name) net += Number(t.amount) || 0;
-          if (t.receiver === name) net -= Number(t.amount) || 0;
-          rows.push(t);
-        }
-      });
+      const person = buildScopedPeople(data).find(item => item.label === label) || { paid: 0, share: 0, net: 0 };
+      const rows = scopedMemberRecords(label, data);
 
-      const memberLabel = displayGroupMember(g, name);
-      let listHtml = rows.length
-        ? rows.map(t => `<div style="display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--line);"><div><strong>${escapeHtml(t.desc)}</strong><div style="font-size:0.78rem; color:var(--muted);">${escapeHtml(t.date)} • ${escapeHtml(displayGroupMember(g, t.payer))}</div></div><div style="font-weight:700;">${formatMoney(t.amount, cur)}</div></div>`).join("")
-        : `<div style="color:var(--muted); padding:8px 0;">No records for ${escapeHtml(memberLabel)} in this group yet.</div>`;
+      const listHtml = rows.length
+        ? rows.map(t => `<div style="display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--line);">
+            <div>
+              <strong>${escapeHtml(t.desc || t.category || "Record")}</strong>
+              <div style="font-size:0.78rem; color:var(--muted);">${escapeHtml(t.date || "")} • ${escapeHtml(t._context)}${t.payer ? ` • paid by ${escapeHtml(t.payer)}` : ""}</div>
+            </div>
+            <div style="font-weight:700;">${formatMoney(t.amount, t._currency || cur)}</div>
+          </div>`).join("")
+        : `<div style="color:var(--muted); padding:8px 0;">No records for ${escapeHtml(label)} in this view yet.</div>`;
 
       body.innerHTML = `
-        <h3 style="margin-top:0;">${escapeHtml(memberLabel)}</h3>
+        <h3 style="margin-top:0;">${escapeHtml(label)}</h3>
+        <p style="margin:0 0 12px; color:var(--muted); font-size:0.82rem;">${escapeHtml(data.label)}</p>
         <div class="summary-grid" style="margin-bottom:12px;">
-          <div class="metric-box"><div class="metric-label">Paid</div><div class="metric-val">${formatMoney(paid, cur)}</div></div>
-          <div class="metric-box"><div class="metric-label">Share</div><div class="metric-val">${formatMoney(share, cur)}</div></div>
-          <div class="metric-box"><div class="metric-label">Net</div><div class="metric-val">${formatSignedMoney(net, cur)}</div></div>
+          <div class="metric-box"><div class="metric-label">Paid</div><div class="metric-val">${formatMoney(person.paid, cur)}</div></div>
+          <div class="metric-box"><div class="metric-label">Share</div><div class="metric-val">${formatMoney(person.share, cur)}</div></div>
+          <div class="metric-box"><div class="metric-label">Net</div><div class="metric-val">${formatSignedMoney(person.net, cur)}</div></div>
         </div>
         ${listHtml}
         <div style="display:flex; justify-content:flex-end; margin-top:14px;">
@@ -4539,6 +4724,11 @@
         return;
       }
       if (!settleUpBox) return;
+      const active = getGroup();
+      if (active.id) {
+        balancesScope = `group:${active.id}`;
+        renderAll();
+      }
       navigateTo("balances");
       settleUpBox.style.display = "block";
       if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
@@ -5433,8 +5623,8 @@
       if (homeGroupStats) homeGroupStats.textContent = groups.length
         ? `${(g.transactions || []).filter(tx => tx.type === "expense").length} expenses`
         : "No groups yet";
-      const balancesScope = document.getElementById("balances-group-scope");
-      if (balancesScope) balancesScope.textContent = g.id ? `Active group: ${g.name}` : "No group selected";
+      const balancesScopeLabel = document.getElementById("balances-group-scope");
+      if (balancesScopeLabel) balancesScopeLabel.textContent = g.id ? `Active group: ${g.name}` : "No group selected";
       const inviteNote = document.getElementById("invite-link-note");
       if (inviteNote) {
         inviteNote.textContent = "Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from You -> Invite links.";
