@@ -561,3 +561,11 @@ test("ledger identity and money repairs run automatically on load, snapshots, an
   assert.match(html, /if \(repairDirectMoney\(\)\) \{ persistLocalState\(\); pushAllDirectPairs\(\); \}/);
   assert.match(html, /setInterval\(\(\) => \{[\s\S]*?syncUserCloud\(currentUser\)/);
 });
+
+test("group creation and CSV import confirm success and open group-scoped activity", () => {
+  assert.match(html, /window\.viewGroupActivity = function\(groupId\)/);
+  assert.match(html, /historyGroupSelect\.value = id/);
+  assert.match(html, /created successfully/);
+  assert.match(html, /actionLabel: "View activity"/);
+  assert.match(html, /data-call="openGroupExpensesHistory">View activity/);
+});
