@@ -221,6 +221,17 @@ test("analytics provides category, people, and trend views with scopes", () => {
   assert.match(html, /renderAnalytics\(\);/);
 });
 
+test("group membership never creates friends and self names are display-mapped", () => {
+  const roster = html.slice(html.indexOf("function addGroupMembersToRoster"), html.indexOf("function renderFriendRequestsUI"));
+  assert.doesNotMatch(roster, /addApprovedFriend/);
+  assert.match(roster, /if \(existing && !normalizeEmail/);
+  assert.match(html, /function migrateGroupSelfName\(group\)/);
+  assert.match(html, /const members = \[myGroupSelfName\(\), \.\.\.selectedFriends\]/);
+  assert.match(html, /displayGroupMember\(g, debt\.from\)/);
+  assert.match(html, /displayGroupMember\(g, m\)/);
+  assert.match(html, /transactionDisplayName\(tx, tx\.payer\)/);
+});
+
 test("group members can repair cloud sync with a linked Gmail or new invite", () => {
   assert.match(html, /window\.linkMemberEmail = async function\(name\)/);
   assert.match(html, /Members without a linked Gmail can't see cloud changes/);
