@@ -1039,7 +1039,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v69";
+    const APP_BUILD = "v70";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1227,6 +1227,291 @@
         myName: currentUser ? myGroupSelfName() : "",
         friends: appState.friends || []
       });
+    }
+
+    function reconcileGroupMemberNames(group) {
+      if (!group || !Array.isArray(group.members)) return false;
+      const friends = appState.friends || [];
+      const members = group.members;
+      const links = group.memberLinks || {};
+      let changed = false;
+      const memberEmail = {};
+
+      members.forEach(member => {
+        let email = links[member] || "";
+        const friend = friends.find(item =>
+          item.name === member
+          || (Array.isArray(item.aliases) && item.aliases.includes(member))
+          || (email && item.email && normalizeEmail(item.email) === normalizeEmail(email))
+        );
+        if (friend?.email) {
+          email = friend.email;
+          if (links[member] !== email) { links[member] = email; changed = true; }
+        }
+        memberEmail[member] = email;
+      });
+
+      const targetFor = (name) => {
+        if (!name || members.includes(name)) return name;
+        const friend = friends.find(item =>
+          item.name === name
+          || (Array.isArray(item.aliases) && item.aliases.includes(name))
+          || (links[name] && item.email && normalizeEmail(item.email) === normalizeEmail(links[name]))
+        );
+        if (friend) {
+          if (friend.email) {
+            const byEmail = members.find(member =>
+              memberEmail[member] && normalizeEmail(memberEmail[member]) === normalizeEmail(friend.email)
+            );
+            if (byEmail) return byEmail;
+          }
+          if (members.includes(friend.name)) return friend.name;
+        }
+        const linked = links[name];
+        if (linked) {
+          const byEmail = members.find(member =>
+            memberEmail[member] && normalizeEmail(memberEmail[member]) === normalizeEmail(linked)
+          );
+          if (byEmail) return byEmail;
+        }
+        return name;
+      };
+
+      const renameTx = tx => {
+        if (!tx || typeof tx !== "object") return;
+        let txChanged = false;
+        if (tx.payer) {
+          const payer = targetFor(tx.payer);
+          if (payer !== tx.payer) { tx.payer = payer; txChanged = true; }
+        }
+        if (tx.receiver) {
+          const receiver = targetFor(tx.receiver);
+          if (receiver !== tx.receiver) { tx.receiver = receiver; txChanged = true; }
+        }
+        if (tx.shares && typeof tx.shares === "object") {
+          const next = {};
+          let sharesChanged = false;
+          Object.entries(tx.shares).forEach(([name, share]) => {
+            const target = targetFor(name);
+            if (target !== name) sharesChanged = true;
+            next[target] = (next[target] || 0) + (Number(share) || 0);
+          });
+          if (sharesChanged) { tx.shares = next; txChanged = true; }
+        }
+        if (txChanged) {
+          tx.updatedAt = Date.now();
+          if (!tx.timestamp) tx.timestamp = Date.now();
+          changed = true;
+        }
+      };
+      (group.transactions || []).forEach(renameTx);
+      (group.deletedTransactions || []).forEach(item => renameTx(item?.transaction));
+
+      Object.keys(links).forEach(key => {
+        if (members.includes(key)) return;
+        const target = targetFor(key);
+        if (target && members.includes(target)) {
+          if (!links[target]) links[target] = links[key];
+          delete links[key];
+          changed = true;
+        }
+      });
+      if (changed) group.memberLinks = links;
+      return changed;
+    }
+
+    function repairGroupIdentity(group) {
+      if (!group || !Array.isArray(group.members)) return false;
+      const friends = appState.friends || [];
+      const oldLinks = group.memberLinks && typeof group.memberLinks === "object" ? group.memberLinks : {};
+      const myEmail = normalizeEmail(currentUser?.email || "");
+      let changed = false;
+
+      const friendFor = (name) => friends.find(friend =>
+        friend.name === name
+        || (Array.isArray(friend.aliases) && friend.aliases.includes(name))
+        || (oldLinks[name] && friend.email && normalizeEmail(friend.email) === normalizeEmail(oldLinks[name]))
+      );
+
+      const emailByMember = new Map();
+      const selfNames = [
+        currentUser?.displayName,
+        String(currentUser?.displayName || "").split(" ")[0],
+        String(currentUser?.email || "").split("@")[0]
+      ].filter(Boolean).map(name => name.toLowerCase());
+      group.members.forEach(member => {
+        const friend = friendFor(member);
+        let email = normalizeEmail(friend?.email || oldLinks[member] || "");
+        if (!friend && myEmail && selfNames.includes(String(member).toLowerCase())) {
+          email = myEmail;
+        }
+        emailByMember.set(member, email);
+      });
+
+      const displayName = String(currentUser?.displayName || (currentUser?.email || "").split("@")[0] || "You").trim() || "You";
+      let selfMember = group.members.find(member => emailByMember.get(member) === myEmail && myEmail);
+      if (!selfMember) {
+        let candidate = displayName;
+        if (group.members.includes(candidate) && emailByMember.get(candidate) !== myEmail) {
+          candidate = `${displayName} (you)`;
+        }
+        if (group.members.includes(candidate)) candidate = `You ${group.members.length + 1}`;
+        group.members = [...group.members, candidate];
+        emailByMember.set(candidate, myEmail);
+        selfMember = candidate;
+        changed = true;
+      }
+
+      // Collapse duplicate member identities that share an email.
+      const preferred = new Map();
+      group.members.forEach(member => {
+        const email = emailByMember.get(member);
+        if (!email) return;
+        if (!preferred.has(email)) {
+          preferred.set(email, member);
+          return;
+        }
+        const friend = friends.find(item => item.email && normalizeEmail(item.email) === email);
+        const current = preferred.get(email);
+        if (friend && group.members.includes(friend.name)) preferred.set(email, friend.name === current ? current : friend.name);
+      });
+
+      const canonical = new Map();
+      group.members.forEach(member => {
+        const email = emailByMember.get(member);
+        const target = email && preferred.get(email) ? preferred.get(email) : member;
+        canonical.set(member, target);
+      });
+      if (preferred.has(myEmail)) selfMember = preferred.get(myEmail);
+      canonical.set(selfMember, selfMember);
+
+      const nextMembers = [];
+      group.members.forEach(member => {
+        const target = canonical.get(member) || member;
+        if (!nextMembers.includes(target)) nextMembers.push(target);
+      });
+      if (JSON.stringify(nextMembers) !== JSON.stringify(group.members)) {
+        group.members = nextMembers;
+        changed = true;
+      }
+
+      const links = {};
+      group.members.forEach(member => {
+        let email = emailByMember.get(member) || oldLinks[member] || "";
+        if (!email) {
+          const friend = friendFor(member);
+          if (friend?.email) email = friend.email;
+        }
+        if (member === selfMember && myEmail) email = currentUser.email;
+        if (email) links[member] = email;
+      });
+      if (JSON.stringify(links) !== JSON.stringify(group.memberLinks || {})) {
+        group.memberLinks = links;
+        changed = true;
+      }
+
+      const targetFor = (name) => {
+        if (!name) return name;
+        if (group.members.includes(name)) return name;
+        if (name === "You") return selfMember;
+        const friend = friendFor(name);
+        if (friend?.email) {
+          const member = group.members.find(item => normalizeEmail(links[item] || "") === normalizeEmail(friend.email));
+          if (member) return member;
+          if (group.members.includes(friend.name)) return friend.name;
+        }
+        const linked = oldLinks[name];
+        if (linked) {
+          const member = group.members.find(item => normalizeEmail(links[item] || "") === normalizeEmail(linked));
+          if (member) return member;
+        }
+        return name;
+      };
+
+      const renameTx = tx => {
+        if (!tx || typeof tx !== "object") return;
+        let txChanged = false;
+        if (tx.payer) {
+          const payer = targetFor(tx.payer);
+          if (payer !== tx.payer) { tx.payer = payer; txChanged = true; }
+        }
+        if (tx.receiver) {
+          const receiver = targetFor(tx.receiver);
+          if (receiver !== tx.receiver) { tx.receiver = receiver; txChanged = true; }
+        }
+        if (tx.shares && typeof tx.shares === "object") {
+          const next = {};
+          let sharesChanged = false;
+          Object.entries(tx.shares).forEach(([name, share]) => {
+            const target = targetFor(name);
+            if (target !== name) sharesChanged = true;
+            next[target] = (next[target] || 0) + (Number(share) || 0);
+          });
+          if (sharesChanged) { tx.shares = next; txChanged = true; }
+        }
+        if (txChanged) {
+          tx.updatedAt = Date.now();
+          if (!tx.timestamp) tx.timestamp = Date.now();
+          changed = true;
+        }
+      };
+      (group.transactions || []).forEach(renameTx);
+      (group.deletedTransactions || []).forEach(item => renameTx(item?.transaction));
+
+      return changed;
+    }
+
+    function repairGroupMoney(group) {
+      if (!group) return false;
+      let changed = false;
+      const fixTx = tx => {
+        if (!tx || typeof tx !== "object") return;
+        let txChanged = false;
+        const amount = Number(tx.amount);
+        if (!Number.isFinite(amount)) return;
+        const shares = tx.shares && typeof tx.shares === "object" ? tx.shares : null;
+        const shareValues = shares ? Object.values(shares).map(Number) : [];
+        const badUnits = !Number.isInteger(amount) || shareValues.some(value => !Number.isInteger(value));
+        if (badUnits) {
+          tx.amount = Math.round(amount * 100);
+          if (shares) Object.keys(shares).forEach(key => { shares[key] = Math.round((Number(shares[key]) || 0) * 100); });
+          txChanged = true;
+        }
+        if (shares && tx.type === "expense" && Number(tx.amount) > 0) {
+          const sum = Object.values(shares).reduce((total, value) => total + (Number(value) || 0), 0);
+          if (Math.abs(sum - Number(tx.amount)) > 1) {
+            const ratio = sum / Number(tx.amount);
+            if (ratio > 50 && ratio < 200) {
+              if (ratio > 1) tx.amount = Math.round(Number(tx.amount) * 100);
+              else Object.keys(shares).forEach(key => { shares[key] = Math.round((Number(shares[key]) || 0) * 100); });
+              txChanged = true;
+            }
+          }
+        }
+        if (txChanged) {
+          tx._money = "paise";
+          tx.updatedAt = Date.now();
+          if (!tx.timestamp) tx.timestamp = Date.now();
+          changed = true;
+        }
+      };
+      (group.transactions || []).forEach(fixTx);
+      (group.deletedTransactions || []).forEach(item => fixTx(item?.transaction));
+      if (changed) group.schemaVersion = 9;
+      return changed;
+    }
+
+    function repairDirectMoney() {
+      const bucket = {
+        transactions: appState.directTransactions || [],
+        deletedTransactions: appState.deletedTransactions || []
+      };
+      const changed = repairGroupMoney(bucket);
+      if (changed) {
+        appState.directTransactions = bucket.transactions;
+        appState.deletedTransactions = bucket.deletedTransactions;
+      }
+      return changed;
     }
 
     function escapeHtml(value) {
@@ -6288,8 +6573,15 @@
 
     function renderAll() {
       const activeGroupForRepair = appState.groups[appState.activeGroupId];
-      if (activeGroupForRepair && migrateGroupSelfName(activeGroupForRepair)) persistLocalState();
+      if (activeGroupForRepair) {
+        let groupRepaired = false;
+        if (migrateGroupSelfName(activeGroupForRepair)) groupRepaired = true;
+        if (repairGroupIdentity(activeGroupForRepair)) groupRepaired = true;
+        if (repairGroupMoney(activeGroupForRepair)) groupRepaired = true;
+        if (groupRepaired) persistLocalState();
+      }
       if (reconcileDirectFriendNames()) persistLocalState();
+      if (repairDirectMoney()) { persistLocalState(); pushAllDirectPairs(); }
       renderDirectFriendDropdown();
       applyTheme();
       renderGroupSelector();
@@ -6384,8 +6676,11 @@
             let migratedSelfName = false;
             Object.values(appState.groups || {}).forEach(group => {
               if (migrateGroupSelfName(group)) migratedSelfName = true;
+              if (repairGroupIdentity(group)) migratedSelfName = true;
+              if (repairGroupMoney(group)) migratedSelfName = true;
             });
             if (migratedSelfName) persistLocalState();
+            if (repairDirectMoney()) { persistLocalState(); pushAllDirectPairs(); }
             materializeRecurring();
             Object.values(appState.groups || {}).forEach(addGroupMembersToRoster);
           } catch (err) {
@@ -6864,7 +7159,13 @@
       for (const group of Object.values(appState.groups || {})) {
         if (!group || !group.id) continue;
         if ((appState.deletedGroups || []).includes(group.id)) continue;
-        const migratedSelfName = migrateGroupSelfName(group);
+        const groupRepaired = (() => {
+          let repaired = false;
+          if (migrateGroupSelfName(group)) repaired = true;
+          if (repairGroupIdentity(group)) repaired = true;
+          if (repairGroupMoney(group)) repaired = true;
+          return repaired;
+        })();
         try {
           const groupRef = fx.storeMod.doc(fx.db, "groups", group.id);
           const created = await fx.storeMod.runTransaction(fx.db, async (transaction) => {
@@ -6888,7 +7189,7 @@
               const membersNeedRepair = cloudMembers.length > 0
                 && !group.members.includes("You")
                 && JSON.stringify(group.members) !== JSON.stringify(cloudMembers);
-              const changed = migratedSelfName
+              const changed = groupRepaired
                 || membersNeedRepair
                 || JSON.stringify(merged.transactions) !== JSON.stringify(cloudTransactions)
                 || JSON.stringify(merged.deletedTransactions) !== JSON.stringify(cloudDeleted);
@@ -6901,7 +7202,7 @@
                 updatedAt: serverTimestamp(fx),
                 updatedBy: myEmail
               };
-              if (migratedSelfName || membersNeedRepair) {
+              if (groupRepaired || membersNeedRepair) {
                 const memberLinks = { ...(cloudData.memberLinks || {}), ...(group.memberLinks || {}) };
                 delete memberLinks.You;
                 write.members = group.members;
@@ -6992,7 +7293,10 @@
           if (cloudData.name) group.name = cloudData.name;
           if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
           // A stale cloud member list must not leave payer/share keys orphaned.
-          const repairedNames = migrateGroupSelfName(group);
+          let repairedNames = false;
+          if (migrateGroupSelfName(group)) repairedNames = true;
+          if (repairGroupIdentity(group)) repairedNames = true;
+          if (repairGroupMoney(group)) repairedNames = true;
           addGroupMembersToRoster(group);
           persistLocalState();
           if (appState.activeGroupId === groupId) renderAll();
@@ -7017,6 +7321,13 @@
         toldPairRules = true;
         toast("1-on-1 sync was denied by Firebase. Publish the latest Firestore rules, then reload.");
       }
+    }
+
+    function pushAllDirectPairs() {
+      if (!fx || !currentUser) return;
+      (appState.friends || []).forEach(friend => {
+        if (friend?.email) syncDirectPairExpense(friend.name, { quiet: true });
+      });
     }
 
     function refreshDirectListeners() {
@@ -7595,6 +7906,12 @@
         cloudSyncUid = currentUser.uid;
       }
     });
+    setInterval(() => {
+      if (fx && currentUser && document.visibilityState === "visible") {
+        syncUserCloud(currentUser);
+        cloudSyncUid = currentUser.uid;
+      }
+    }, 5 * 60 * 1000);
     let hiddenAt = 0;
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {

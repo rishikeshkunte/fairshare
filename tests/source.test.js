@@ -551,3 +551,13 @@ test("Splitwise CSV import creates groups, members, expenses, and settlements", 
   assert.match(html, /importKey: key/);
   assert.match(html, /saveState\(target\)/);
 });
+
+test("ledger identity and money repairs run automatically on load, snapshots, and sync", () => {
+  assert.match(html, /function repairGroupIdentity\(group\)/);
+  assert.match(html, /function repairGroupMoney\(group\)/);
+  assert.match(html, /function repairDirectMoney\(\)/);
+  assert.match(html, /if \(repairGroupIdentity\(group\)\) migratedSelfName = true/);
+  assert.match(html, /if \(repairGroupMoney\(group\)\) repairedNames = true/);
+  assert.match(html, /if \(repairDirectMoney\(\)\) \{ persistLocalState\(\); pushAllDirectPairs\(\); \}/);
+  assert.match(html, /setInterval\(\(\) => \{[\s\S]*?syncUserCloud\(currentUser\)/);
+});
