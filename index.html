@@ -377,8 +377,15 @@
       <div class="settlement-card">
         <div class="settlement-header">
           <div class="settlement-title" id="settlement-header-label">Suggested debt settlements</div>
-          <span style="font-size:0.75rem; color:var(--success-text); font-weight:600;">Click "Settle" to log payment</span>
+          <div class="settlement-filter">
+            <label for="settlement-visibility">Show</label>
+            <select id="settlement-visibility" aria-label="Who to show in suggested settlements">
+              <option value="mine">Only mine</option>
+              <option value="all">Everyone</option>
+            </select>
+          </div>
         </div>
+        <p class="group-hint" style="margin:8px 0 0;">Click “Settle” to record the payment in the right group or 1-on-1 ledger.</p>
         <p id="settlement-scope-note" class="group-hint" style="margin:8px 0 0;" hidden></p>
         <ul id="settlement-list" class="settlement-list"></ul>
       </div>
@@ -987,7 +994,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v67";
+    const APP_BUILD = "v68";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1783,6 +1790,7 @@
     const toggleSimplify = document.getElementById("toggle-simplify");
     const simplifyDesc = document.getElementById("simplify-desc");
     const settlementHeaderLabel = document.getElementById("settlement-header-label");
+    const settlementVisibilitySelect = document.getElementById("settlement-visibility");
     const settlementListEl = document.getElementById("settlement-list");
     const transactionListEl = document.getElementById("transaction-list");
     const historyGroupSelect = document.getElementById("history-group-select");
@@ -1803,6 +1811,7 @@
     let analyticsView = "category";
     let analyticsScope = "active";
     let balancesScope = "all";
+    let settlementVisibility = "mine";
 
     // History Filters
     let historyFilter = "all";
@@ -4095,6 +4104,13 @@
       balancesScopeSelect.addEventListener("change", (event) => setBalancesScope(event.target.value));
     }
 
+    if (settlementVisibilitySelect) {
+      settlementVisibilitySelect.addEventListener("change", (event) => {
+        settlementVisibility = event.target.value === "all" ? "all" : "mine";
+        renderAll();
+      });
+    }
+
     function buildScopedPeople(data) {
       const people = new Map();
       const ensure = (label) => {
@@ -4695,9 +4711,15 @@
         settlementHeaderLabel.textContent = `Suggested settlements · ${data.label}`;
       }
 
-      const items = allOpenSettlementItems(data);
+      const allItems = allOpenSettlementItems(data);
+      const isMine = item => item.kind === "direct" || item.fromLabel === "You" || item.toLabel === "You";
+      if (settlementVisibilitySelect) settlementVisibilitySelect.value = settlementVisibility;
+      const items = settlementVisibility === "all" ? allItems : allItems.filter(isMine);
       if (!items.length) {
-        settlementListEl.innerHTML = `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">Everyone is fully settled up in this view.</div>`;
+        const otherOpen = settlementVisibility !== "all" && allItems.some(item => !isMine(item));
+        settlementListEl.innerHTML = otherOpen
+          ? `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">You are settled up in this view. Other members still have open debts — switch Show to Everyone.</div>`
+          : `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">You are fully settled up in this view.</div>`;
         return;
       }
 
