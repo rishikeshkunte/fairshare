@@ -613,6 +613,19 @@
       </div>
       <div id="invites-list" style="margin-top:12px;"></div>
     </div>
+    <div class="card" id="sync-card" style="margin-top:16px;">
+      <div class="card-header-row">
+        <div>
+          <h2>Sync &amp; app data</h2>
+          <span id="sync-build-label" style="font-size:0.82rem; color:var(--muted);">Build …</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary" data-call="syncNow">Sync now</button>
+        <button type="button" class="btn btn-secondary" data-call="refreshAppData">Refresh app data</button>
+      </div>
+      <p class="group-hint" style="margin-top:10px;">Sync now reconnects cloud listeners. Refresh app data clears cached app files without deleting your ledger, sign-in, or cloud data.</p>
+    </div>
   </section>
 
   <!-- ================= PAGE 6: FRIENDS & GROUPS ================= -->
@@ -990,7 +1003,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v50";
+    const APP_BUILD = "v51";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -5151,6 +5164,8 @@
       applyTheme();
       renderGroupSelector();
       renderManageGroupSelector();
+      const syncBuild = document.getElementById("sync-build-label");
+      if (syncBuild) syncBuild.textContent = `Build ${APP_BUILD}`;
 
       const groups = Object.values(appState.groups);
       const g = getGroup();
@@ -5552,6 +5567,38 @@
       // account can see them on every browser. Existing cloud groups are left alone.
       pushLocalGroupsToCloud(user);
     }
+
+    window.syncNow = function() {
+      if (!fx || !currentUser) {
+        toast("Sign in with Gmail first.");
+        return;
+      }
+      syncUserCloud(currentUser);
+      cloudSyncUid = currentUser.uid;
+      processPendingInvite();
+      toast("Cloud sync reconnected. Pulling the latest groups and ledgers.");
+    };
+
+    window.refreshAppData = async function() {
+      if (!(await askConfirm({
+        title: "Refresh app data",
+        message: "Clear cached app files and reload? Your ledger, sign-in, and cloud data stay on this device.",
+        confirmLabel: "Refresh"
+      }))) return;
+      try {
+        if ("serviceWorker" in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(registration => registration.unregister()));
+        }
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(key => caches.delete(key)));
+        }
+      } catch (err) {
+        console.warn("Refresh app data note:", err);
+      }
+      window.location.reload();
+    };
 
     async function pushLocalGroupsToCloud(user) {
       if (!fx || !user) return;
@@ -6238,6 +6285,23 @@
       updateAuthUI(null);
       renderAll();
       console.warn("Firebase session restore failed; continuing in local mode.");
+    });
+    window.addEventListener("online", () => {
+      if (fx && currentUser) {
+        syncUserCloud(currentUser);
+        cloudSyncUid = currentUser.uid;
+      }
+    });
+    let hiddenAt = 0;
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (document.visibilityState === "visible" && fx && currentUser && Date.now() - hiddenAt > 30000) {
+        syncUserCloud(currentUser);
+        cloudSyncUid = currentUser.uid;
+      }
     });
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
