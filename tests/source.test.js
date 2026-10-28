@@ -249,6 +249,17 @@ test("account offers sync repair and app refresh without clearing login", () => 
   assert.match(html, /addEventListener\("online"/);
 });
 
+test("friends page lists friends first and selects a friend for details", () => {
+  const start = html.indexOf("function organizeNavigationPages()");
+  const end = html.indexOf("// The floating button", start);
+  const organize = html.slice(start, end);
+  assert.match(organize, /friendsStack\.prepend\(rosterCard\)/);
+  assert.match(organize, /rosterCard\.after\(friendDetailCard\)/);
+  assert.match(organize, /addFriendsCard\.appendChild\(quickAddBlock\)/);
+  assert.match(html, /id="friend-detail-select"/);
+  assert.match(html, /friendDetailSelect\.addEventListener\("change"/);
+});
+
 test("1-on-1 ledgers can be reloaded from cloud", () => {
   assert.match(html, /data-call="reloadSelectedFriendFromCloud"/);
   assert.match(html, /window\.reloadFriendFromCloud = async function\(friendId\)/);
