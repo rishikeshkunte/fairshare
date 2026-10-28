@@ -518,3 +518,10 @@ test("renaming a contact propagates to direct ledgers and group display names", 
   assert.match(html, /friend\.email && normalizeEmail\(friend\.email\) === normalizeEmail\(linkedEmail\)/);
   assert.match(html, /friend\.aliases\.includes\(name\)/);
 });
+
+test("suggested settlements and direct balances use the renamed contact, not an alias", () => {
+  assert.match(html, /function canonicalFriendName\(name\)/);
+  assert.match(html, /item\.name === name \|\| \(Array\.isArray\(item\.aliases\) && item\.aliases\.includes\(name\)\)/);
+  assert.match(html, /const friend = canonicalFriendName\(tx\.friend\)/);
+  assert.match(html, /canonicalFriendName\(name\) === target/);
+});
