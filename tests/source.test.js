@@ -509,3 +509,12 @@ test("balances can scope to one group, all groups, or 1-on-1 and include people 
   assert.match(html, /function buildScopedPeople\(data\)/);
   assert.match(html, /const balancesScopeLabel = document\.getElementById\("balances-group-scope"\)/);
 });
+
+test("renaming a contact propagates to direct ledgers and group display names", () => {
+  assert.match(html, /friend\.aliases = Array\.from\(new Set/);
+  assert.match(html, /if \(tx\.friend === oldName\)/);
+  assert.match(html, /if \(tx\.payer === oldName\)/);
+  assert.match(html, /const linkedEmail = group\?\.memberLinks\?\.\[name\]/);
+  assert.match(html, /friend\.email && normalizeEmail\(friend\.email\) === normalizeEmail\(linkedEmail\)/);
+  assert.match(html, /friend\.aliases\.includes\(name\)/);
+});

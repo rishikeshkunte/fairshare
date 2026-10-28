@@ -987,7 +987,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v64";
+    const APP_BUILD = "v65";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1141,7 +1141,19 @@
 
     function displayGroupMember(group, name) {
       if (!name) return "";
-      return name === getMyGroupMemberName(group) ? "You" : name;
+      if (name === getMyGroupMemberName(group)) return "You";
+      const linkedEmail = group?.memberLinks?.[name];
+      if (linkedEmail) {
+        const linkedFriend = (appState.friends || []).find(friend =>
+          friend.email && normalizeEmail(friend.email) === normalizeEmail(linkedEmail)
+        );
+        if (linkedFriend?.name) return linkedFriend.name;
+        return name;
+      }
+      const aliasFriend = (appState.friends || []).find(friend =>
+        Array.isArray(friend.aliases) && friend.aliases.includes(name)
+      );
+      return aliasFriend?.name || name;
     }
 
     function transactionDisplayName(tx, name) {
@@ -2142,16 +2154,74 @@
       if (!newName || !newName.trim() || newName.trim() === friend.name) return;
 
       const oldName = friend.name;
-      friend.name = newName.trim();
-
-      // Update name across active group if present
-      const g = getGroup();
-      if (g.members.includes(oldName)) {
-        g.members = g.members.map(m => m === oldName ? friend.name : m);
+      const trimmed = newName.trim();
+      if (appState.friends.some(f => f !== friend && String(f.name || "").toLowerCase() === trimmed.toLowerCase())) {
+        toast("Another contact already uses that name.");
+        return;
       }
 
+      friend.aliases = Array.from(new Set([...(friend.aliases || []), oldName])).filter(name => name && name !== trimmed);
+      friend.name = trimmed;
+
+      // Direct ledgers are keyed by the roster name, so rename those keys now.
+      const renameTx = tx => {
+        if (!tx || typeof tx !== "object") return false;
+        let changed = false;
+        if (tx.friend === oldName) { tx.friend = trimmed; changed = true; }
+        if (tx.payer === oldName) { tx.payer = trimmed; changed = true; }
+        if (tx.receiver === oldName) { tx.receiver = trimmed; changed = true; }
+        if (tx.shares && Object.prototype.hasOwnProperty.call(tx.shares, oldName)) {
+          const share = Number(tx.shares[oldName]) || 0;
+          delete tx.shares[oldName];
+          tx.shares[trimmed] = (Number(tx.shares[trimmed]) || 0) + share;
+          changed = true;
+        }
+        if (tx.type === "settlement" && typeof tx.desc === "string" && tx.desc.includes(oldName)) {
+          tx.desc = tx.desc.split(oldName).join(trimmed);
+          changed = true;
+        }
+        if (changed) {
+          tx.updatedAt = Date.now();
+          if (!tx.timestamp) tx.timestamp = Date.now();
+        }
+        return changed;
+      };
+
+      (appState.directTransactions || []).forEach(renameTx);
+      (appState.deletedTransactions || []).forEach(item => {
+        if (!item) return;
+        if (item.friend === oldName) item.friend = trimmed;
+        renameTx(item.transaction);
+      });
+
+      // Group ledgers keep their internal member key, but every group UI resolves
+      // the roster name through memberLinks/aliases. Refresh generated settlement
+      // descriptions so the old name does not linger in Activity text.
+      Object.values(appState.groups || {}).forEach(group => {
+        (group.transactions || []).forEach(tx => {
+          if (tx.type === "settlement" && typeof tx.desc === "string" && tx.desc.includes(oldName)) {
+            tx.desc = tx.desc.split(oldName).join(trimmed);
+            tx.updatedAt = Date.now();
+            if (!tx.timestamp) tx.timestamp = Date.now();
+          }
+        });
+        (group.deletedTransactions || []).forEach(item => {
+          const tx = item?.transaction;
+          if (tx?.type === "settlement" && typeof tx.desc === "string" && tx.desc.includes(oldName)) {
+            tx.desc = tx.desc.split(oldName).join(trimmed);
+          }
+        });
+      });
+
+      if (selectedDirectFriend === oldName) selectedDirectFriend = trimmed;
+
       saveState();
+      if (friend.email) syncDirectPairExpense(trimmed);
+      refreshDirectListeners();
+      renderFriendsRoster();
+      renderFriendPickerDropdown();
       renderAll();
+      toast(`Renamed to ${trimmed} everywhere.`);
     };
 
     window.deleteFriendFromRoster = async function(id) {
