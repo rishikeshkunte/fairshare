@@ -532,3 +532,10 @@ test("old 1-on-1 names resolve through group links and reconcile direct keys", (
   assert.match(html, /if \(reconcileDirectFriendNames\(\)\) persistLocalState\(\)/);
   assert.match(html, /const linkedEmail = group\?\.memberLinks\?\.\[name\]/);
 });
+
+test("suggested settlements default to the signed-in person's own debts", () => {
+  assert.match(html, /id="settlement-visibility"/);
+  assert.match(html, /let settlementVisibility = "mine"/);
+  assert.match(html, /item\.kind === "direct" \|\| item\.fromLabel === "You" \|\| item\.toLabel === "You"/);
+  assert.match(html, /settlementVisibility === "all" \? allItems : allItems\.filter\(isMine\)/);
+});

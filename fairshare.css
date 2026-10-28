@@ -1609,3 +1609,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .balances-scope-picker, .balances-scope-picker select { min-width: 0; width: 100%; }
   .balances-scope-bar { align-items: stretch; }
 }
+
+/* Suggested settlements visibility */
+.settlement-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: .78rem;
+  color: var(--muted);
+}
+.settlement-filter label { margin: 0; font-size: .72rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.settlement-filter select { width: auto; min-width: 118px; padding: 6px 9px; font-size: .8rem; }
+@media (max-width: 600px) {
+  .settlement-header { flex-wrap: wrap; }
+  .settlement-filter { width: 100%; justify-content: space-between; }
+  .settlement-filter select { flex: 1 1 auto; }
+}
