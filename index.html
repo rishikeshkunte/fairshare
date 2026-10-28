@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="FairShare splits group expenses, simplifies who owes whom, and tracks spending. It works offline, with optional Gmail sign-in.">
-  <meta name="theme-color" content="#2F4E3F">
-  <link rel="canonical" href="https://rishikeshkunte.github.io/fairshare/">
+  <meta name="description" content="What's My Share? splits group expenses, simplifies who owes whom, and tracks spending. Works offline, with optional Gmail sync.">
+  <meta name="theme-color" content="#1F3D32">
+  <link rel="canonical" href="https://whatismyshare.vercel.app/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="FairShare — group expense tracker">
+  <meta property="og:title" content="What's My Share? — group expense tracker">
   <meta property="og:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Gmail sync is optional.">
-  <meta property="og:url" content="https://rishikeshkunte.github.io/fairshare/">
-  <meta property="og:image" content="https://rishikeshkunte.github.io/fairshare/icons/icon-512.png">
+  <meta property="og:url" content="https://whatismyshare.vercel.app/">
+  <meta property="og:image" content="https://whatismyshare.vercel.app/icons/icon-512.png">
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="FairShare — group expense tracker">
+  <meta name="twitter:title" content="What's My Share? — group expense tracker">
   <meta name="twitter:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Gmail sync is optional.">
-  <meta name="twitter:image" content="https://rishikeshkunte.github.io/fairshare/icons/icon-512.png">
+  <meta name="twitter:image" content="https://whatismyshare.vercel.app/icons/icon-512.png">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <title>FairShare - Group Expense Tracker</title>
+  <title>What's My Share? — group expense tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Sans:wght@500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="fairshare.css">
 </head>
 <body>
@@ -31,10 +31,10 @@
   <div id="auth-gate" class="auth-gate">
     <div class="auth-gate-card">
       <span class="eyebrow">Private by account</span>
-      <h1>FairShare</h1>
+      <h1>What's My Share?</h1>
       <p>Sign in to view your groups, expenses, balances, and receipts.</p>
       <button type="button" class="btn btn-primary" data-call="handleAuthClick">Sign in with Gmail</button>
-      <p class="auth-gate-note">FairShare only uses your Gmail address and display name for sign-in. It does not read your Gmail messages, Drive, or contacts.</p>
+      <p class="auth-gate-note">What's My Share? only uses your Gmail address and display name for sign-in. It does not read your Gmail messages, Drive, or contacts.</p>
       <p class="auth-gate-note">Your data is visible only while you are signed in on this device.</p>
     </div>
   </div>
@@ -44,25 +44,17 @@
   <!-- App Header -->
   <header class="app-header">
     <button type="button" class="brand-group" data-call="navigateTo" data-arg="home">
-      <div class="logo-container" title="FairShare">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="40" height="40">
-          <rect width="100" height="100" rx="22" fill="#2F4E3F"/>
-          <circle cx="50" cy="50" r="38" fill="#ffffff"/>
-          <path d="M 12 12 C 22 24, 32 30, 42 34 C 44 35, 45 32, 43 30 C 38 24, 30 16, 20 8 Z" fill="#2563eb"/>
-          <path d="M 88 12 C 78 24, 68 30, 58 34 C 56 35, 55 32, 57 30 C 62 24, 70 16, 80 8 Z" fill="#D4A83F"/>
-          <path d="M 12 88 C 22 76, 32 70, 42 66 C 44 65, 45 68, 43 70 C 38 76, 30 84, 20 92 Z" fill="#ef4444"/>
-          <path d="M 88 88 C 78 76, 68 70, 58 66 C 56 65, 55 68, 57 70 C 62 76, 70 84, 80 92 Z" fill="#1b7a42"/>
-          <path d="M 48 20 A 30 30 0 0 0 20 48 L 48 48 Z" fill="#3b82f6"/>
-          <path d="M 20 52 A 30 30 0 0 0 48 80 L 48 52 Z" fill="#f87171"/>
-          <path d="M 52 20 L 52 48 L 80 48 A 30 30 0 0 0 52 20 Z" fill="#fbbf24"/>
-          <path d="M 52 52 L 52 80 A 30 30 0 0 0 80 52 Z" fill="#34d399"/>
-          <path d="M 32 31 L 44 31 L 44 37 L 36 37 L 36 44 L 43 44 L 43 49 L 36 49 L 36 69 L 30 69 L 30 31 Z" fill="#ffffff"/>
-          <path d="M 68 34 C 68 32, 65 31, 61 31 C 56 31, 54 33, 54 36 C 54 42, 68 42, 68 53 C 68 62, 59 64, 54 64 C 50 64, 47 62, 47 62 L 48 56 C 48 56, 51 58, 55 58 C 59 58, 62 56, 62 53 C 62 47, 48 47, 48 36 C 48 27, 56 25, 62 25 C 66 25, 69 27, 69 27 Z" fill="#ffffff"/>
+      <div class="logo-container" title="What's My Share?">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="40" height="40" role="img" aria-label="What's My Share?">
+          <rect width="100" height="100" rx="24" fill="#1F3D32"/>
+          <path d="M48 18 A32 32 0 0 0 48 82 Z" fill="#F6F4EE"/>
+          <path d="M52 18 A32 32 0 0 1 52 82 Z" fill="#C9752F"/>
+          <circle cx="50" cy="50" r="6.5" fill="#1F3D32"/>
         </svg>
       </div>
       <div>
-        <h1 class="brand-title">FairShare</h1>
-        <p class="brand-tagline">Shared expenses, made simple.</p>
+        <h1 class="brand-title">What's My Share?</h1>
+        <p class="brand-tagline">Split it. Settle it. Done.</p>
       </div>
     </button>
 
@@ -86,14 +78,9 @@
       <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
       Home
     </button>
-    <button type="button" class="nav-tab-btn" data-page="groups" data-call="navigateTo" data-arg="groups">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>
-      Groups
-    </button>
-    <button type="button" class="nav-tab-btn" data-page="friends" data-call="navigateTo" data-arg="friends">
-      <svg viewBox="0 0 24 24"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"/><circle cx="10" cy="8" r="3"/><path d="M20 19v-1a3 3 0 0 0-2.2-2.9M16 5.1a3 3 0 0 1 0 5.8"/></svg>
-      Friends
-      <span id="desktop-requests-badge" class="nav-badge" style="display:none;">0</span>
+    <button type="button" class="nav-tab-btn" data-page="analytics" data-call="navigateTo" data-arg="analytics">
+      <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg>
+      Insights
     </button>
     <button type="button" class="nav-tab-btn" data-page="history" data-call="navigateTo" data-arg="history">
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
@@ -101,11 +88,8 @@
     </button>
     <button type="button" class="nav-tab-btn" data-page="account" data-call="navigateTo" data-arg="account">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-      Account
-    </button>
-    <button type="button" class="nav-tab-btn" data-page="analytics" data-call="navigateTo" data-arg="analytics">
-      <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/></svg>
-      Analytics
+      You
+      <span id="desktop-requests-badge" class="nav-badge" style="display:none;">0</span>
     </button>
   </nav>
   </aside>
@@ -113,30 +97,28 @@
   <main class="workspace">
   <!-- ================= PAGE 1: HOME DASHBOARD ================= -->
   <section id="page-home" class="app-page active">
-    <div class="home-balance-card">
-      <div>
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
-          <span class="eyebrow">Your overall standing</span>
+    <div class="home-balance-card home-hero">
+      <div class="home-hero-main">
+        <div class="hero-topline">
+          <span class="eyebrow">Your overall balance</span>
           <span id="home-standing-badge">Live</span>
         </div>
         <div id="home-standing-text">All settled up!</div>
         <div id="home-standing-sub">You neither owe nor are owed money across active groups and direct bills.</div>
 
-        <div class="metrics-split" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin: 16px 0;">
-          <div class="metric-tile owed" style="background:var(--surface-sage); padding:14px; border-radius:12px;">
-            <div style="font-size:0.75rem; color:var(--muted); font-weight:700;">↙ You are owed</div>
-            <div id="home-owed-val" style="font-size:1.35rem; font-weight:800; color:var(--positive); font-family:var(--mono);">₹0.00</div>
+        <div class="hero-metrics">
+          <div class="hero-metric">
+            <span>You are owed</span>
+            <strong id="home-owed-val">₹0.00</strong>
           </div>
-          <div class="metric-tile owe" style="background:var(--surface-peach); padding:14px; border-radius:12px;">
-            <div style="font-size:0.75rem; color:var(--muted); font-weight:700;">↗ You owe</div>
-            <div id="home-owe-val" style="font-size:1.35rem; font-weight:800; color:var(--negative); font-family:var(--mono);">₹0.00</div>
+          <div class="hero-metric">
+            <span>You owe</span>
+            <strong id="home-owe-val">₹0.00</strong>
           </div>
         </div>
 
         <div class="hero-actions">
-          <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="balances">Review balances</button>
-          <button type="button" class="btn btn-settle" data-call="openSettleUp">Settle up</button>
-          <button type="button" id="hero-add-expense" class="btn btn-primary" aria-expanded="false" aria-controls="hero-expense-menu">
+          <button type="button" class="btn btn-primary" id="hero-add-expense" aria-expanded="false" aria-controls="hero-expense-menu">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             Add expense
           </button>
@@ -144,65 +126,56 @@
             <button type="button" data-expense-scope="group">👥 Add a group expense</button>
             <button type="button" data-expense-scope="friend">👤 Add a friend expense</button>
           </div>
+          <button type="button" class="btn btn-settle" data-call="openSettleUp">Settle up</button>
+          <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="balances">Review balances</button>
         </div>
       </div>
-      <div>
+
+      <div class="home-hero-side">
         <span class="eyebrow">Active group</span>
-        <h2 style="margin:6px 0 4px;"><span id="home-group-name">My Group</span></h2>
-        <div id="home-group-stats" style="color:var(--muted); font-size:0.85rem;">0 expenses</div>
+        <h2 id="home-group-name">No groups yet</h2>
+        <div id="home-group-stats" class="section-hint">No groups yet</div>
+        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="groups">Manage group</button>
         <div id="home-no-groups-prompt" class="empty-state" hidden>
-          You haven’t created a group yet.
+          <p class="empty-state-description">You haven’t created a group yet.</p>
           <button type="button" class="btn btn-primary" data-call="openNewGroupPrompt">Create your first group</button>
         </div>
       </div>
     </div>
 
-    <!-- Quick Navigation Cards Grid -->
-    <div class="dashboard-grid">
-      <button type="button" class="dash-card" data-call="navigateTo" data-arg="balances">
+    <div class="home-quick-grid">
+      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="balances">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg></div>
         <div class="dash-card-title">Who pays whom</div>
         <div class="dash-card-desc" id="dash-settle-desc">Review balances</div>
         <div id="home-debt-preview"></div>
       </button>
 
-      <button type="button" class="dash-card" data-call="navigateTo" data-arg="history">
+      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="history">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
         <div class="dash-card-title">Activity</div>
         <div class="dash-card-desc" id="dash-history-desc">0 transactions recorded</div>
       </button>
 
-      <button type="button" class="dash-card" data-call="navigateTo" data-arg="analytics">
-        <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/></svg></div>
-        <div class="dash-card-title">Spending mix</div>
+      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="analytics">
+        <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg></div>
+        <div class="dash-card-title">Insights</div>
         <div class="dash-card-desc" id="dash-analytics-desc">Category insights</div>
       </button>
 
-      <button type="button" class="dash-card" data-call="navigateTo" data-arg="friends">
+      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="friends">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"/><circle cx="10" cy="8" r="3"/></svg></div>
-        <div class="dash-card-title">People & Groups</div>
+        <div class="dash-card-title">People &amp; Groups</div>
         <div class="dash-card-desc" id="dash-friends-desc">Manage connections</div>
       </button>
     </div>
 
-    <!-- Active Group Card -->
-    <div class="card home-members-card">
-      <div class="card-header-row">
-        <div>
-          <h2 style="margin:0;">Members</h2>
-          <span style="font-size:0.8rem; color:var(--muted);">In active group</span>
-        </div>
-        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="groups">Manage group</button>
-      </div>
-      <div id="home-members-chips" class="chip-container"></div>
-    </div>
-
     <div class="card home-recent-card">
       <div class="card-header-row">
-        <h2 style="margin:0;">Recent Activity</h2>
-        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="history" style="padding:6px 10px; font-size:0.8rem;">View All →</button>
+        <h2 style="margin:0;">Recent activity</h2>
+        <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="history" style="padding:6px 10px; font-size:0.8rem;">View all →</button>
       </div>
-      <div id="home-recent-empty" class="empty-state" style="padding:14px 0;">No expenses yet. Tap <strong>+ Add an expense</strong> to log your first bill.</div>
+      <div id="home-recent-empty" class="empty-state" style="padding:14px 0;">No expenses yet. Tap <strong>Add expense</strong> to log your first bill.</div>
       <ul id="home-recent-list" class="transaction-list"></ul>
     </div>
   </section>
@@ -542,7 +515,7 @@
         <div class="card-header-row">
           <div>
             <h2 id="your-groups-heading">Your groups</h2>
-            <span class="section-hint">Select a group to make it active across FairShare.</span>
+            <span class="section-hint">Select a group to make it active across What's My Share?.</span>
           </div>
           <button type="button" id="btn-new-group-inline" class="btn btn-primary">+ New group</button>
         </div>
@@ -599,10 +572,37 @@
   </section>
 
   <section id="page-account" class="app-page">
-    <div class="section-header"><div><h1>Account</h1><p>Manage your sign-in, invite links, and preferences.</p></div></div>
+    <div class="you-hero">
+      <div class="you-avatar" id="you-avatar">Y</div>
+      <div>
+        <span class="eyebrow">Your account</span>
+        <h1 id="you-name">You</h1>
+        <p id="you-email">Signed in with Gmail</p>
+      </div>
+    </div>
+
+    <div class="you-links">
+      <button type="button" class="you-link" data-call="navigateTo" data-arg="friends">
+        <strong>Friends &amp; contacts</strong>
+        <span class="you-count" id="you-friends-count">0 people</span>
+      </button>
+      <button type="button" class="you-link" data-call="navigateTo" data-arg="groups">
+        <strong>Groups</strong>
+        <span class="you-count" id="you-groups-count">0 groups</span>
+      </button>
+      <button type="button" class="you-link" data-call="navigateTo" data-arg="analytics">
+        <strong>Insights</strong>
+        <span>Categories and trends</span>
+      </button>
+      <button type="button" class="you-link" data-call="navigateTo" data-arg="history">
+        <strong>Activity</strong>
+        <span>Every expense and settlement</span>
+      </button>
+    </div>
+
     <div id="account-profile-slot"></div>
     <div class="card account-settings-card">
-      <h2>Preferences & tools</h2>
+      <h2>Settings</h2>
       <div id="account-actions-slot"></div>
     </div>
     <div class="card" id="invites-card" style="margin-top:16px;">
@@ -779,7 +779,7 @@
               <button type="button" class="btn btn-secondary" data-call="shareViaWhatsApp">Share via WhatsApp</button>
             </div>
             <p id="invite-link-note" style="font-size:0.75rem; color:var(--muted); margin:8px 0 0; line-height:1.4;">
-              Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from Account -> Invite links.
+              Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from You -> Invite links.
             </p>
           </div>
 
@@ -861,7 +861,7 @@
   </section>
 
   <footer class="app-footer">
-    <p>Privacy: FairShare stores your ledger in this browser. Gmail sign-in is optional and is used only to sync groups you belong to, friend requests, and receipt photos. Receipts stay on this device until you are signed in. Nothing here is sold or used for ads.</p>
+    <p>Privacy: What's My Share? stores your ledger in this browser. Gmail sign-in is optional and is used only to sync groups you belong to, friend requests, and receipt photos. Receipts stay on this device until you are signed in. Nothing here is sold or used for ads.</p>
   </footer>
   </main>
   </div>
@@ -872,28 +872,20 @@
       <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
       <span>Home</span>
     </button>
-    <button type="button" class="mobile-nav-item" data-page="groups" data-call="navigateTo" data-arg="groups">
-      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>
-      <span>Groups</span>
-    </button>
-    <button type="button" class="mobile-nav-item" data-page="friends" data-call="navigateTo" data-arg="friends">
-      <span style="position:relative; display:grid;">
-        <svg viewBox="0 0 24 24"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"/><circle cx="10" cy="8" r="3"/><path d="M20 19v-1a3 3 0 0 0-2.2-2.9M16 5.1a3 3 0 0 1 0 5.8"/></svg>
-        <span id="mobile-requests-badge" class="nav-badge-mobile" style="display:none;">0</span>
-      </span>
-      <span>Friends</span>
+    <button type="button" class="mobile-nav-item" data-page="analytics" data-call="navigateTo" data-arg="analytics">
+      <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg>
+      <span>Insights</span>
     </button>
     <button type="button" class="mobile-nav-item" data-page="history" data-call="navigateTo" data-arg="history">
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
       <span>Activity</span>
     </button>
     <button type="button" class="mobile-nav-item" data-page="account" data-call="navigateTo" data-arg="account">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-      <span>Account</span>
-    </button>
-    <button type="button" class="mobile-nav-item" data-page="analytics" data-call="navigateTo" data-arg="analytics">
-      <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 15v-4M12 15V8M16 15v-6"/></svg>
-      <span>Analytics</span>
+      <span style="position:relative; display:grid;">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+        <span id="mobile-requests-badge" class="nav-badge-mobile" style="display:none;">0</span>
+      </span>
+      <span>You</span>
     </button>
   </nav>
 
@@ -1010,9 +1002,10 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v56";
+    const APP_BUILD = "v57";
     window.FAIRSHARE_BUILD = APP_BUILD;
-    console.info("[FairShare] build", APP_BUILD);
+    window.WHATSMYSHARE_BUILD = APP_BUILD;
+    console.info("[What's My Share?] build", APP_BUILD);
 
     function requestsCol() {
       return fx.storeMod.collection(fx.db, "friend_requests");
@@ -1527,7 +1520,7 @@
       // Never load user data before Firebase confirms the signed-in account.
       let theme = "";
       try { theme = localStorage.getItem("fairshare_theme") || ""; } catch { /* ignore */ }
-      if (theme === "light" || theme === "dark") {
+      if (theme === "light" || theme === "dark" || theme === "black") {
         appState.theme = theme;
       } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
         appState.theme = "dark";
@@ -1855,6 +1848,18 @@
     const modalBody = document.getElementById("modal-body");
 
     // Navigation (SPA)
+    // Four primary tabs: Home, Insights, Activity, You. Management screens
+    // (groups, friends, add-expense, balances) belong to one of those tabs.
+    const NAV_PARENT = {
+      home: "home",
+      balances: "home",
+      "add-expense": "home",
+      analytics: "analytics",
+      history: "history",
+      account: "account",
+      friends: "account",
+      groups: "account"
+    };
     window.navigateTo = function(pageId) {
       const requestedPage = pageId;
       if (!currentUser) pageId = "home";
@@ -1863,11 +1868,12 @@
       const targetPage = document.getElementById("page-" + pageId);
       if (targetPage) targetPage.classList.add("active");
 
+      const activeTab = NAV_PARENT[requestedPage] || NAV_PARENT[pageId] || pageId;
       document.querySelectorAll(".desktop-nav .nav-tab-btn").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.page === pageId);
+        btn.classList.toggle("active", btn.dataset.page === activeTab);
       });
       document.querySelectorAll(".mobile-bottom-nav .mobile-nav-item").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.page === pageId);
+        btn.classList.toggle("active", btn.dataset.page === activeTab);
       });
 
       window.location.hash = pageId;
@@ -1968,16 +1974,25 @@
       });
     });
 
+    const THEME_ORDER = ["light", "dark", "black"];
+    const THEME_LABEL = { light: "Ink mode", dark: "Black mode", black: "Ivory mode" };
+    const THEME_COLOR = { light: "#1F3D32", dark: "#0F1412", black: "#050706" };
+
     function applyTheme() {
-      document.documentElement.setAttribute("data-theme", appState.theme);
+      const theme = THEME_ORDER.includes(appState.theme) ? appState.theme : "light";
+      appState.theme = theme;
+      document.documentElement.setAttribute("data-theme", theme);
+      const themeColor = document.querySelector('meta[name="theme-color"]');
+      if (themeColor) themeColor.setAttribute("content", THEME_COLOR[theme]);
       if (themeBtnText) {
-        themeBtnText.textContent = appState.theme === "dark" ? "Light mode" : "Dark mode";
+        themeBtnText.textContent = THEME_LABEL[theme];
       }
     }
 
     if (btnThemeToggle) {
       btnThemeToggle.addEventListener("click", () => {
-        appState.theme = appState.theme === "dark" ? "light" : "dark";
+        const current = THEME_ORDER.indexOf(appState.theme);
+        appState.theme = THEME_ORDER[(current + 1) % THEME_ORDER.length];
         applyTheme();
         saveState();
         renderAnalytics();
@@ -3509,8 +3524,8 @@
       const myName = myInviteName();
       const inviteUrl = activeGroupInviteUrl();
 
-      const subject = encodeURIComponent(`Split expenses on FairShare with ${myName}`);
-      const body = encodeURIComponent(`Hey! I am using FairShare to track and split our expenses.\n\nOpen this link to join "${g.name}":\n${inviteUrl}\n\nSign in with Gmail after opening the link if you want the expenses to sync live.\n\nCheers`);
+      const subject = encodeURIComponent(`Split expenses on What's My Share? with ${myName}`);
+      const body = encodeURIComponent(`Hey! I am using What's My Share? to track and split our expenses.\n\nOpen this link to join "${g.name}":\n${inviteUrl}\n\nSign in with Gmail after opening the link if you want the expenses to sync live.\n\nCheers`);
 
       window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`, '_blank');
     };
@@ -3519,7 +3534,7 @@
       const g = requireGroupForInvite();
       if (!g) return;
       const inviteUrl = activeGroupInviteUrl();
-      const text = encodeURIComponent(`Hey! Join me on FairShare to track and split our expenses: ${inviteUrl}`);
+      const text = encodeURIComponent(`Hey! Join me on What's My Share? to track and split our expenses: ${inviteUrl}`);
       window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
     };
 
@@ -3890,7 +3905,7 @@
         const pa = await askPrompt({ title: "Pay with UPI", message: "UPI ID of the person being paid", placeholder: "name@okbank" });
         if (!pa || !pa.includes("@")) return toast("Enter a UPI ID such as name@okbank.");
         const amount = document.getElementById("settle-amount")?.value || "0.00";
-        const href = `upi://pay?${new URLSearchParams({ pa: pa.trim(), pn: "FairShare", am: amount, cu: "INR", tn: "FairShare settlement" })}`;
+        const href = `upi://pay?${new URLSearchParams({ pa: pa.trim(), pn: "WhatsMyShare", am: amount, cu: "INR", tn: "What's My Share? settlement" })}`;
         const qrMod = await import("./js/vendor/qrcode.js");
         const qrcode = qrMod.default;
         qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
@@ -5322,6 +5337,15 @@
 
       const groups = Object.values(appState.groups);
       const g = getGroup();
+      const youFriendsCount = document.getElementById("you-friends-count");
+      if (youFriendsCount) {
+        const count = (appState.friends || []).length;
+        youFriendsCount.textContent = `${count} ${count === 1 ? "person" : "people"}`;
+      }
+      const youGroupsCount = document.getElementById("you-groups-count");
+      if (youGroupsCount) {
+        youGroupsCount.textContent = `${groups.length} ${groups.length === 1 ? "group" : "groups"}`;
+      }
       const noGroupsPrompt = document.getElementById("home-no-groups-prompt");
       if (noGroupsPrompt) noGroupsPrompt.hidden = groups.length > 0;
       const homeGroupStats = document.getElementById("home-group-stats");
@@ -5332,7 +5356,7 @@
       if (balancesScope) balancesScope.textContent = g.id ? `Active group: ${g.name}` : "No group selected";
       const inviteNote = document.getElementById("invite-link-note");
       if (inviteNote) {
-        inviteNote.textContent = "Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from Account -> Invite links.";
+        inviteNote.textContent = "Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from You -> Invite links.";
       }
       const manageCard = document.getElementById("group-management-card");
       if (manageCard) manageCard.hidden = groups.length === 0;
@@ -5480,11 +5504,23 @@
         if (myDisplayAccount) {
           myDisplayAccount.textContent = user.displayName ? `${user.displayName} (${user.email})` : user.email;
         }
+        const youName = document.getElementById("you-name");
+        const youEmail = document.getElementById("you-email");
+        const youAvatar = document.getElementById("you-avatar");
+        if (youName) youName.textContent = user.displayName || firstName;
+        if (youEmail) youEmail.textContent = user.email || "Signed in with Gmail";
+        if (youAvatar) youAvatar.textContent = (user.displayName || user.email || "Y").trim().slice(0, 1).toUpperCase();
       } else {
         authBtn.textContent = "Sign in";
         if (myDisplayAccount) {
           myDisplayAccount.textContent = "Not signed in (Operating offline & local)";
         }
+        const youName = document.getElementById("you-name");
+        const youEmail = document.getElementById("you-email");
+        const youAvatar = document.getElementById("you-avatar");
+        if (youName) youName.textContent = "You";
+        if (youEmail) youEmail.textContent = "Signed in with Gmail";
+        if (youAvatar) youAvatar.textContent = "Y";
       }
       document.querySelectorAll("[data-needs-auth]").forEach((node) => {
         node.disabled = !user;
@@ -5536,7 +5572,7 @@
         ]);
       } catch (err) {
         if (!fx) ensureCloudPromise = null;
-        toast("Gmail sign-in is unreachable. FairShare still works on this device.");
+        toast("Gmail sign-in is unreachable. What's My Share? still works on this device.");
         return;
       }
       if (currentUser) {
@@ -6279,7 +6315,7 @@
       const url = inviteUrlFor(token);
       try {
         await navigator.clipboard.writeText(url);
-        toast(`${label} copied. It expires in 48 hours. Revoke it from Account -> Invite links.`);
+        toast(`${label} copied. It expires in 48 hours. Revoke it from You -> Invite links.`);
       } catch {
         await askPrompt({ message: `${label}:`, defaultValue: url });
       }
@@ -6303,15 +6339,15 @@
       const inputEl = document.getElementById("input-friend-email");
       const toEmail = (inputEl ? inputEl.value : "").trim();
       const myName = myInviteName();
-      const subject = encodeURIComponent(`Connect with ${myName} on FairShare`);
-      const body = encodeURIComponent(`Hey! I am using FairShare to track and split expenses. Connect with me using this link:\n${inviteUrlFor(token)}\n\nThe link expires in 48 hours. Sign in with Gmail to sync.\n\nCheers`);
+      const subject = encodeURIComponent(`Connect with ${myName} on What's My Share?`);
+      const body = encodeURIComponent(`Hey! I am using What's My Share? to track and split expenses. Connect with me using this link:\n${inviteUrlFor(token)}\n\nThe link expires in 48 hours. Sign in with Gmail to sync.\n\nCheers`);
       window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`, "_blank");
     };
 
     window.shareViaWhatsApp = async function() {
       const token = await createInvite("friend");
       if (!token) return;
-      const text = encodeURIComponent(`Hey! Connect with me on FairShare to track and split expenses: ${inviteUrlFor(token)} (expires in 48 hours)`);
+      const text = encodeURIComponent(`Hey! Connect with me on What's My Share? to track and split expenses: ${inviteUrlFor(token)} (expires in 48 hours)`);
       window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
     };
 
@@ -6447,7 +6483,7 @@
         if (desc) {
           desc.textContent = data.type === "group"
             ? `${inviter} invited you to join "${data.groupName || "their group"}". This link expires in 48 hours and can be used by multiple people.`
-            : `${inviter} wants to connect with you on FairShare. This link expires in 48 hours and can be used by multiple people.`;
+            : `${inviter} wants to connect with you on What's My Share?. This link expires in 48 hours and can be used by multiple people.`;
         }
         if (modal) modal.classList.add("active");
       } catch (err) {

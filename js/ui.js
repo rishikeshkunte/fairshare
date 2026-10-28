@@ -29,7 +29,7 @@ function ensureDialog() {
   content.style.maxWidth = "440px";
   const title = document.createElement("h3");
   title.id = "dialog-title";
-  title.textContent = "FairShare";
+  title.textContent = "What's My Share?";
   const message = document.createElement("p");
   message.id = "dialog-message";
   const input = document.createElement("input");
@@ -79,11 +79,11 @@ export function toast(message, options = {}) {
   toastTimer = setTimeout(() => { root.hidden = true; }, options.duration || (options.actionLabel ? 7000 : 3400));
 }
 
-export function askConfirm({ title = "FairShare", message, confirmLabel = "Confirm", danger = false }) {
+export function askConfirm({ title = "What's My Share?", message, confirmLabel = "Confirm", danger = false }) {
   return openDialog({ title, message, mode: "confirm", confirmLabel, danger });
 }
 
-export function askPrompt({ title = "FairShare", message, defaultValue = "", placeholder = "" }) {
+export function askPrompt({ title = "What's My Share?", message, defaultValue = "", placeholder = "" }) {
   return openDialog({ title, message, mode: "prompt", defaultValue, placeholder, confirmLabel: "OK" });
 }
 
