@@ -161,15 +161,6 @@
         </div>
       </div>
     </div>
-
-    <div class="home-quick-grid">
-      <button type="button" class="home-quick-card home-debt-card" data-call="navigateTo" data-arg="balances">
-        <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg></div>
-        <div class="dash-card-title">Who pays whom</div>
-        <div class="dash-card-desc" id="dash-settle-desc">Review balances</div>
-        <div id="home-debt-preview"></div>
-      </button>
-    </div>
   </section>
 
   <!-- ================= PAGE 2: ADD / EDIT EXPENSE ================= -->
@@ -996,7 +987,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v63";
+    const APP_BUILD = "v64";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -5649,7 +5640,6 @@
       renderMembers();
       renderBalancesAndSettlements();
       renderGroupExpenseSummary();
-      renderHomeAllDebts();
       renderAnalytics();
       renderTransactions();
       renderFriendsRoster();
