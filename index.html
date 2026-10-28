@@ -64,19 +64,38 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>
         <span id="auth-btn-label">Sign in</span>
       </button>
-      <button type="button" id="btn-theme-toggle" class="btn btn-secondary">
+      <button type="button" id="btn-theme-toggle" class="btn btn-secondary" aria-haspopup="true" aria-expanded="false" aria-controls="theme-menu">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"/></svg>
-        <span id="theme-btn-text">Dark mode</span>
+        <span id="theme-btn-text">Theme: Ivory</span>
       </button>
     </div>
   </header>
 
-  <div id="global-theme-toggle-slot" class="global-theme-toggle-slot" aria-label="Appearance"></div>
+  <div id="global-theme-toggle-slot" class="global-theme-toggle-slot" aria-label="Appearance">
+    <div id="theme-menu" class="theme-menu" role="radiogroup" aria-label="Choose theme" hidden>
+      <button type="button" class="theme-option" role="radio" aria-checked="false" data-theme-choice="light">
+        <span class="theme-swatch theme-swatch-light" aria-hidden="true"></span>
+        <span>Ivory</span>
+      </button>
+      <button type="button" class="theme-option" role="radio" aria-checked="false" data-theme-choice="dark">
+        <span class="theme-swatch theme-swatch-dark" aria-hidden="true"></span>
+        <span>Indigo</span>
+      </button>
+      <button type="button" class="theme-option" role="radio" aria-checked="false" data-theme-choice="black">
+        <span class="theme-swatch theme-swatch-black" aria-hidden="true"></span>
+        <span>Black</span>
+      </button>
+    </div>
+  </div>
 
   <nav class="desktop-nav" aria-label="Primary">
     <button type="button" class="nav-tab-btn active" data-page="home" data-call="navigateTo" data-arg="home">
       <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
       Home
+    </button>
+    <button type="button" class="nav-tab-btn" data-page="groups" data-call="navigateTo" data-arg="groups">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>
+      Groups
     </button>
     <button type="button" class="nav-tab-btn" data-page="analytics" data-call="navigateTo" data-arg="analytics">
       <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg>
@@ -163,9 +182,9 @@
         <div class="dash-card-desc" id="dash-analytics-desc">Category insights</div>
       </button>
 
-      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="friends">
+      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="groups">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"/><circle cx="10" cy="8" r="3"/></svg></div>
-        <div class="dash-card-title">People &amp; Groups</div>
+        <div class="dash-card-title">Groups &amp; friends</div>
         <div class="dash-card-desc" id="dash-friends-desc">Manage connections</div>
       </button>
     </div>
@@ -509,6 +528,10 @@
   </section>
 
   <section id="page-groups" class="app-page">
+    <div class="people-switch" role="tablist" aria-label="Groups and friends">
+      <button type="button" class="people-tab active" role="tab" aria-selected="true" data-call="navigateTo" data-arg="groups">Groups</button>
+      <button type="button" class="people-tab" role="tab" aria-selected="false" data-call="navigateTo" data-arg="friends">Friends &amp; contacts</button>
+    </div>
     <div class="section-header"><div><h1>Groups</h1><p>Choose a group, review its activity, and manage its members.</p></div></div>
     <div class="groups-page-layout">
       <section class="card groups-list-card" aria-labelledby="your-groups-heading">
@@ -581,25 +604,6 @@
       </div>
     </div>
 
-    <div class="you-links">
-      <button type="button" class="you-link" data-call="navigateTo" data-arg="friends">
-        <strong>Friends &amp; contacts</strong>
-        <span class="you-count" id="you-friends-count">0 people</span>
-      </button>
-      <button type="button" class="you-link" data-call="navigateTo" data-arg="groups">
-        <strong>Groups</strong>
-        <span class="you-count" id="you-groups-count">0 groups</span>
-      </button>
-      <button type="button" class="you-link" data-call="navigateTo" data-arg="analytics">
-        <strong>Insights</strong>
-        <span>Categories and trends</span>
-      </button>
-      <button type="button" class="you-link" data-call="navigateTo" data-arg="history">
-        <strong>Activity</strong>
-        <span>Every expense and settlement</span>
-      </button>
-    </div>
-
     <div id="account-profile-slot"></div>
     <div class="card account-settings-card">
       <h2>Settings</h2>
@@ -631,7 +635,11 @@
 
   <!-- ================= PAGE 6: FRIENDS & GROUPS ================= -->
   <section id="page-friends" class="app-page">
-    <div class="section-header"><div><h1>Friends</h1><p>Manage your connections, requests, and 1-on-1 expense partners.</p></div></div>
+    <div class="people-switch" role="tablist" aria-label="Groups and friends">
+      <button type="button" class="people-tab" role="tab" aria-selected="false" data-call="navigateTo" data-arg="groups">Groups</button>
+      <button type="button" class="people-tab active" role="tab" aria-selected="true" data-call="navigateTo" data-arg="friends">Friends &amp; contacts</button>
+    </div>
+    <div class="section-header"><div><h1>Friends &amp; contacts</h1><p>Manage your connections, requests, and 1-on-1 expense partners.</p></div></div>
     <div class="page-back-bar">
       <button type="button" class="btn-back-home" data-call="navigateTo" data-arg="home">← Back to Home</button>
       <span></span>
@@ -872,6 +880,10 @@
       <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/></svg>
       <span>Home</span>
     </button>
+    <button type="button" class="mobile-nav-item" data-page="groups" data-call="navigateTo" data-arg="groups">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>
+      <span>Groups</span>
+    </button>
     <button type="button" class="mobile-nav-item" data-page="analytics" data-call="navigateTo" data-arg="analytics">
       <svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg>
       <span>Insights</span>
@@ -1003,7 +1015,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v60";
+    const APP_BUILD = "v61";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1829,8 +1841,8 @@
       analytics: "analytics",
       history: "history",
       account: "account",
-      friends: "account",
-      groups: "account"
+      friends: "groups",
+      groups: "groups"
     };
     window.navigateTo = function(pageId) {
       const requestedPage = pageId;
@@ -1947,8 +1959,9 @@
     });
 
     const THEME_ORDER = ["light", "dark", "black"];
-    const THEME_LABEL = { light: "Indigo mode", dark: "Black mode", black: "Ivory mode" };
-    const THEME_COLOR = { light: "#1F3D32", dark: "#0F1412", black: "#050706" };
+    const THEME_NAME = { light: "Ivory", dark: "Indigo", black: "Black" };
+    const THEME_COLOR = { light: "#1F3D32", dark: "#0B1024", black: "#000000" };
+    const themeMenu = document.getElementById("theme-menu");
 
     function applyTheme() {
       const theme = THEME_ORDER.includes(appState.theme) ? appState.theme : "light";
@@ -1957,17 +1970,51 @@
       const themeColor = document.querySelector('meta[name="theme-color"]');
       if (themeColor) themeColor.setAttribute("content", THEME_COLOR[theme]);
       if (themeBtnText) {
-        themeBtnText.textContent = THEME_LABEL[theme];
+        themeBtnText.textContent = `Theme: ${THEME_NAME[theme]}`;
+      }
+      if (themeMenu) {
+        themeMenu.querySelectorAll("[data-theme-choice]").forEach((option) => {
+          const current = option.dataset.themeChoice === theme;
+          option.classList.toggle("is-current", current);
+          option.setAttribute("aria-checked", String(current));
+        });
       }
     }
 
+    function closeThemeMenu() {
+      if (!themeMenu) return;
+      themeMenu.hidden = true;
+      btnThemeToggle?.setAttribute("aria-expanded", "false");
+    }
+
     if (btnThemeToggle) {
-      btnThemeToggle.addEventListener("click", () => {
-        const current = THEME_ORDER.indexOf(appState.theme);
-        appState.theme = THEME_ORDER[(current + 1) % THEME_ORDER.length];
-        applyTheme();
-        saveState();
-        renderAnalytics();
+      btnThemeToggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!themeMenu) return;
+        const willOpen = themeMenu.hidden;
+        themeMenu.hidden = !willOpen;
+        btnThemeToggle.setAttribute("aria-expanded", String(willOpen));
+      });
+    }
+
+    if (themeMenu) {
+      themeMenu.addEventListener("click", (event) => {
+        const option = event.target.closest("[data-theme-choice]");
+        if (!option) return;
+        const next = option.dataset.themeChoice;
+        if (THEME_ORDER.includes(next)) {
+          appState.theme = next;
+          applyTheme();
+          saveState();
+          renderAnalytics();
+        }
+        closeThemeMenu();
+      });
+      document.addEventListener("click", (event) => {
+        if (!themeMenu.hidden && !event.target.closest("#global-theme-toggle-slot")) closeThemeMenu();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !themeMenu.hidden) closeThemeMenu();
       });
     }
 
@@ -4229,6 +4276,102 @@
       }
     };
 
+    function directBalancesByFriend() {
+      const out = {};
+      if (!currentUser) return out;
+      (appState.directTransactions || []).forEach(tx => {
+        if (!tx || !tx.friend) return;
+        const friend = tx.friend;
+        out[friend] = out[friend] || 0;
+        if (tx.type === "expense" && tx.friend === friend) {
+          const myShare = Number(tx.shares?.["You"]) || 0;
+          const theirShare = Number(tx.shares?.[friend]) || 0;
+          if (tx.payer === "You") out[friend] += theirShare;
+          else if (tx.payer === friend) out[friend] -= myShare;
+        } else if (tx.type === "settlement" && tx.friend === friend) {
+          if (tx.payer === friend && tx.receiver === "You") out[friend] -= Number(tx.amount) || 0;
+          else if (tx.payer === "You" && tx.receiver === friend) out[friend] += Number(tx.amount) || 0;
+        }
+      });
+      return out;
+    }
+
+    function allOpenSettlementItems() {
+      const items = [];
+      Object.values(appState.groups || {}).forEach(group => {
+        if (!group) return;
+        const debts = group.simplifyDebts !== false
+          ? simplifiedDebts(netBalances(group))
+          : pairwiseDebts(group);
+        debts.forEach(debt => {
+          if (!(debt.amount >= 1)) return;
+          items.push({
+            kind: "group",
+            groupId: group.id,
+            groupName: group.name || "Group",
+            currency: group.currency || "₹",
+            from: debt.from,
+            to: debt.to,
+            fromLabel: displayGroupMember(group, debt.from),
+            toLabel: displayGroupMember(group, debt.to),
+            amount: Math.round(debt.amount)
+          });
+        });
+      });
+
+      const balances = directBalancesByFriend();
+      const directCurrency = getGroup().currency || "₹";
+      Object.entries(balances).forEach(([friend, balance]) => {
+        const rounded = Math.round(balance);
+        if (Math.abs(rounded) < 1) return;
+        const iOwe = rounded < 0;
+        items.push({
+          kind: "direct",
+          friendName: friend,
+          currency: directCurrency,
+          from: iOwe ? "You" : friend,
+          to: iOwe ? friend : "You",
+          fromLabel: iOwe ? "You" : friend,
+          toLabel: iOwe ? friend : "You",
+          amount: Math.abs(rounded),
+          signed: rounded
+        });
+      });
+      return items;
+    }
+
+    function settleSuggestedItem(item) {
+      if (!item) return;
+      if (item.kind === "group") {
+        if (item.groupId && item.groupId !== appState.activeGroupId) switchActiveGroup(item.groupId);
+        quickSettlePrompt(item.from, item.to, item.amount);
+        return;
+      }
+      quickStartDirectSettle(item.friendName, item.signed);
+    }
+
+    function buildUnifiedSettlementRow(item) {
+      const card = document.createElement("div");
+      card.className = "settlement-card";
+      const info = document.createElement("div");
+      info.innerHTML = `<strong>${escapeHtml(item.fromLabel)}</strong> owes <strong>${escapeHtml(item.toLabel)}</strong><span class="settlement-context">${escapeHtml(item.kind === "group" ? `Group · ${item.groupName}` : "1-on-1")}</span>`;
+      const actions = document.createElement("div");
+      actions.className = "settlement-actions";
+      const badge = document.createElement("span");
+      badge.className = "settle-badge";
+      badge.textContent = formatMoney(item.amount, item.currency);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-secondary";
+      button.style.padding = "6px 10px";
+      button.style.fontSize = "0.8rem";
+      button.textContent = "Settle";
+      button.addEventListener("click", () => settleSuggestedItem(item));
+      actions.append(badge, button);
+      card.append(info, actions);
+      return card;
+    }
+
     function renderDebtSimplification(balances, cur) {
       if (!settlementListEl) return;
       settlementListEl.innerHTML = "";
@@ -4237,43 +4380,34 @@
 
       if (simplifyDesc) {
         simplifyDesc.textContent = simplified
-          ? "On: Minimizes payments. If A owes B and B owes C, A pays C directly."
-          : "Off: Shows each pair separately, without combining debts through other people.";
+          ? "On: minimizes payments for the active group. Other groups use their own setting."
+          : "Off: shows each pair separately for the active group. Other groups use their own setting.";
       }
       if (settlementHeaderLabel) {
-        settlementHeaderLabel.textContent = `${simplified ? "Suggested debt settlements" : "Pairwise balances"}${g.id ? ` — ${g.name}` : ""}`;
+        settlementHeaderLabel.textContent = `Suggested settlements — all groups & 1-on-1${g.id ? ` · active: ${g.name}` : ""}`;
       }
 
-      const debtPreview = document.getElementById("home-debt-preview");
-      const paintPreview = (text) => { if (debtPreview) debtPreview.textContent = text; };
-
-      if (!simplified) {
-        const edges = pairwiseDebts(g);
-        if (edges.length === 0) {
-          settlementListEl.innerHTML = `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">Everyone is fully settled up. No debts pending.</div>`;
-          if (dashSettleDesc) dashSettleDesc.textContent = "Fully settled up";
-          paintPreview("No open debts");
-          return;
-        }
-        if (dashSettleDesc) dashSettleDesc.textContent = `${edges.length} separate debts`;
-        paintPreview(`${displayGroupMember(g, edges[0].from)} → ${displayGroupMember(g, edges[0].to)}`);
-        edges.forEach(d => appendSettlementRow(d, cur));
+      const items = allOpenSettlementItems();
+      if (!items.length) {
+        settlementListEl.innerHTML = `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">Everyone is fully settled up across groups and 1-on-1.</div>`;
         return;
       }
 
-      const debts = simplifiedDebts(balances);
-
-      if (debts.length === 0) {
-        settlementListEl.innerHTML = `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">Everyone is fully settled up. No debts pending.</div>`;
-        if (dashSettleDesc) dashSettleDesc.textContent = "Fully settled up";
-        paintPreview("No open debts");
-        return;
+      const byCurrency = new Map();
+      items.forEach(item => {
+        const list = byCurrency.get(item.currency) || [];
+        list.push(item);
+        byCurrency.set(item.currency, list);
+      });
+      for (const [currency, list] of byCurrency) {
+        const heading = document.createElement("div");
+        heading.className = "settlement-currency-title";
+        heading.textContent = `Currency ${currency}`;
+        settlementListEl.appendChild(heading);
+        list.sort((a, b) => b.amount - a.amount).forEach(item => {
+          settlementListEl.appendChild(buildUnifiedSettlementRow(item));
+        });
       }
-
-      if (dashSettleDesc) dashSettleDesc.textContent = `${debts.length} optimal debt settlements`;
-      paintPreview(`${displayGroupMember(g, debts[0].from)} pays ${displayGroupMember(g, debts[0].to)}`);
-
-      debts.forEach(d => appendSettlementRow(d, cur));
     }
 
     function renderHomeAllDebts() {
@@ -5311,15 +5445,6 @@
 
       const groups = Object.values(appState.groups);
       const g = getGroup();
-      const youFriendsCount = document.getElementById("you-friends-count");
-      if (youFriendsCount) {
-        const count = (appState.friends || []).length;
-        youFriendsCount.textContent = `${count} ${count === 1 ? "person" : "people"}`;
-      }
-      const youGroupsCount = document.getElementById("you-groups-count");
-      if (youGroupsCount) {
-        youGroupsCount.textContent = `${groups.length} ${groups.length === 1 ? "group" : "groups"}`;
-      }
       const noGroupsPrompt = document.getElementById("home-no-groups-prompt");
       if (noGroupsPrompt) noGroupsPrompt.hidden = groups.length > 0;
       const homeGroupStats = document.getElementById("home-group-stats");
