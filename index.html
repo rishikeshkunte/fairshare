@@ -821,6 +821,7 @@
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button type="button" class="btn btn-settle" id="btn-friend-detail-settle" data-call="friendDetailSettle">Settle up</button>
+              <button type="button" class="btn btn-secondary" data-call="reloadSelectedFriendFromCloud">Resync</button>
               <button type="button" class="btn btn-primary" data-call="friendDetailAddExpense">+ Add 1-on-1 expense</button>
             </div>
           </div>
@@ -1004,7 +1005,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v52";
+    const APP_BUILD = "v53";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -5612,6 +5613,72 @@
       }
     };
 
+    window.reloadFriendFromCloud = async function(friendId) {
+      if (!fx || !currentUser) {
+        toast("Sign in with Gmail first.");
+        return;
+      }
+      const friend = (appState.friends || []).find(item => String(item.id) === String(friendId));
+      if (!friend) return;
+      if (!friend.email) {
+        toast("Link this friend's Gmail first.");
+        return;
+      }
+      const myEmail = (currentUser.email || "").toLowerCase().trim();
+      const pairId = pairIdFor(myEmail, friend.email);
+      if (!pairId) {
+        toast("This friend needs a valid Gmail address.");
+        return;
+      }
+      if (!(await askConfirm({
+        title: "Reload 1-on-1 ledger",
+        message: `Replace this device's 1-on-1 ledger with ${friend.name} from the cloud? Local-only changes will be lost.`,
+        confirmLabel: "Reload"
+      }))) return;
+      try {
+        const snapshot = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "direct_pairs", pairId));
+        if (!snapshot.exists()) {
+          toast("This 1-on-1 ledger is not in the cloud yet.");
+          return;
+        }
+        const remote = snapshot.data() || {};
+        const remoteState = applyRemotePair(
+          { directTransactions: [], deletedTransactions: [] },
+          {
+            friendName: friend.name,
+            friendEmail: friend.email,
+            myEmail,
+            remoteTransactions: remote.transactions || [],
+            remoteDeleted: remote.deletedTransactions || []
+          }
+        );
+        const localDeleted = deletedForFriend(appState.deletedTransactions, friend.name, friend.email);
+        const otherDeleted = (appState.deletedTransactions || []).filter(item => !localDeleted.includes(item));
+        const otherTransactions = (appState.directTransactions || []).filter(tx => !tx || tx.friend !== friend.name);
+        appState.directTransactions = [
+          ...preserveLocalReceipts(remoteState.directTransactions, appState.directTransactions || []),
+          ...otherTransactions
+        ].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        appState.deletedTransactions = [...remoteState.deletedTransactions, ...otherDeleted];
+        persistLocalState();
+        refreshDirectListeners();
+        renderAll();
+        toast(`Reloaded the 1-on-1 ledger with ${friend.name}.`);
+      } catch (err) {
+        console.error("Friend ledger reload note:", err?.code || err);
+        toast("Could not reload this 1-on-1 ledger. It may not be shared with this Gmail.");
+      }
+    };
+
+    window.reloadSelectedFriendFromCloud = function() {
+      const friend = (appState.friends || []).find(item => String(item.id) === String(selectedFriendDetailId));
+      if (!friend) {
+        toast("Select a friend first.");
+        return;
+      }
+      window.reloadFriendFromCloud(friend.id);
+    };
+
     window.syncNow = function() {
       if (!fx || !currentUser) {
         toast("Sign in with Gmail first.");
@@ -5811,6 +5878,7 @@
           const next = applyRemotePair(appState, {
             friendName,
             friendEmail,
+            myEmail,
             remoteTransactions: remote.transactions || [],
             remoteDeleted: remote.deletedTransactions || []
           });
