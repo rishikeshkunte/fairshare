@@ -682,6 +682,7 @@
             <div class="group-bar" style="margin-bottom:14px;">
               <div class="group-select-wrapper"></div>
               <div style="display:flex; gap:6px;">
+                <button type="button" class="btn btn-secondary" data-call="reloadGroupFromCloud" title="Replace this device's copy with the shared cloud ledger">Reload cloud</button>
                 <button type="button" id="btn-rename-group" class="btn btn-secondary" title="Rename managed group">Rename</button>
                 <button type="button" id="btn-delete-group" class="btn btn-secondary" title="Delete managed group">Delete</button>
               </div>
@@ -1003,7 +1004,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v51";
+    const APP_BUILD = "v52";
     window.FAIRSHARE_BUILD = APP_BUILD;
     console.info("[FairShare] build", APP_BUILD);
 
@@ -5568,6 +5569,49 @@
       pushLocalGroupsToCloud(user);
     }
 
+    window.reloadGroupFromCloud = async function() {
+      if (!fx || !currentUser) {
+        toast("Sign in with Gmail first.");
+        return;
+      }
+      const g = getGroup();
+      if (!g.id) {
+        toast("Select a group first.");
+        return;
+      }
+      if (!(await askConfirm({
+        title: "Reload from cloud",
+        message: `Replace this device's copy of "${g.name}" with the shared cloud ledger? Local-only changes in this group will be lost.`,
+        confirmLabel: "Reload"
+      }))) return;
+      try {
+        const snapshot = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "groups", g.id));
+        if (!snapshot.exists()) {
+          toast("This group is not in the cloud.");
+          return;
+        }
+        const data = snapshot.data() || {};
+        g.name = data.name || g.name;
+        g.currency = data.currency || g.currency;
+        g.members = Array.isArray(data.members) ? data.members : g.members;
+        g.memberLinks = data.memberLinks || {};
+        g.memberEmails = Array.isArray(data.memberEmails) ? data.memberEmails : [];
+        g.transactions = preserveLocalReceipts(
+          Array.isArray(data.transactions) ? data.transactions : [],
+          g.transactions || []
+        );
+        g.deletedTransactions = Array.isArray(data.deletedTransactions) ? data.deletedTransactions : [];
+        g.simplifyDebts = data.simplifyDebts !== false;
+        persistLocalState();
+        listenToCloudGroup(g.id);
+        renderAll();
+        toast(`Reloaded "${g.name}" from the cloud.`);
+      } catch (err) {
+        console.error("Group reload note:", err?.code || err);
+        toast("Could not reload this group. It may not be shared with this Gmail.");
+      }
+    };
+
     window.syncNow = function() {
       if (!fx || !currentUser) {
         toast("Sign in with Gmail first.");
@@ -5611,7 +5655,32 @@
           const groupRef = fx.storeMod.doc(fx.db, "groups", group.id);
           const created = await fx.storeMod.runTransaction(fx.db, async (transaction) => {
             const snapshot = await transaction.get(groupRef);
-            if (snapshot.exists()) return false;
+            if (snapshot.exists()) {
+              // Reconcile both directions. Cloud transactions missing locally are
+              // added, and local edits/tombstones are pushed to the shared ledger.
+              const cloudData = snapshot.data() || {};
+              const localTransactions = group.transactions || [];
+              const merged = mergePairLedger({
+                localTransactions: stripReceiptBytes(localTransactions),
+                remoteTransactions: cloudData.transactions || [],
+                localDeleted: group.deletedTransactions || [],
+                remoteDeleted: cloudData.deletedTransactions || []
+              });
+              const cloudTransactions = cloudData.transactions || [];
+              const cloudDeleted = cloudData.deletedTransactions || [];
+              const changed = JSON.stringify(merged.transactions) !== JSON.stringify(cloudTransactions)
+                || JSON.stringify(merged.deletedTransactions) !== JSON.stringify(cloudDeleted);
+              group.transactions = preserveLocalReceipts(merged.transactions, localTransactions);
+              group.deletedTransactions = merged.deletedTransactions;
+              if (!changed) return false;
+              transaction.set(groupRef, {
+                transactions: stripReceiptBytes(merged.transactions),
+                deletedTransactions: merged.deletedTransactions,
+                updatedAt: serverTimestamp(fx),
+                updatedBy: myEmail
+              }, { merge: true });
+              return true;
+            }
             const memberLinks = { ...(group.memberLinks || {}) };
             memberLinks[getMyGroupMemberName(group)] = myEmail;
             const emails = new Set([myEmail, myEmailNorm]);

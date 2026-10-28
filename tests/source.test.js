@@ -229,6 +229,14 @@ test("group members can repair cloud sync with a linked Gmail or new invite", ()
   assert.match(html, /Cloud group sync was denied/);
 });
 
+test("group sync can be repaired from cloud and pushes local edits", () => {
+  assert.match(html, /data-call="reloadGroupFromCloud"/);
+  assert.match(html, /window\.reloadGroupFromCloud = async function\(\)/);
+  assert.match(html, /Reconcile both directions/);
+  assert.match(html, /cloudTransactions/);
+  assert.match(html, /Local-only changes in this group will be lost/);
+});
+
 test("account offers sync repair and app refresh without clearing login", () => {
   assert.match(html, /data-call="syncNow"/);
   assert.match(html, /data-call="refreshAppData"/);
