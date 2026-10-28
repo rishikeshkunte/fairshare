@@ -163,29 +163,11 @@
     </div>
 
     <div class="home-quick-grid">
-      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="balances">
+      <button type="button" class="home-quick-card home-debt-card" data-call="navigateTo" data-arg="balances">
         <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg></div>
         <div class="dash-card-title">Who pays whom</div>
         <div class="dash-card-desc" id="dash-settle-desc">Review balances</div>
         <div id="home-debt-preview"></div>
-      </button>
-
-      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="history">
-        <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></div>
-        <div class="dash-card-title">Activity</div>
-        <div class="dash-card-desc" id="dash-history-desc">0 transactions recorded</div>
-      </button>
-
-      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="analytics">
-        <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16l3-4 3 2 4-6"/></svg></div>
-        <div class="dash-card-title">Insights</div>
-        <div class="dash-card-desc" id="dash-analytics-desc">Category insights</div>
-      </button>
-
-      <button type="button" class="home-quick-card" data-call="navigateTo" data-arg="groups">
-        <div class="icon-badge"><svg viewBox="0 0 24 24"><path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1"/><circle cx="10" cy="8" r="3"/></svg></div>
-        <div class="dash-card-title">Groups &amp; friends</div>
-        <div class="dash-card-desc" id="dash-friends-desc">Manage connections</div>
       </button>
     </div>
 
@@ -1015,7 +997,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v61";
+    const APP_BUILD = "v62";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
