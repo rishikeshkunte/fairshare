@@ -139,28 +139,60 @@ export function deletedForFriend(deleted, friendName, friendEmail) {
   });
 }
 
-function relabel(transactions, friendName) {
-  return (transactions || []).map((tx) => ({ ...tx, friend: friendName, scope: tx.scope || "direct" }));
+function rekeyTransaction(tx, friendName, friendEmail, myEmail) {
+  if (!tx) return tx;
+  const friendKey = canonEmail(friendEmail);
+  const myKey = canonEmail(myEmail);
+  const originalFriend = tx.friend;
+  const copy = { ...tx, friend: friendName, scope: tx.scope || "direct" };
+  const sharesByEmail = tx.sharesByEmail || null;
+  if (sharesByEmail && myKey && friendKey && (myKey in sharesByEmail || friendKey in sharesByEmail)) {
+    copy.shares = {
+      You: Number(sharesByEmail[myKey]) || 0,
+      [friendName]: Number(sharesByEmail[friendKey]) || 0
+    };
+  } else if (tx.shares) {
+    const mapped = {};
+    Object.entries(tx.shares).forEach(([name, share]) => {
+      if (name === "You") mapped[friendName] = share;
+      else if (originalFriend && name === originalFriend) mapped["You"] = share;
+      else mapped[name] = share;
+    });
+    copy.shares = mapped;
+  }
+  const mapParticipant = (email, name) => {
+    if (email) {
+      const key = canonEmail(email);
+      if (key === friendKey) return friendName;
+      if (key === myKey) return "You";
+    }
+    if (name === "You") return friendName;
+    if (originalFriend && name === originalFriend) return "You";
+    return name;
+  };
+  if (tx.payerEmail || tx.payer) copy.payer = mapParticipant(tx.payerEmail, tx.payer);
+  if (tx.receiverEmail || tx.receiver) copy.receiver = mapParticipant(tx.receiverEmail, tx.receiver);
+  return copy;
 }
 
-function relabelDeleted(deleted, friendName) {
+function relabelDeleted(deleted, friendName, friendEmail, myEmail) {
   return (deleted || []).map((item) => ({
     ...item,
     location: "direct",
-    transaction: item.transaction ? { ...item.transaction, friend: friendName, scope: item.transaction.scope || "direct" } : item.transaction
+    transaction: item.transaction ? rekeyTransaction(item.transaction, friendName, friendEmail, myEmail) : item.transaction
   }));
 }
 
-export function applyRemotePair(state, { friendName, friendEmail, remoteTransactions, remoteDeleted }) {
+export function applyRemotePair(state, { friendName, friendEmail, myEmail, remoteTransactions, remoteDeleted }) {
   const localTx = transactionsForFriend(state.directTransactions, friendName);
   const otherTx = (state.directTransactions || []).filter((tx) => !tx || tx.friend !== friendName);
   const localDeleted = deletedForFriend(state.deletedTransactions, friendName, friendEmail);
   const otherDeleted = (state.deletedTransactions || []).filter((item) => !localDeleted.includes(item));
   const merged = mergePairLedger({
     localTransactions: localTx,
-    remoteTransactions: relabel(remoteTransactions, friendName),
+    remoteTransactions: (remoteTransactions || []).map((tx) => rekeyTransaction(tx, friendName, friendEmail, myEmail)),
     localDeleted,
-    remoteDeleted: relabelDeleted(remoteDeleted, friendName)
+    remoteDeleted: relabelDeleted(remoteDeleted, friendName, friendEmail, myEmail)
   });
   return {
     directTransactions: [...merged.transactions, ...otherTx].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)),
