@@ -1626,3 +1626,28 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .settlement-filter { width: 100%; justify-content: space-between; }
   .settlement-filter select { flex: 1 1 auto; }
 }
+
+/* Splitwise CSV import preview */
+.csv-import-block {
+  margin-top: 12px;
+  padding: 12px;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--box-bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.csv-import-block h4 { margin: 0 0 8px; font-size: .85rem; }
+.csv-import-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+  margin: 0;
+  font-size: .8rem;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+.csv-import-check input { width: auto; margin-top: 3px; }
+.csv-import-error { padding: 4px 0; font-size: .78rem; color: var(--danger-text); }

@@ -519,7 +519,10 @@
             <h2 id="your-groups-heading">Your groups</h2>
             <span class="section-hint">Select a group to make it active across What's My Share?.</span>
           </div>
-          <button type="button" id="btn-new-group-inline" class="btn btn-primary">+ New group</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="btn-import-csv" class="btn btn-secondary">Import CSV</button>
+            <button type="button" id="btn-new-group-inline" class="btn btn-primary">+ New group</button>
+          </div>
         </div>
         <div id="group-tabs" class="group-tabs" role="tablist" aria-label="Your groups"></div>
       </section>
@@ -946,6 +949,48 @@
     </div>
   </div>
 
+  <!-- Import from Splitwise Modal -->
+  <div id="csv-import-modal" class="modal-backdrop">
+    <div class="modal-content" style="max-width: 640px;">
+      <button type="button" class="modal-close" data-call="closeCsvImport">&times;</button>
+      <h3 style="margin-top:0; font-size:1.25rem;">Import from Splitwise</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-top:-4px;">
+        Choose a per-group CSV export. Expected columns: Date, Description, Category, Cost, Currency, then one column per person.
+      </p>
+      <div class="form-group">
+        <label for="csv-import-file">CSV file</label>
+        <input type="file" id="csv-import-file" accept=".csv,text/csv">
+      </div>
+      <div id="csv-import-preview" hidden>
+        <div class="form-group">
+          <label for="csv-import-group-name">Group name</label>
+          <input type="text" id="csv-import-group-name" placeholder="Group name">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="csv-import-self">My column</label>
+            <select id="csv-import-self"></select>
+          </div>
+          <div class="form-group" id="csv-import-merge-field">
+            <label for="csv-import-merge">If this group already exists</label>
+            <select id="csv-import-merge">
+              <option value="merge">Merge into it</option>
+              <option value="copy">Create a copy</option>
+              <option value="skip">Skip</option>
+            </select>
+          </div>
+        </div>
+        <p id="csv-import-summary" class="group-hint"></p>
+        <div id="csv-import-duplicates"></div>
+        <div id="csv-import-errors"></div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+          <button type="button" class="btn btn-secondary" data-call="closeCsvImport">Cancel</button>
+          <button type="button" id="csv-import-confirm" class="btn btn-primary">Import</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Member Statement Drawer Modal -->
   <div id="member-modal" class="modal-backdrop">
     <div class="modal-content" style="max-width: 540px;">
@@ -994,7 +1039,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v68";
+    const APP_BUILD = "v69";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1729,6 +1774,19 @@
     const modalGroupName = document.getElementById("modal-group-name");
     const modalGroupCurrency = document.getElementById("modal-group-currency");
     const modalFriendsCheckboxes = document.getElementById("modal-friends-checkboxes");
+
+    const csvImportModal = document.getElementById("csv-import-modal");
+    const csvImportFile = document.getElementById("csv-import-file");
+    const csvImportPreview = document.getElementById("csv-import-preview");
+    const csvImportGroupName = document.getElementById("csv-import-group-name");
+    const csvImportSelf = document.getElementById("csv-import-self");
+    const csvImportMerge = document.getElementById("csv-import-merge");
+    const csvImportMergeField = document.getElementById("csv-import-merge-field");
+    const csvImportSummary = document.getElementById("csv-import-summary");
+    const csvImportDuplicates = document.getElementById("csv-import-duplicates");
+    const csvImportErrors = document.getElementById("csv-import-errors");
+    const csvImportConfirm = document.getElementById("csv-import-confirm");
+    let csvImportState = null;
 
     const currencySelect = document.getElementById("currency-select");
     const currencyLabels = document.querySelectorAll(".currency-label");
@@ -3096,6 +3154,476 @@
     window.closeNewGroupModal = function() {
       if (newGroupModal) newGroupModal.classList.remove("active");
     };
+
+    // --- Splitwise CSV import ---
+    function csvSplit(text) {
+      const firstLine = String(text).split(/\r?\n/, 1)[0] || "";
+      const delimiter = firstLine.split("\t").length > firstLine.split(",").length ? "\t" : ",";
+      const rows = [];
+      let row = [];
+      let field = "";
+      let inQuotes = false;
+      const pushField = () => { row.push(field); field = ""; };
+      const pushRow = () => { row.push(field); rows.push(row); row = []; field = ""; };
+      for (let i = 0; i < text.length; i += 1) {
+        const ch = text[i];
+        if (inQuotes) {
+          if (ch === '"') {
+            if (text[i + 1] === '"') { field += '"'; i += 1; }
+            else inQuotes = false;
+          } else {
+            field += ch;
+          }
+        } else if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === delimiter) {
+          pushField();
+        } else if (ch === "\n") {
+          pushRow();
+        } else if (ch === "\r") {
+          if (text[i + 1] === "\n") i += 1;
+          pushRow();
+        } else {
+          field += ch;
+        }
+      }
+      if (field.length || row.length) pushRow();
+      return rows.filter(cells => cells.some(cell => String(cell).trim() !== ""));
+    }
+
+    function csvParseDate(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+      if (match) {
+        return `${match[1]}-${String(match[2]).padStart(2, "0")}-${String(match[3]).padStart(2, "0")}`;
+      }
+      match = raw.match(/^(\d{1,2})[\s/.-](\d{1,2})[\s/.-](\d{4})$/);
+      if (match) {
+        let first = Number(match[1]);
+        let second = Number(match[2]);
+        let day = first;
+        let month = second;
+        if (second > 12 && first <= 12) { day = second; month = first; }
+        return `${match[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+      return "";
+    }
+
+    function csvMoney(value) {
+      const raw = String(value ?? "").replace(/[,\s]/g, "").trim();
+      if (!raw) return 0;
+      const number = Number(raw);
+      return Number.isFinite(number) ? Math.round(number * 100) : NaN;
+    }
+
+    function csvHash(text) {
+      let hash = 2166136261;
+      for (let i = 0; i < text.length; i += 1) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return (hash >>> 0).toString(36);
+    }
+
+    function csvGroupFromFilename(filename) {
+      let base = String(filename || "Imported group").replace(/\.[^.]+$/, "").replace(/_/g, " ").trim();
+      base = base.replace(/^splitwise[\s-]*/i, "");
+      base = base.replace(/[-\s]+/g, " ").trim();
+      return base || "Imported group";
+    }
+
+    function csvCurrency(value) {
+      const raw = String(value || "").trim();
+      const map = { INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥", CNY: "¥" };
+      return map[raw.toUpperCase()] || raw || "₹";
+    }
+
+    function csvCategory(rawCategory, description) {
+      const key = String(rawCategory || "").trim().toLowerCase();
+      const map = {
+        "general": "Other", "other": "Other", "food": "Food", "food & drink": "Food",
+        "dining out": "Food", "restaurants": "Food", "groceries": "Groceries",
+        "transportation": "Transport", "transport": "Transport", "travel": "Transport",
+        "home": "Stay", "rent": "Utilities", "utilities": "Utilities", "electricity": "Utilities",
+        "entertainment": "Entertainment", "movies": "Entertainment", "shopping": "Other",
+        "health": "Other", "education": "Other", "gifts": "Other"
+      };
+      if (map[key]) return map[key];
+      const haystack = `${rawCategory || ""} ${description || ""}`.toLowerCase();
+      for (const rule of KEYWORD_RULES) {
+        if (rule.keywords.some(keyword => haystack.includes(keyword))) return rule.category;
+      }
+      return "Other";
+    }
+
+    function csvFindExistingGroup(name) {
+      const needle = String(name || "").trim().toLowerCase();
+      if (!needle) return null;
+      return Object.values(appState.groups || {}).find(group =>
+        String(group.name || "").trim().toLowerCase() === needle
+      ) || null;
+    }
+
+    async function prepareCsvImport(file) {
+      const text = await file.text();
+      const rows = csvSplit(text);
+      if (!rows.length) throw new Error("The CSV is empty.");
+
+      const header = rows[0].map(cell => String(cell).replace(/^\uFEFF/, "").trim());
+      const lower = header.map(cell => cell.toLowerCase());
+      const find = (...names) => lower.findIndex(cell => names.includes(cell));
+      const indexes = {
+        date: find("date"),
+        desc: find("description", "desc"),
+        category: find("category"),
+        cost: find("cost", "amount"),
+        currency: find("currency"),
+        group: find("group", "group name")
+      };
+      if (indexes.date < 0 || indexes.desc < 0 || indexes.cost < 0) {
+        throw new Error("Missing Date, Description, or Cost column.");
+      }
+
+      const known = new Set(Object.values(indexes).filter(index => index >= 0));
+      const memberColumns = header
+        .map((name, index) => ({ name: String(name).trim(), index }))
+        .filter(column => !known.has(column.index) && column.name);
+      const memberIndexes = memberColumns.map(column => column.index);
+      const memberNames = memberColumns.map(column => column.name);
+      if (!memberNames.length) throw new Error("No person columns were found after the fixed columns.");
+      if (new Set(memberNames.map(name => name.toLowerCase())).size !== memberNames.length) {
+        throw new Error("Two person columns have the same name.");
+      }
+
+      const fileGroup = csvGroupFromFilename(file.name);
+      const groupNames = new Set();
+      const parsed = [];
+      for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+        const cells = rows[rowIndex];
+        const get = index => (index >= 0 ? String(cells[index] ?? "").trim() : "");
+        const dateISO = csvParseDate(get(indexes.date));
+        const desc = get(indexes.desc) || "Imported record";
+        const amount = csvMoney(get(indexes.cost));
+        const currency = csvCurrency(get(indexes.currency) || getGroup().currency || "₹");
+        const rawCategory = get(indexes.category);
+        const groupName = indexes.group >= 0 ? get(indexes.group) : fileGroup;
+        groupNames.add(groupName || fileGroup);
+        const nets = memberIndexes.map(index => csvMoney(get(index)));
+        const problems = [];
+        if (!dateISO) problems.push("invalid date");
+        if (!Number.isFinite(amount) || amount <= 0) problems.push("invalid cost");
+        if (nets.some(value => !Number.isFinite(value))) problems.push("invalid person amount");
+        if (!groupName) problems.push("missing group name");
+        if (problems.length) {
+          parsed.push({ rawIndex: rowIndex, groupName, dateISO, desc, amount, currency, rawCategory, nets, memberNames, error: problems.join(", ") });
+          continue;
+        }
+
+        const netSum = nets.reduce((sum, value) => sum + value, 0);
+        if (Math.abs(netSum) > 1) {
+          parsed.push({ rawIndex: rowIndex, groupName, dateISO, desc, amount, currency, rawCategory, nets, memberNames, error: "person amounts do not balance to zero" });
+          continue;
+        }
+        const positive = memberNames.filter((_, index) => nets[index] > 0);
+        const negative = memberNames.filter((_, index) => nets[index] < 0);
+        const isPayment = /^payment$/i.test(String(rawCategory || "").trim());
+
+        if (isPayment) {
+          if (positive.length !== 1 || negative.length !== 1) {
+            parsed.push({ rawIndex: rowIndex, groupName, dateISO, desc, amount, currency, rawCategory, nets, memberNames, error: "payment needs one payer and one receiver" });
+            continue;
+          }
+          parsed.push({ rawIndex: rowIndex, groupName, dateISO, desc, amount, currency, rawCategory, nets, memberNames, kind: "settlement", payer: positive[0], receiver: negative[0] });
+          continue;
+        }
+
+        if (positive.length !== 1) {
+          parsed.push({ rawIndex: rowIndex, groupName, dateISO, desc, amount, currency, rawCategory, nets, memberNames, error: positive.length ? "multiple payers are not supported" : "could not identify the payer" });
+          continue;
+        }
+
+        const payer = positive[0];
+        const payerIndex = memberNames.indexOf(payer);
+        const shares = {};
+        memberNames.forEach((name, index) => {
+          shares[name] = index === payerIndex ? amount - nets[index] : -nets[index];
+        });
+        if (Object.values(shares).some(value => value < 0)) {
+          parsed.push({ rawIndex: rowIndex, groupName, dateISO, desc, amount, currency, rawCategory, nets, memberNames, error: "derived shares include a negative amount" });
+          continue;
+        }
+        const shareSum = Object.values(shares).reduce((sum, value) => sum + value, 0);
+        if (Math.abs(shareSum - amount) > 1) {
+          parsed.push({ rawIndex: rowIndex, groupName, dateISO, desc, amount, currency, rawCategory, nets, memberNames, error: "derived shares do not add up to the cost" });
+          continue;
+        }
+        parsed.push({ rawIndex: rowIndex, groupName, dateISO, desc, amount, currency, rawCategory, nets, memberNames, kind: "expense", payer, shares });
+      }
+
+      if (!parsed.length) throw new Error("No data rows were found.");
+      const groups = [...groupNames].filter(Boolean);
+      if (groups.length > 1) throw new Error("This file contains more than one group. Export one group at a time.");
+      const groupName = groups[0] || fileGroup;
+      const currencies = [...new Set(parsed.map(row => row.currency).filter(Boolean))];
+      if (currencies.length > 1) throw new Error("This file mixes currencies. Export one currency at a time.");
+      const currency = currencies[0] || getGroup().currency || "₹";
+
+      parsed.forEach(row => {
+        row.importKey = "splitwise:" + csvHash([
+          "splitwise", groupName, row.dateISO, row.desc, row.amount, row.currency,
+          row.memberNames.join("|"), row.nets.join("|")
+        ].join("::"));
+      });
+
+      const existing = csvFindExistingGroup(groupName);
+      const existingKeys = new Set((existing?.transactions || []).map(tx => tx.importKey).filter(Boolean));
+      const seen = new Set();
+      parsed.forEach(row => {
+        if (existingKeys.has(row.importKey) || seen.has(row.importKey)) row.duplicate = true;
+        seen.add(row.importKey);
+      });
+
+      const selfDefault = memberNames.find(name =>
+        currentUser?.displayName && name.toLowerCase() === String(currentUser.displayName).toLowerCase()
+      ) || memberNames.find(name => name.toLowerCase() === "rishikesh kunte") || memberNames[0];
+
+      csvImportState = { rows: parsed, memberNames, groupName, currency, existing, selfDefault, selfName: selfDefault };
+      renderCsvImportPreview();
+    }
+
+    function renderCsvImportPreview() {
+      const state = csvImportState;
+      if (!state || !csvImportPreview) return;
+      csvImportPreview.hidden = false;
+      if (csvImportGroupName) csvImportGroupName.value = state.groupName;
+      if (csvImportSelf) {
+        csvImportSelf.innerHTML = state.memberNames.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+        csvImportSelf.value = state.selfName || state.selfDefault;
+      }
+      if (csvImportMergeField) csvImportMergeField.hidden = !state.existing;
+
+      const valid = state.rows.filter(row => !row.error);
+      const expenses = valid.filter(row => row.kind === "expense").length;
+      const settlements = valid.filter(row => row.kind === "settlement").length;
+      const errors = state.rows.length - valid.length;
+      const duplicates = valid.filter(row => row.duplicate).length;
+      const existingNote = state.existing
+        ? ` Existing group uses ${state.existing.currency || "₹"}.`
+        : "";
+      const currencyNote = state.existing && (state.existing.currency || "₹") !== state.currency
+        ? ` Currency mismatch: CSV is ${state.currency}; choose “Create a copy”.`
+        : "";
+      if (csvImportSummary) {
+        csvImportSummary.textContent = `${expenses} expense${expenses === 1 ? "" : "s"}, ${settlements} payment${settlements === 1 ? "" : "s"}, ${duplicates} duplicate${duplicates === 1 ? "" : "s"}, ${errors} skipped row${errors === 1 ? "" : "s"}. Members: ${state.memberNames.join(", ")}.${existingNote}${currencyNote}`;
+      }
+
+      const duplicatesRows = valid.filter(row => row.duplicate);
+      if (csvImportDuplicates) {
+        csvImportDuplicates.innerHTML = duplicatesRows.length
+          ? `<div class="csv-import-block"><h4>Possible duplicates</h4><p style="font-size:.78rem;color:var(--muted);margin:0 0 6px;">Unchecked rows will be skipped.</p>${duplicatesRows.map(row => `<label class="csv-import-check"><input type="checkbox" data-csv-duplicate value="${row.rawIndex}"> <span>${escapeHtml(row.dateISO || "No date")} · ${escapeHtml(row.desc)} · ${formatMoney(row.amount, row.currency)}</span></label>`).join("")}</div>`
+          : "";
+      }
+      if (csvImportErrors) {
+        const errorRows = state.rows.filter(row => row.error);
+        csvImportErrors.innerHTML = errorRows.length
+          ? `<div class="csv-import-block"><h4>Rows that will be skipped</h4>${errorRows.slice(0, 20).map(row => `<div class="csv-import-error">Row ${row.rawIndex + 1}: ${escapeHtml(row.desc || "Untitled")} — ${escapeHtml(row.error)}</div>`).join("")}${errorRows.length > 20 ? `<div class="csv-import-error">…and ${errorRows.length - 20} more</div>` : ""}</div>`
+          : "";
+      }
+      if (csvImportConfirm) csvImportConfirm.disabled = valid.length === 0;
+    }
+
+    window.openCsvImport = function() {
+      if (!currentUser) {
+        toast("Sign in to import a CSV.");
+        return;
+      }
+      csvImportState = null;
+      if (csvImportFile) csvImportFile.value = "";
+      if (csvImportPreview) csvImportPreview.hidden = true;
+      if (csvImportModal) csvImportModal.classList.add("active");
+    };
+
+    window.closeCsvImport = function() {
+      if (csvImportModal) csvImportModal.classList.remove("active");
+    };
+
+    if (csvImportFile) {
+      csvImportFile.addEventListener("change", async () => {
+        const file = csvImportFile.files?.[0];
+        if (!file) return;
+        try {
+          await prepareCsvImport(file);
+        } catch (error) {
+          csvImportState = null;
+          if (csvImportPreview) csvImportPreview.hidden = true;
+          toast(error?.message || "Could not read that CSV.");
+        }
+      });
+    }
+
+    if (csvImportGroupName) {
+      csvImportGroupName.addEventListener("input", () => {
+        if (!csvImportState) return;
+        csvImportState.groupName = csvImportGroupName.value.trim() || csvImportState.groupName;
+        csvImportState.existing = csvFindExistingGroup(csvImportState.groupName);
+        if (csvImportMergeField) csvImportMergeField.hidden = !csvImportState.existing;
+      });
+    }
+
+    if (csvImportSelf) {
+      csvImportSelf.addEventListener("change", () => {
+        if (csvImportState) csvImportState.selfName = csvImportSelf.value;
+      });
+    }
+
+    window.importCsvFile = function() {
+      const state = csvImportState;
+      if (!state) return;
+      const groupName = String(csvImportGroupName?.value || state.groupName || "").trim();
+      if (!groupName) {
+        toast("Enter a group name first.");
+        return;
+      }
+      const existing = csvFindExistingGroup(groupName);
+      const mode = existing ? (csvImportMerge?.value || "merge") : "new";
+      if (existing && mode === "skip") {
+        toast("Import skipped.");
+        closeCsvImport();
+        return;
+      }
+      if (existing && mode === "merge" && (existing.currency || "₹") !== state.currency) {
+        toast(`That group uses ${existing.currency || "₹"}; the CSV is ${state.currency}. Choose “Create a copy”.`);
+        return;
+      }
+
+      const selfName = csvImportSelf?.value || state.selfName || state.selfDefault;
+      const duplicateIndexes = new Set(
+        Array.from(document.querySelectorAll("[data-csv-duplicate]:checked")).map(input => Number(input.value))
+      );
+
+      let target = existing && mode === "merge" ? existing : null;
+      if (!target) {
+        target = {
+          id: newId(),
+          name: existing && mode === "copy" ? `${groupName} (imported)` : groupName,
+          currency: state.currency || "₹",
+          members: [],
+          memberLinks: {},
+          memberEmails: [],
+          simplifyDebts: true,
+          transactions: [],
+          deletedTransactions: []
+        };
+        appState.groups[target.id] = target;
+      }
+
+      target.transactions = Array.isArray(target.transactions) ? target.transactions : [];
+      target.members = Array.isArray(target.members) ? target.members : [];
+      target.deletedTransactions = Array.isArray(target.deletedTransactions) ? target.deletedTransactions : [];
+
+      const selfTargetName = existing && mode === "merge" ? getMyGroupMemberName(target) : myGroupSelfName();
+      const mapName = (rawName) => {
+        if (rawName === selfName) return selfTargetName;
+        const existingMember = (target.members || []).find(member => member.toLowerCase() === String(rawName).toLowerCase());
+        if (existingMember) return existingMember;
+        const friend = (appState.friends || []).find(item =>
+          String(item.name || "").toLowerCase() === String(rawName).toLowerCase()
+          || (Array.isArray(item.aliases) && item.aliases.some(alias => String(alias).toLowerCase() === String(rawName).toLowerCase()))
+        );
+        return friend ? friend.name : rawName;
+      };
+
+      const mappedMembers = state.memberNames.map(mapName);
+      target.members = Array.from(new Set([...(target.members || []), ...mappedMembers]));
+      const memberLinks = { ...(target.memberLinks || {}) };
+      state.memberNames.forEach((rawName, index) => {
+        const mapped = mappedMembers[index];
+        if (rawName === selfName) {
+          if (currentUser?.email) memberLinks[mapped] = currentUser.email;
+          return;
+        }
+        const friend = (appState.friends || []).find(item =>
+          String(item.name || "") === mapped
+          || (Array.isArray(item.aliases) && item.aliases.some(alias => String(alias).toLowerCase() === String(rawName).toLowerCase()))
+        );
+        if (friend?.email) memberLinks[mapped] = friend.email;
+      });
+      target.memberLinks = memberLinks;
+      const memberEmails = new Set(target.memberEmails || []);
+      if (currentUser?.email) {
+        memberEmails.add(currentUser.email);
+        memberEmails.add(normalizeEmail(currentUser.email));
+      }
+      Object.values(memberLinks).forEach(email => {
+        if (!email) return;
+        memberEmails.add(email);
+        memberEmails.add(normalizeEmail(email));
+      });
+      target.memberEmails = Array.from(memberEmails).filter(Boolean);
+
+      const existingKeys = new Set((target.transactions || []).map(tx => tx.importKey).filter(Boolean));
+      let imported = 0;
+      state.rows.forEach(row => {
+        if (row.error) return;
+        if (row.duplicate && !duplicateIndexes.has(row.rawIndex)) return;
+        const key = "splitwise:" + csvHash([
+          "splitwise", groupName, row.dateISO, row.desc, row.amount, row.currency,
+          row.memberNames.join("|"), row.nets.join("|")
+        ].join("::"));
+        const duplicateImport = existingKeys.has(key) || row.duplicate;
+        if (duplicateImport && !duplicateIndexes.has(row.rawIndex)) return;
+        const transaction = {
+          id: duplicateImport ? newId() : "csv_" + csvHash(key),
+          type: row.kind,
+          scope: "group",
+          groupId: target.id,
+          desc: row.desc,
+          amount: row.amount,
+          category: row.kind === "settlement" ? "Settlement" : csvCategory(row.rawCategory, row.desc),
+          date: formatDisplayDate(row.dateISO),
+          dateISO: row.dateISO,
+          timestamp: Date.parse(`${row.dateISO}T12:00:00`) || Date.now(),
+          updatedAt: Date.now(),
+          importKey: key,
+          importSource: "splitwise"
+        };
+        if (row.kind === "settlement") {
+          transaction.payer = mapName(row.payer);
+          transaction.receiver = mapName(row.receiver);
+        } else {
+          transaction.payer = mapName(row.payer);
+          transaction.shares = {};
+          Object.entries(row.shares || {}).forEach(([rawName, share]) => {
+            const mapped = mapName(rawName);
+            transaction.shares[mapped] = (transaction.shares[mapped] || 0) + share;
+          });
+          transaction.splitMode = "exact";
+        }
+        target.transactions.unshift(transaction);
+        imported += 1;
+      });
+
+      if (!imported) {
+        toast("Nothing to import.");
+        return;
+      }
+      appState.activeGroupId = target.id;
+      persistLocalState();
+      saveState(target);
+      renderAll();
+      closeCsvImport();
+      toast(`Imported ${imported} record${imported === 1 ? "" : "s"} into ${target.name}.`);
+    };
+
+    if (csvImportConfirm) {
+      csvImportConfirm.addEventListener("click", window.importCsvFile);
+    }
+
+    const btnImportCsv = document.getElementById("btn-import-csv");
+    if (btnImportCsv) {
+      btnImportCsv.addEventListener("click", window.openCsvImport);
+    }
 
     if (newGroupForm) {
       newGroupForm.addEventListener("submit", (e) => {
