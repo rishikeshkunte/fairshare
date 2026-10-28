@@ -987,7 +987,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v65";
+    const APP_BUILD = "v66";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2216,8 +2216,8 @@
       if (selectedDirectFriend === oldName) selectedDirectFriend = trimmed;
 
       saveState();
-      if (friend.email) syncDirectPairExpense(trimmed);
       refreshDirectListeners();
+      if (friend.email) syncDirectPairExpense(trimmed);
       renderFriendsRoster();
       renderFriendPickerDropdown();
       renderAll();
@@ -4136,13 +4136,18 @@
         ensure("You");
         (appState.directTransactions || []).forEach(tx => {
           if (!tx || !tx.friend) return;
-          const friend = tx.friend;
+          const friend = canonicalFriendName(tx.friend);
           ensure(friend);
+          const payer = canonicalFriendName(tx.payer);
+          const receiver = canonicalFriendName(tx.receiver);
           const amount = Number(tx.amount) || 0;
+          const shareFor = (target) => Object.entries(tx.shares || {}).reduce((sum, [name, value]) => {
+            return canonicalFriendName(name) === target ? sum + (Number(value) || 0) : sum;
+          }, 0);
           if (tx.type === "expense") {
-            const myShare = Number(tx.shares?.["You"]) || 0;
-            const theirShare = Number(tx.shares?.[friend]) || 0;
-            if (tx.payer === friend) {
+            const myShare = shareFor("You");
+            const theirShare = shareFor(friend);
+            if (payer === friend) {
               const friendPerson = ensure(friend);
               friendPerson.paid += amount;
               friendPerson.net += amount;
@@ -4151,7 +4156,7 @@
               const me = ensure("You");
               me.share += myShare;
               me.net -= myShare;
-            } else {
+            } else if (payer === "You") {
               const me = ensure("You");
               me.paid += amount;
               me.net += amount;
@@ -4162,8 +4167,8 @@
               friendPerson.net -= theirShare;
             }
           } else if (tx.type === "settlement") {
-            if (tx.payer) ensure(tx.payer).net += amount;
-            if (tx.receiver) ensure(tx.receiver).net -= amount;
+            if (payer) ensure(payer).net += amount;
+            if (receiver) ensure(receiver).net -= amount;
           }
         });
       }
@@ -4188,7 +4193,7 @@
       if (data.includeDirect) {
         (appState.directTransactions || []).forEach(tx => {
           if (!tx || !tx.friend) return;
-          const names = [tx.payer, tx.receiver, tx.friend, ...Object.keys(tx.shares || {})];
+          const names = [tx.payer, tx.receiver, tx.friend, ...Object.keys(tx.shares || {})].map(canonicalFriendName);
           if (!names.includes(label)) return;
           rows.push({ ...tx, _context: "1-on-1", _currency: data.currency });
         });
@@ -4509,21 +4514,34 @@
       }
     };
 
+    function canonicalFriendName(name) {
+      if (!name || name === "You") return name;
+      const friend = (appState.friends || []).find(item =>
+        item.name === name || (Array.isArray(item.aliases) && item.aliases.includes(name))
+      );
+      return friend?.name || name;
+    }
+
     function directBalancesByFriend() {
       const out = {};
       if (!currentUser) return out;
       (appState.directTransactions || []).forEach(tx => {
         if (!tx || !tx.friend) return;
-        const friend = tx.friend;
+        const friend = canonicalFriendName(tx.friend);
         out[friend] = out[friend] || 0;
-        if (tx.type === "expense" && tx.friend === friend) {
-          const myShare = Number(tx.shares?.["You"]) || 0;
-          const theirShare = Number(tx.shares?.[friend]) || 0;
-          if (tx.payer === "You") out[friend] += theirShare;
-          else if (tx.payer === friend) out[friend] -= myShare;
-        } else if (tx.type === "settlement" && tx.friend === friend) {
-          if (tx.payer === friend && tx.receiver === "You") out[friend] -= Number(tx.amount) || 0;
-          else if (tx.payer === "You" && tx.receiver === friend) out[friend] += Number(tx.amount) || 0;
+        const payer = canonicalFriendName(tx.payer);
+        const receiver = canonicalFriendName(tx.receiver);
+        const shareFor = (target) => Object.entries(tx.shares || {}).reduce((sum, [name, value]) => {
+          return canonicalFriendName(name) === target ? sum + (Number(value) || 0) : sum;
+        }, 0);
+        if (tx.type === "expense") {
+          const myShare = shareFor("You");
+          const theirShare = shareFor(friend);
+          if (payer === "You") out[friend] += theirShare;
+          else if (payer === friend) out[friend] -= myShare;
+        } else if (tx.type === "settlement") {
+          if (payer === friend && receiver === "You") out[friend] -= Number(tx.amount) || 0;
+          else if (payer === "You" && receiver === friend) out[friend] += Number(tx.amount) || 0;
         }
       });
       return out;
