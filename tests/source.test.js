@@ -229,6 +229,18 @@ test("group members can repair cloud sync with a linked Gmail or new invite", ()
   assert.match(html, /Cloud group sync was denied/);
 });
 
+test("account offers sync repair and app refresh without clearing login", () => {
+  assert.match(html, /data-call="syncNow"/);
+  assert.match(html, /data-call="refreshAppData"/);
+  assert.match(html, /window\.syncNow = function\(\)/);
+  assert.match(html, /window\.refreshAppData = async function\(\)/);
+  assert.match(html, /serviceWorker\.getRegistrations/);
+  assert.match(html, /caches\.delete/);
+  assert.match(html, /syncUserCloud\(currentUser\)/);
+  assert.match(html, /sync-build-label/);
+  assert.match(html, /addEventListener\("online"/);
+});
+
 test("local friends can be linked to Gmail for direct sync", () => {
   assert.match(html, /window\.linkFriendEmail = async function\(friendId\)/);
   assert.match(html, /data-call="linkFriendEmail"/);
