@@ -249,6 +249,13 @@ test("account offers sync repair and app refresh without clearing login", () => 
   assert.match(html, /addEventListener\("online"/);
 });
 
+test("1-on-1 ledgers can be reloaded from cloud", () => {
+  assert.match(html, /data-call="reloadSelectedFriendFromCloud"/);
+  assert.match(html, /window\.reloadFriendFromCloud = async function\(friendId\)/);
+  assert.match(html, /Replace this device's 1-on-1 ledger/);
+  assert.match(html, /applyRemotePair\(/);
+});
+
 test("local friends can be linked to Gmail for direct sync", () => {
   assert.match(html, /window\.linkFriendEmail = async function\(friendId\)/);
   assert.match(html, /data-call="linkFriendEmail"/);

@@ -139,6 +139,43 @@ test("the other account applies a remote expense under its own friend name and d
   assert.equal(next.deletedTransactions[0].transaction.friend, "Rishi");
 });
 
+test("remote pair transactions are rekeyed into the receiving account's view", () => {
+  const next = applyRemotePair({ directTransactions: [], deletedTransactions: [] }, {
+    friendName: "Aryan",
+    friendEmail: "aryan@gmail.com",
+    myEmail: "rishi@gmail.com",
+    remoteTransactions: [{
+      id: "tx",
+      friend: "Rishi",
+      payer: "You",
+      payerEmail: "aryan@gmail.com",
+      sharesByEmail: { "aryan@gmail.com": 500, "rishi@gmail.com": 500 },
+      shares: { You: 500, Rishi: 500 },
+      timestamp: 1,
+      updatedAt: 1
+    }],
+    remoteDeleted: [{
+      id: "del",
+      location: "direct",
+      deletedAt: 2,
+      transaction: {
+        id: "old",
+        friend: "Rishi",
+        payer: "Rishi",
+        payerEmail: "rishi@gmail.com",
+        sharesByEmail: { "aryan@gmail.com": 100, "rishi@gmail.com": 100 }
+      }
+    }]
+  });
+  const tx = next.directTransactions.find(item => item.id === "tx");
+  assert.equal(tx.friend, "Aryan");
+  assert.equal(tx.payer, "Aryan");
+  assert.deepEqual(tx.shares, { You: 500, Aryan: 500 });
+  const deleted = next.deletedTransactions.find(item => item.id === "del");
+  assert.equal(deleted.transaction.friend, "Aryan");
+  assert.equal(deleted.transaction.payer, "You");
+});
+
 test("a snapshot is pushed only when this device still has something the cloud ledger lacks", () => {
   const local = [{ id: "local", timestamp: 4, updatedAt: 4 }];
   const remoteMissing = { transactions: [], deletedTransactions: [] };
