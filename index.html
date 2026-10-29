@@ -614,7 +614,9 @@
         <button type="button" class="btn btn-secondary" data-call="runNormalizedMigration">Migrate to normalized</button>
         <button type="button" class="btn btn-secondary" data-call="refreshAppData">Refresh app data</button>
         <button type="button" class="btn btn-secondary" data-call="purgeDeletedGroupsFromCloud" style="color:var(--danger-text);">Purge deleted groups</button>
+        <button type="button" class="btn btn-secondary" data-call="exportDiagnostics">Export diagnostics</button>
       </div>
+      <p id="sync-health-status" class="group-hint" style="margin-top:10px;"></p>
       <p id="normalized-sync-status" class="group-hint" style="margin-top:10px;"></p>
       <p class="group-hint" style="margin-top:10px;">Sync now reconnects cloud listeners. Pull all groups merges every shared ledger from cloud. Purge deleted groups removes groups you already left from the cloud for every member.</p>
     </div>
@@ -1052,7 +1054,7 @@
     const normalizedWriteTimers = new Map();
     const membershipHydrated = new Set();
     let toldGroupSyncError = false;
-    const APP_BUILD = "v80";
+    const APP_BUILD = "v81";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -6758,6 +6760,7 @@
       renderManageGroupSelector();
       const syncBuild = document.getElementById("sync-build-label");
       if (syncBuild) syncBuild.textContent = `Build ${APP_BUILD}`;
+      updateSyncHealth();
 
       const groups = Object.values(appState.groups);
       const g = getGroup();
@@ -7595,6 +7598,54 @@
         }
       }
       toast(`Deleted ${purged} group${purged === 1 ? "" : "s"} for every member.`);
+    };
+
+    function updateSyncHealth() {
+      const statusEl = document.getElementById("sync-health-status");
+      if (!statusEl) return;
+      const groups = Object.values(appState.groups || {});
+      const normalized = groups.filter(group => group.normalizedVersion).length;
+      const pending = groups.filter(group => !group.normalizedVersion).length;
+      const checks = groups.reduce((counts, group) => {
+        if (group.normalizedCheck === "ok") counts.ok += 1;
+        else if (group.normalizedCheck === "mismatch") counts.mismatch += 1;
+        return counts;
+      }, { ok: 0, mismatch: 0 });
+      statusEl.textContent = `Sync health: ${normalized}/${groups.length} groups normalized, ${pending} pending, ${checks.mismatch} mismatch, ${normalizedUnsubs.size} live listeners.`;
+    }
+
+    window.exportDiagnostics = function() {
+      const groups = Object.values(appState.groups || {}).map(group => ({
+        id: group.id,
+        normalizedVersion: group.normalizedVersion || 0,
+        normalizedCheck: group.normalizedCheck || "",
+        members: Array.isArray(group.members) ? group.members.length : 0,
+        transactions: Array.isArray(group.transactions) ? group.transactions.length : 0,
+        deletedTransactions: Array.isArray(group.deletedTransactions) ? group.deletedTransactions.length : 0,
+        hasOwner: Boolean(group.ownerEmail),
+        listener: normalizedUnsubs.has(group.id)
+      }));
+      const payload = {
+        build: APP_BUILD,
+        schemaVersion: appState.schemaVersion || 0,
+        signedIn: Boolean(currentUser),
+        activeGroup: appState.activeGroupId ? "set" : "none",
+        groups,
+        directTransactions: (appState.directTransactions || []).length,
+        deletedTransactions: (appState.deletedTransactions || []).length,
+        deletedGroups: (appState.deletedGroups || []).length,
+        timestamp: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `whatsmyshare-diagnostics-${APP_BUILD}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast("Diagnostics downloaded.");
     };
 
     window.refreshAppData = async function() {

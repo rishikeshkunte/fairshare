@@ -612,3 +612,11 @@ test("phase 5 discovers groups from membership documents", () => {
   assert.match(html, /hydrateNormalizedGroupMetadata/);
   assert.match(html, /listenToMemberships\(user\)/);
 });
+
+test("sync health and sanitized diagnostics are available for support", () => {
+  assert.match(html, /id="sync-health-status"/);
+  assert.match(html, /window\.exportDiagnostics = function\(\)/);
+  assert.match(html, /whatsmyshare-diagnostics/);
+  assert.match(html, /function updateSyncHealth\(\)/);
+  assert.match(html, /updateSyncHealth\(\);/);
+});
