@@ -15,6 +15,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: node --check ops/repair.mjs
       - run: npm test
 
   firestore-rules:
