@@ -620,3 +620,10 @@ test("sync health and sanitized diagnostics are available for support", () => {
   assert.match(html, /function updateSyncHealth\(\)/);
   assert.match(html, /updateSyncHealth\(\);/);
 });
+
+test("quota saver limits background normalized listeners", () => {
+  assert.match(html, /id="toggle-quota-saver"/);
+  assert.match(html, /let quotaSaver = false/);
+  assert.match(html, /if \(quotaSaver && groupId !== appState\.activeGroupId\) return;/);
+  assert.match(html, /fairshare_quota_saver/);
+});
