@@ -579,3 +579,12 @@ test("group-only contacts are hidden from Friends unless explicitly connected", 
   assert.match(html, /const visibleFriends = getVisibleFriends\(\)/);
   assert.match(html, /cleanupGroupOnlyFriends\(\);/);
 });
+
+test("groups can be left locally or soft-deleted for everyone, with cloud repair tools", () => {
+  assert.match(html, /id="btn-delete-group-everyone"/);
+  assert.match(html, /deletedAt: Date\.now\(\)/);
+  assert.match(html, /cloudData\.deletedAt/);
+  assert.match(html, /window\.pullAllGroupsFromCloud = async function\(\)/);
+  assert.match(html, /window\.purgeDeletedGroupsFromCloud = async function\(\)/);
+  assert.match(html, /function removeGroupLocally\(groupId\)/);
+});
