@@ -168,10 +168,10 @@ export function normalizeLegacyGroup(group, owner = {}) {
   };
 }
 
-export function validateNormalizedGroup(plan) {
+export function validateNormalizedGroup(plan, { requireOwner = false } = {}) {
   const errors = [];
   if (!plan || !plan.group) return ["missing group"];
-  if (!plan.ownerMemberId) errors.push("missing owner member");
+  if (requireOwner && !plan.ownerMemberId) errors.push("missing owner member");
   const memberIds = new Set(plan.members.map(member => member.id));
   if (memberIds.size !== plan.members.length) errors.push("duplicate member ids");
   const active = plan.members.filter(member => member.status === "active");
