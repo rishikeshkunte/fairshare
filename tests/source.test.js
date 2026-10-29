@@ -600,7 +600,7 @@ test("phase 3 projects normalized group subcollections and dual-writes changes",
 test("phase 4 stops legacy ledger writes for normalized groups", () => {
   assert.match(html, /if \(g\.normalizedVersion\) \{/);
   assert.match(html, /scheduleNormalizedGroupWrite\(g\);/);
-  assert.match(html, /if \(group\.normalizedVersion\) \{[\s\S]*?scheduleNormalizedGroupWrite\(group\);[\s\S]*?continue;/);
+  assert.match(html, /if \(!group\.normalizedVersion\) \{[\s\S]*?runNormalizedMigration\([\s\S]*?continue;[\s\S]*?scheduleNormalizedGroupWrite\(group\);[\s\S]*?continue;/);
   assert.match(html, /memberEmails: normalizedEmails/);
   assert.match(html, /if \(activeGroupForRepair && !activeGroupForRepair\.normalizedVersion\)/);
 });
