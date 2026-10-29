@@ -1021,6 +1021,7 @@
     import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, mergePairLedger, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
     import { repairGroupNames } from "./js/groupnames.js";
     import { normalizeLegacyGroup, validateNormalizedGroup } from "./js/groupschema.js";
+    import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs } from "./js/normalizedsync.js";
 
     document.body.addEventListener("click", (event) => {
       const node = event.target.closest("[data-call]");
@@ -1047,8 +1048,10 @@
     let cloudSyncUid = null;
     let normalizedMigrationInFlight = false;
     let normalizedMigrationScheduledFor = "";
+    const normalizedUnsubs = new Map();
+    const normalizedWriteTimers = new Map();
     let toldGroupSyncError = false;
-    const APP_BUILD = "v75";
+    const APP_BUILD = "v76";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1978,6 +1981,7 @@
         g.transactions = preserveLocalReceipts(reconciled.transactions, localGroupTransactions);
         g.deletedTransactions = reconciled.deletedTransactions;
         persistLocalState();
+        scheduleNormalizedGroupWrite(g);
         if (appState.activeGroupId === g.id) renderAll();
       }).catch(err => console.warn("Cloud sync note:", err));
     }
@@ -3429,6 +3433,8 @@
 
     function removeGroupLocally(groupId) {
       if (!groupId || !appState.groups[groupId]) return false;
+      const normalizedUnsub = normalizedUnsubs.get(groupId);
+      if (normalizedUnsub) normalizedUnsub();
       appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(groupId)]));
       delete appState.groups[groupId];
       if (managedGroupId === groupId) managedGroupId = "";
@@ -4002,6 +4008,7 @@
       appState.activeGroupId = target.id;
       persistLocalState();
       saveState(target);
+      window.setTimeout(() => window.runNormalizedMigration({ quiet: true, forceGroupId: target.id }), 1500);
       renderAll();
       closeCsvImport();
       navigateTo("groups");
@@ -4051,6 +4058,7 @@
         appState.activeGroupId = newId;
 
         saveState();
+        window.setTimeout(() => window.runNormalizedMigration({ quiet: true, forceGroupId: newId }), 1500);
         closeNewGroupModal();
         renderAll();
         navigateTo("groups");
@@ -6786,6 +6794,7 @@
       if (inviteModal) inviteModal.classList.remove("active");
       clearPendingInvite();
       clearSensitiveState();
+      clearNormalizedListeners();
       updateAuthUI(null);
       renderAll();
     }
@@ -6815,6 +6824,9 @@
             if (repairDirectMoney()) { persistLocalState(); pushAllDirectPairs(); }
             materializeRecurring();
             Object.values(appState.groups || {}).forEach(addGroupMembersToRoster);
+            Object.values(appState.groups || {}).forEach(group => {
+              if (group.normalizedVersion) listenToNormalizedGroup(group.id);
+            });
           } catch (err) {
             console.error("Local state restore note:", err);
           }
@@ -7145,6 +7157,7 @@
             }
           }
           addGroupMembersToRoster(appState.groups[groupId]);
+          if (appState.groups[groupId]?.normalizedVersion) listenToNormalizedGroup(groupId);
         });
         setCloudSyncStatus(`Cloud sync: ${snapshot.size} group(s)`);
         if (changed) {
@@ -7343,6 +7356,7 @@
 
     window.runNormalizedMigration = async function(options = {}) {
       const quiet = Boolean(options?.quiet);
+      const forceGroupId = String(options?.forceGroupId || "");
       if (!fx || !currentUser) {
         if (!quiet) toast("Sign in with Gmail first.");
         return;
@@ -7354,9 +7368,12 @@
       let skipped = 0;
       let failed = 0;
       try {
-        for (const group of Object.values(appState.groups || {})) {
+        const targets = forceGroupId
+          ? [appState.groups[forceGroupId]].filter(Boolean)
+          : Object.values(appState.groups || {});
+        for (const group of targets) {
           if (!group?.id) continue;
-          if (group.normalizedVersion) {
+          if (group.normalizedVersion && !forceGroupId) {
             migrated += 1;
             continue;
           }
@@ -7418,6 +7435,8 @@
             group.normalizedVersion = 1;
             group.normalizedAt = Date.now();
             group.normalizedCheck = checkOk ? "ok" : "mismatch";
+            group._normalizedSig = normalizedSignature(group);
+            listenToNormalizedGroup(group.id);
             migrated += 1;
             if (!checkOk) {
               console.warn("Normalized compare mismatch:", group.name, {
@@ -7612,6 +7631,87 @@
       }
     }
 
+    function normalizedSignature(group) {
+      return JSON.stringify({
+        members: group?.members || [],
+        links: group?.memberLinks || {},
+        transactions: group?.transactions || [],
+        deleted: group?.deletedTransactions || []
+      });
+    }
+
+    function scheduleNormalizedGroupWrite(group) {
+      if (!fx || !currentUser || !group?.id || !group.normalizedVersion) return;
+      const signature = normalizedSignature(group);
+      if (group._normalizedSig === signature) return;
+      group._normalizedSig = signature;
+      if (normalizedWriteTimers.has(group.id)) clearTimeout(normalizedWriteTimers.get(group.id));
+      normalizedWriteTimers.set(group.id, window.setTimeout(() => {
+        normalizedWriteTimers.delete(group.id);
+        window.runNormalizedMigration({ quiet: true, forceGroupId: group.id });
+      }, 1200));
+    }
+
+    function listenToNormalizedGroup(groupId) {
+      if (!fx || !currentUser || !groupId || normalizedUnsubs.has(groupId)) return;
+      const groupRef = fx.storeMod.doc(fx.db, "groups", groupId);
+      let memberDocs = [];
+      let expenseDocs = [];
+      let settlementDocs = [];
+      const loaded = new Set();
+      const apply = () => {
+        if (loaded.size < 3) return;
+        const group = appState.groups[groupId];
+        if (!group) return;
+        const members = projectGroupMembers(memberDocs);
+        if (members.length) {
+          group.members = members.map(member => member.name);
+          group.memberLinks = { ...(group.memberLinks || {}), ...memberLinksFromDocs(memberDocs) };
+        }
+        const projected = projectGroupTransactions({ memberDocs, expenseDocs, settlementDocs });
+        const localCount = (group.transactions || []).length;
+        if (projected.length < localCount && localCount > 0) {
+          console.warn("Normalized ledger is behind local:", group.name, projected.length, localCount);
+          return;
+        }
+        group.transactions = projected;
+        group.normalizedVersion = 1;
+        group._normalizedSig = normalizedSignature(group);
+        persistLocalState();
+        if (appState.activeGroupId === groupId) renderAll();
+      };
+      const subscriptions = [
+        fx.storeMod.onSnapshot(fx.storeMod.collection(groupRef, "members"), snapshot => {
+          memberDocs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+          loaded.add("members");
+          apply();
+        }, err => console.warn("Normalized members note:", err?.code || err)),
+        fx.storeMod.onSnapshot(fx.storeMod.collection(groupRef, "expenses"), snapshot => {
+          expenseDocs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+          loaded.add("expenses");
+          apply();
+        }, err => console.warn("Normalized expenses note:", err?.code || err)),
+        fx.storeMod.onSnapshot(fx.storeMod.collection(groupRef, "settlements"), snapshot => {
+          settlementDocs = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+          loaded.add("settlements");
+          apply();
+        }, err => console.warn("Normalized settlements note:", err?.code || err))
+      ];
+      normalizedUnsubs.set(groupId, () => {
+        subscriptions.forEach(unsubscribe => { try { unsubscribe(); } catch { /* ignore */ } });
+        normalizedUnsubs.delete(groupId);
+      });
+    }
+
+    function clearNormalizedListeners() {
+      for (const unsubscribe of Array.from(normalizedUnsubs.values())) {
+        try { unsubscribe(); } catch { /* ignore */ }
+      }
+      normalizedUnsubs.clear();
+      normalizedWriteTimers.forEach(timer => clearTimeout(timer));
+      normalizedWriteTimers.clear();
+    }
+
     function listenToCloudGroup(groupId) {
       if (!fx || !currentUser) return;
       if (unsubscribeGroupListener) unsubscribeGroupListener();
@@ -7656,6 +7756,7 @@
           if (repairGroupMoney(group)) repairedNames = true;
           addGroupMembersToRoster(group);
           persistLocalState();
+          if (group.normalizedVersion) listenToNormalizedGroup(groupId);
           if (appState.activeGroupId === groupId) renderAll();
           if (repairedNames) saveState(group);
         } else if (appState.activeGroupId === groupId) {
