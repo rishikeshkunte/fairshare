@@ -587,3 +587,12 @@ test("groups can be left locally or soft-deleted for everyone, with cloud repair
   assert.match(html, /window\.purgeDeletedGroupsFromCloud = async function\(\)/);
   assert.match(html, /function removeGroupLocally\(groupId\)/);
 });
+
+test("phase 3 projects normalized group subcollections and dual-writes changes", () => {
+  assert.match(html, /import \{ projectGroupTransactions/);
+  assert.match(html, /function listenToNormalizedGroup\(groupId\)/);
+  assert.match(html, /function scheduleNormalizedGroupWrite\(group\)/);
+  assert.match(html, /group\.transactions = projected/);
+  assert.match(html, /window\.runNormalizedMigration\(\{ quiet: true, forceGroupId: group\.id \}\)/);
+  assert.match(html, /clearNormalizedListeners\(\)/);
+});
