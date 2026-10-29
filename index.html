@@ -1051,7 +1051,7 @@
     const normalizedUnsubs = new Map();
     const normalizedWriteTimers = new Map();
     let toldGroupSyncError = false;
-    const APP_BUILD = "v76";
+    const APP_BUILD = "v77";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -6808,6 +6808,7 @@
         if (switchedUser) {
           if (previousUser) persistLocalState(previousUser);
           updateAuthUI(null);
+          clearNormalizedListeners();
           currentUser = user;
           // Loading the local cache must never leave a signed-in user stuck on
           // the privacy gate. A bad cache or render error is logged, then the

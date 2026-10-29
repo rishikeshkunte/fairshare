@@ -10,6 +10,13 @@ function stripPrefix(id, prefix) {
   return value.startsWith(prefix) ? value.slice(prefix.length) : value;
 }
 
+function displayDate(doc) {
+  if (doc.date) return doc.date;
+  if (!doc.dateISO) return "";
+  const date = new Date(`${doc.dateISO}T00:00:00`);
+  return isNaN(date.getTime()) ? doc.dateISO : date.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function stamp(doc) {
   return Number(doc.updatedAt || doc.createdAt || 0) || 0;
 }
@@ -38,6 +45,7 @@ export function projectGroupTransactions({ memberDocs = [], expenseDocs = [], se
       category: doc.category || "Other",
       desc: doc.description || "",
       notes: doc.notes || "",
+      date: displayDate(doc),
       dateISO: doc.dateISO || "",
       splitMode: doc.splitMode || "equal",
       timestamp: stamp(doc),
@@ -58,6 +66,7 @@ export function projectGroupTransactions({ memberDocs = [], expenseDocs = [], se
       receiver: nameById.get(doc.toMemberId) || doc.toMemberId || "",
       category: "Settlement",
       desc: doc.description || "",
+      date: displayDate(doc),
       dateISO: doc.dateISO || "",
       timestamp: stamp(doc),
       updatedAt: stamp(doc),
