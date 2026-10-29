@@ -616,6 +616,16 @@
         <button type="button" class="btn btn-secondary" data-call="purgeDeletedGroupsFromCloud" style="color:var(--danger-text);">Purge deleted groups</button>
         <button type="button" class="btn btn-secondary" data-call="exportDiagnostics">Export diagnostics</button>
       </div>
+      <div class="toggle-row" style="margin-top:12px;">
+        <div>
+          <strong style="font-size:0.92rem;">Quota saver</strong>
+          <div class="toggle-desc">Live sync only the open group. Other groups refresh when opened or via Pull all groups. This turns off background listeners to reduce Firestore reads.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-quota-saver">
+          <span class="slider"></span>
+        </label>
+      </div>
       <p id="sync-health-status" class="group-hint" style="margin-top:10px;"></p>
       <p id="normalized-sync-status" class="group-hint" style="margin-top:10px;"></p>
       <p class="group-hint" style="margin-top:10px;">Sync now reconnects cloud listeners. Pull all groups merges every shared ledger from cloud. Purge deleted groups removes groups you already left from the cloud for every member.</p>
@@ -1053,8 +1063,11 @@
     const normalizedUnsubs = new Map();
     const normalizedWriteTimers = new Map();
     const membershipHydrated = new Set();
+    const normalizedWrittenByGroup = new Map();
+    let quotaSaver = false;
+    try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v81";
+    const APP_BUILD = "v82";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -3424,6 +3437,12 @@
       saveState();
       renderAll();
       if (typeof listenToCloudGroup === "function") listenToCloudGroup(groupId);
+      if (quotaSaver) {
+        for (const [id, unsubscribe] of Array.from(normalizedUnsubs.entries())) {
+          if (id !== groupId) unsubscribe();
+        }
+      }
+      if (typeof listenToNormalizedGroup === "function") listenToNormalizedGroup(groupId);
     }
 
     if (groupSelector) {
@@ -7524,33 +7543,31 @@
             }, { merge: true });
             group.memberEmails = normalizedEmails;
 
-            const [memberSnap, expenseSnap, settlementSnap] = await Promise.all([
-              fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "members")),
-              fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "expenses")),
-              fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "settlements"))
-            ]);
-            const normalizedTotal = expenseSnap.docs.reduce((sum, docSnap) => {
-              return sum + (Number(docSnap.data().amountPaise) || 0);
-            }, 0);
-            const legacyTotal = plan.expenses.reduce((sum, expense) => sum + expense.amountPaise, 0);
-            const checkOk = memberSnap.size === plan.members.length
-              && expenseSnap.size >= plan.expenses.length
-              && settlementSnap.size >= plan.settlements.length
-              && normalizedTotal === legacyTotal;
+            let checkOk = true;
+            if (options?.compare === true) {
+              const [memberSnap, expenseSnap, settlementSnap] = await Promise.all([
+                fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "members")),
+                fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "expenses")),
+                fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "settlements"))
+              ]);
+              const normalizedTotal = expenseSnap.docs.reduce((sum, docSnap) => {
+                return sum + (Number(docSnap.data().amountPaise) || 0);
+              }, 0);
+              const legacyTotal = plan.expenses.reduce((sum, expense) => sum + expense.amountPaise, 0);
+              checkOk = memberSnap.size === plan.members.length
+                && expenseSnap.size >= plan.expenses.length
+                && settlementSnap.size >= plan.settlements.length
+                && normalizedTotal === legacyTotal;
+            }
             group.normalizedVersion = 1;
             group.normalizedAt = Date.now();
             group.normalizedCheck = checkOk ? "ok" : "mismatch";
             group._normalizedSig = normalizedSignature(group);
+            seedNormalizedWritten(group.id, plan);
             listenToNormalizedGroup(group.id);
             migrated += 1;
             if (!checkOk) {
-              console.warn("Normalized compare mismatch:", group.name, {
-                members: memberSnap.size,
-                expenses: expenseSnap.size,
-                settlements: settlementSnap.size,
-                normalizedTotal,
-                legacyTotal
-              });
+              console.warn("Normalized compare mismatch:", group.name);
             }
           } catch (err) {
             failed += 1;
@@ -7647,6 +7664,25 @@
       URL.revokeObjectURL(url);
       toast("Diagnostics downloaded.");
     };
+
+    const quotaSaverToggle = document.getElementById("toggle-quota-saver");
+    if (quotaSaverToggle) {
+      quotaSaverToggle.checked = quotaSaver;
+      quotaSaverToggle.addEventListener("change", () => {
+        quotaSaver = quotaSaverToggle.checked;
+        try { localStorage.setItem("fairshare_quota_saver", quotaSaver ? "1" : "0"); } catch { /* ignore */ }
+        if (quotaSaver) {
+          for (const [groupId, unsubscribe] of Array.from(normalizedUnsubs.entries())) {
+            if (groupId !== appState.activeGroupId) unsubscribe();
+          }
+        } else {
+          Object.values(appState.groups || {}).forEach(group => {
+            if (group.normalizedVersion) listenToNormalizedGroup(group.id);
+          });
+        }
+        updateSyncHealth();
+      });
+    }
 
     window.refreshAppData = async function() {
       if (!(await askConfirm({
@@ -7799,15 +7835,84 @@
       });
     }
 
+    function normalizedWriteKey(collection, id) {
+      return `${collection}/${id}`;
+    }
+
+    function seedNormalizedWritten(groupId, plan) {
+      const written = new Map();
+      (plan.members || []).forEach(member => written.set(normalizedWriteKey("members", member.id), JSON.stringify(member)));
+      (plan.expenses || []).forEach(expense => written.set(normalizedWriteKey("expenses", expense.id), JSON.stringify(expense)));
+      (plan.settlements || []).forEach(settlement => written.set(normalizedWriteKey("settlements", settlement.id), JSON.stringify(settlement)));
+      normalizedWrittenByGroup.set(groupId, written);
+    }
+
+    async function syncNormalizedGroupChanges(group) {
+      if (!fx || !currentUser || !group?.id || !group.normalizedVersion) return;
+      const plan = normalizeLegacyGroup(group, {
+        ownerUid: group.ownerUid || "",
+        ownerEmail: group.ownerEmail || ""
+      });
+      if (!plan.ok || validateNormalizedGroup(plan).length) return;
+      const written = normalizedWrittenByGroup.get(group.id) || new Map();
+      const groupRef = fx.storeMod.doc(fx.db, "groups", group.id);
+      const ops = [];
+      const put = (collection, doc) => {
+        const key = normalizedWriteKey(collection, doc.id);
+        const signature = JSON.stringify(doc);
+        if (written.get(key) === signature) return;
+        ops.push({ ref: fx.storeMod.doc(groupRef, collection, doc.id), data: doc });
+        written.set(key, signature);
+      };
+      plan.members.forEach(member => put("members", member));
+      plan.expenses.forEach(expense => put("expenses", expense));
+      plan.settlements.forEach(settlement => put("settlements", settlement));
+      plan.tombstones.forEach(tombstone => {
+        const collectionName = tombstone.type === "expense" ? "expenses" : "settlements";
+        const docId = `${tombstone.type}_${tombstone.transactionId}`;
+        const key = normalizedWriteKey(collectionName, docId);
+        const signature = `deleted:${tombstone.deletedAt}`;
+        if (written.get(key) === signature) return;
+        ops.push({ ref: fx.storeMod.doc(groupRef, collectionName, docId), data: { deletedAt: Number(tombstone.deletedAt) || Date.now() } });
+        written.set(key, signature);
+      });
+      if (ops.length) {
+        for (let index = 0; index < ops.length; index += 450) {
+          const batch = fx.storeMod.writeBatch(fx.db);
+          ops.slice(index, index + 450).forEach(op => batch.set(op.ref, op.data, { merge: true }));
+          await batch.commit();
+        }
+      }
+      const normalizedEmails = Array.from(new Set([
+        ...plan.members.map(member => member.emailCanonical).filter(Boolean),
+        normalizeEmail(currentUser.email || "")
+      ].filter(Boolean)));
+      const emailsChanged = JSON.stringify(normalizedEmails) !== JSON.stringify(group.memberEmails || []);
+      if (!ops.length && !emailsChanged) {
+        group._normalizedSig = normalizedSignature(group);
+        normalizedWrittenByGroup.set(group.id, written);
+        return;
+      }
+      await fx.storeMod.setDoc(groupRef, {
+        normalizedVersion: 1,
+        normalizedAt: serverTimestamp(fx),
+        normalizedBy: (currentUser.email || "").toLowerCase().trim(),
+        memberEmails: normalizedEmails
+      }, { merge: true });
+      group.memberEmails = normalizedEmails;
+      group._normalizedSig = normalizedSignature(group);
+      normalizedWrittenByGroup.set(group.id, written);
+      persistLocalState();
+    }
+
     function scheduleNormalizedGroupWrite(group) {
       if (!fx || !currentUser || !group?.id || !group.normalizedVersion) return;
       const signature = normalizedSignature(group);
       if (group._normalizedSig === signature) return;
-      group._normalizedSig = signature;
       if (normalizedWriteTimers.has(group.id)) clearTimeout(normalizedWriteTimers.get(group.id));
       normalizedWriteTimers.set(group.id, window.setTimeout(() => {
         normalizedWriteTimers.delete(group.id);
-        window.runNormalizedMigration({ quiet: true, forceGroupId: group.id });
+        syncNormalizedGroupChanges(group);
       }, 1200));
     }
 
@@ -7879,6 +7984,7 @@
 
     function listenToNormalizedGroup(groupId) {
       if (!fx || !currentUser || !groupId || normalizedUnsubs.has(groupId)) return;
+      if (quotaSaver && groupId !== appState.activeGroupId) return;
       const groupRef = fx.storeMod.doc(fx.db, "groups", groupId);
       let memberDocs = [];
       let expenseDocs = [];
@@ -7902,6 +8008,11 @@
         group.transactions = projected;
         group.normalizedVersion = 1;
         group._normalizedSig = normalizedSignature(group);
+        const written = new Map();
+        memberDocs.forEach(doc => written.set(normalizedWriteKey("members", doc.id), JSON.stringify(doc)));
+        expenseDocs.forEach(doc => written.set(normalizedWriteKey("expenses", doc.id), JSON.stringify(doc)));
+        settlementDocs.forEach(doc => written.set(normalizedWriteKey("settlements", doc.id), JSON.stringify(doc)));
+        normalizedWrittenByGroup.set(groupId, written);
         persistLocalState();
         if (appState.activeGroupId === groupId) renderAll();
       };
@@ -7934,6 +8045,7 @@
       }
       normalizedUnsubs.clear();
       membershipHydrated.clear();
+      normalizedWrittenByGroup.clear();
       normalizedWriteTimers.forEach(timer => clearTimeout(timer));
       normalizedWriteTimers.clear();
     }
