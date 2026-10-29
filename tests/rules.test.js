@@ -201,4 +201,44 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     }));
     await assertSucceeds(deleteDoc(doc(aliceDb, "groups", "g2")));
   });
+
+  await t.test("normalized group subcollections are member-only", async () => {
+    const group = {
+      id: "g1",
+      name: "Test group",
+      currency: "INR",
+      members: ["Alice"],
+      memberEmails: [ALICE_RAW],
+      transactions: [],
+      deletedTransactions: []
+    };
+    const expense = {
+      amountPaise: 1000,
+      currency: "INR",
+      payerMemberId: "email_alice_gmail_com",
+      shares: { email_alice_gmail_com: 1000 },
+      category: "Other",
+      description: "Test",
+      dateISO: "2026-10-28",
+      createdBy: ALICE_RAW
+    };
+    await env.clearFirestore();
+    await seed(["groups", "g1"], group);
+    await assertSucceeds(setDoc(doc(aliceDb, "groups", "g1", "expenses", "expense_t1"), expense));
+    await assertFails(setDoc(doc(bobDb, "groups", "g1", "expenses", "expense_t2"), expense));
+    await assertSucceeds(getDocs(collection(aliceDb, "groups", "g1", "expenses")));
+    await assertFails(getDocs(collection(bobDb, "groups", "g1", "expenses")));
+    await assertSucceeds(setDoc(doc(aliceDb, "groups", "g1", "members", "email_alice_gmail_com"), {
+      displayName: "Alice",
+      emailCanonical: ALICE_KEY,
+      role: "owner",
+      status: "active"
+    }));
+    await assertFails(setDoc(doc(bobDb, "groups", "g1", "members", "email_bob_outlook_com"), {
+      displayName: "Bob",
+      emailCanonical: BOB_KEY,
+      role: "member",
+      status: "active"
+    }));
+  });
 });

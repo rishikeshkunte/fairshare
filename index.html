@@ -1051,7 +1051,7 @@
     const normalizedUnsubs = new Map();
     const normalizedWriteTimers = new Map();
     let toldGroupSyncError = false;
-    const APP_BUILD = "v77";
+    const APP_BUILD = "v78";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1896,6 +1896,29 @@
       if (!(fx && currentUser && g)) return;
       const myEmail = (currentUser.email || "").toLowerCase().trim();
       const myEmailNorm = normalizeEmail(myEmail);
+      if (g.normalizedVersion) {
+        const metaSig = JSON.stringify({
+          name: g.name,
+          currency: g.currency,
+          simplifyDebts: g.simplifyDebts !== false,
+          ownerUid: g.ownerUid || null,
+          ownerEmail: g.ownerEmail || null
+        });
+        if (g._normalizedMetaSig !== metaSig) {
+          g._normalizedMetaSig = metaSig;
+          fx.storeMod.setDoc(fx.storeMod.doc(fx.db, "groups", g.id), {
+            name: g.name,
+            currency: g.currency,
+            simplifyDebts: g.simplifyDebts !== false,
+            ownerUid: g.ownerUid || null,
+            ownerEmail: g.ownerEmail || null,
+            updatedAt: serverTimestamp(fx),
+            updatedBy: myEmail
+          }, { merge: true }).catch(err => console.warn("Normalized metadata note:", err?.code || err));
+        }
+        scheduleNormalizedGroupWrite(g);
+        return;
+      }
       const memberLinks = { ...(g.memberLinks || {}) };
       memberLinks[getMyGroupMemberName(g)] = myEmail;
       // Retain linked members discovered from the shared group even if they are
@@ -6713,7 +6736,7 @@
 
     function renderAll() {
       const activeGroupForRepair = appState.groups[appState.activeGroupId];
-      if (activeGroupForRepair) {
+      if (activeGroupForRepair && !activeGroupForRepair.normalizedVersion) {
         let groupRepaired = false;
         if (migrateGroupSelfName(activeGroupForRepair)) groupRepaired = true;
         if (repairGroupIdentity(activeGroupForRepair)) groupRepaired = true;
@@ -7116,6 +7139,26 @@
             };
             changed = true;
           } else {
+            if (localGroup.normalizedVersion) {
+              if (cloudData.name && localGroup.name !== cloudData.name) { localGroup.name = cloudData.name; changed = true; }
+              if (cloudData.currency && localGroup.currency !== cloudData.currency) { localGroup.currency = cloudData.currency; changed = true; }
+              if (cloudData.ownerUid && localGroup.ownerUid !== cloudData.ownerUid) { localGroup.ownerUid = cloudData.ownerUid; changed = true; }
+              if (cloudData.ownerEmail && localGroup.ownerEmail !== cloudData.ownerEmail) { localGroup.ownerEmail = cloudData.ownerEmail; changed = true; }
+              if (cloudData.normalizedVersion && localGroup.normalizedVersion !== cloudData.normalizedVersion) {
+                localGroup.normalizedVersion = cloudData.normalizedVersion;
+                changed = true;
+              }
+              if (Array.isArray(cloudData.memberEmails) && JSON.stringify(localGroup.memberEmails || []) !== JSON.stringify(cloudData.memberEmails)) {
+                localGroup.memberEmails = cloudData.memberEmails;
+                changed = true;
+              }
+              if (typeof cloudData.simplifyDebts === "boolean" && localGroup.simplifyDebts !== cloudData.simplifyDebts) {
+                localGroup.simplifyDebts = cloudData.simplifyDebts;
+                changed = true;
+              }
+              listenToNormalizedGroup(groupId);
+              return;
+            }
             const localGroupTransactions = localGroup.transactions || [];
             const merged = mergePairLedger({
               localTransactions: localGroupTransactions,
@@ -7414,11 +7457,17 @@
               ops.slice(index, index + 450).forEach(op => batch.set(op.ref, op.data, { merge: op.merge !== false }));
               await batch.commit();
             }
+            const normalizedEmails = Array.from(new Set([
+              ...plan.members.map(member => member.emailCanonical).filter(Boolean),
+              normalizeEmail(currentUser.email || "")
+            ].filter(Boolean)));
             await fx.storeMod.setDoc(groupRef, {
               normalizedVersion: 1,
               normalizedAt: serverTimestamp(fx),
-              normalizedBy: (currentUser.email || "").toLowerCase().trim()
+              normalizedBy: (currentUser.email || "").toLowerCase().trim(),
+              memberEmails: normalizedEmails
             }, { merge: true });
+            group.memberEmails = normalizedEmails;
 
             const [memberSnap, expenseSnap, settlementSnap] = await Promise.all([
               fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "members")),
@@ -7524,6 +7573,10 @@
       for (const group of Object.values(appState.groups || {})) {
         if (!group || !group.id) continue;
         if ((appState.deletedGroups || []).includes(group.id)) continue;
+        if (group.normalizedVersion) {
+          scheduleNormalizedGroupWrite(group);
+          continue;
+        }
         const groupRepaired = (() => {
           let repaired = false;
           if (migrateGroupSelfName(group)) repaired = true;
@@ -7727,6 +7780,19 @@
           const cloudData = docSnap.data() || {};
           if (cloudData.deletedAt) {
             removeGroupLocally(groupId);
+            return;
+          }
+          if (cloudData.normalizedVersion) group.normalizedVersion = cloudData.normalizedVersion;
+          if (group.normalizedVersion) {
+            if (cloudData.name) group.name = cloudData.name;
+            if (cloudData.currency) group.currency = cloudData.currency;
+            if (cloudData.ownerUid) group.ownerUid = cloudData.ownerUid;
+            if (cloudData.ownerEmail) group.ownerEmail = cloudData.ownerEmail;
+            if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
+            if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
+            listenToNormalizedGroup(groupId);
+            persistLocalState();
+            if (appState.activeGroupId === groupId) renderAll();
             return;
           }
           const remote = cloudData.schemaVersion === 9
