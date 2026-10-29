@@ -611,9 +611,11 @@
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button type="button" class="btn btn-secondary" data-call="syncNow">Sync now</button>
         <button type="button" class="btn btn-secondary" data-call="pullAllGroupsFromCloud">Pull all groups</button>
+        <button type="button" class="btn btn-secondary" data-call="runNormalizedMigration">Migrate to normalized</button>
         <button type="button" class="btn btn-secondary" data-call="refreshAppData">Refresh app data</button>
         <button type="button" class="btn btn-secondary" data-call="purgeDeletedGroupsFromCloud" style="color:var(--danger-text);">Purge deleted groups</button>
       </div>
+      <p id="normalized-sync-status" class="group-hint" style="margin-top:10px;"></p>
       <p class="group-hint" style="margin-top:10px;">Sync now reconnects cloud listeners. Pull all groups merges every shared ledger from cloud. Purge deleted groups removes groups you already left from the cloud for every member.</p>
     </div>
   </section>
@@ -1018,6 +1020,7 @@
     import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
     import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, mergePairLedger, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
     import { repairGroupNames } from "./js/groupnames.js";
+    import { normalizeLegacyGroup, validateNormalizedGroup } from "./js/groupschema.js";
 
     document.body.addEventListener("click", (event) => {
       const node = event.target.closest("[data-call]");
@@ -1042,8 +1045,10 @@
     let authActionInProgress = false;
     let authListenerAttached = false;
     let cloudSyncUid = null;
+    let normalizedMigrationInFlight = false;
+    let normalizedMigrationScheduledFor = "";
     let toldGroupSyncError = false;
-    const APP_BUILD = "v74";
+    const APP_BUILD = "v75";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -7084,6 +7089,9 @@
               members: Array.isArray(cloudData.members) ? cloudData.members : ["You"],
               memberLinks: cloudData.memberLinks || {},
               memberEmails: Array.isArray(cloudData.memberEmails) ? cloudData.memberEmails : [],
+              ownerUid: cloudData.ownerUid || null,
+              ownerEmail: cloudData.ownerEmail || null,
+              normalizedVersion: cloudData.normalizedVersion || 0,
               simplifyDebts: cloudData.simplifyDebts !== false,
               transactions: mergePairLedger({
                 localTransactions: [],
@@ -7125,6 +7133,12 @@
               localGroup.memberEmails = cloudData.memberEmails;
               changed = true;
             }
+            if (cloudData.ownerUid && localGroup.ownerUid !== cloudData.ownerUid) { localGroup.ownerUid = cloudData.ownerUid; changed = true; }
+            if (cloudData.ownerEmail && localGroup.ownerEmail !== cloudData.ownerEmail) { localGroup.ownerEmail = cloudData.ownerEmail; changed = true; }
+            if (cloudData.normalizedVersion && localGroup.normalizedVersion !== cloudData.normalizedVersion) {
+              localGroup.normalizedVersion = cloudData.normalizedVersion;
+              changed = true;
+            }
             if (typeof cloudData.simplifyDebts === "boolean" && localGroup.simplifyDebts !== cloudData.simplifyDebts) {
               localGroup.simplifyDebts = cloudData.simplifyDebts;
               changed = true;
@@ -7156,6 +7170,12 @@
       // 6. Upload groups that exist only in this device's UID cache so the same
       // account can see them on every browser. Existing cloud groups are left alone.
       pushLocalGroupsToCloud(user);
+      if (normalizedMigrationScheduledFor !== user.uid) {
+        normalizedMigrationScheduledFor = user.uid;
+        window.setTimeout(() => {
+          if (currentUser?.uid === user.uid) window.runNormalizedMigration({ quiet: true });
+        }, 20000);
+      }
     }
 
     window.reloadGroupFromCloud = async function() {
@@ -7319,6 +7339,110 @@
       persistLocalState();
       renderAll();
       toast(`Pulled ${pulled} group${pulled === 1 ? "" : "s"} from cloud.${missing ? ` ${missing} missing.` : ""}`);
+    };
+
+    window.runNormalizedMigration = async function(options = {}) {
+      const quiet = Boolean(options?.quiet);
+      if (!fx || !currentUser) {
+        if (!quiet) toast("Sign in with Gmail first.");
+        return;
+      }
+      if (normalizedMigrationInFlight) return;
+      normalizedMigrationInFlight = true;
+      const statusEl = document.getElementById("normalized-sync-status");
+      let migrated = 0;
+      let skipped = 0;
+      let failed = 0;
+      try {
+        for (const group of Object.values(appState.groups || {})) {
+          if (!group?.id) continue;
+          if (group.normalizedVersion) {
+            migrated += 1;
+            continue;
+          }
+          const plan = normalizeLegacyGroup(group, {
+            ownerUid: group.ownerUid || "",
+            ownerEmail: group.ownerEmail || ""
+          });
+          const validation = validateNormalizedGroup(plan);
+          if (!plan.ok || validation.length) {
+            skipped += 1;
+            console.warn("Normalized migration skipped:", group.name, [...plan.errors, ...validation]);
+            continue;
+          }
+          try {
+            const groupRef = fx.storeMod.doc(fx.db, "groups", group.id);
+            const ops = [];
+            plan.members.forEach(member => {
+              ops.push({ ref: fx.storeMod.doc(groupRef, "members", member.id), data: member, merge: true });
+            });
+            plan.expenses.forEach(expense => {
+              ops.push({ ref: fx.storeMod.doc(groupRef, "expenses", expense.id), data: expense, merge: true });
+            });
+            plan.settlements.forEach(settlement => {
+              ops.push({ ref: fx.storeMod.doc(groupRef, "settlements", settlement.id), data: settlement, merge: true });
+            });
+            plan.tombstones.forEach(tombstone => {
+              const collectionName = tombstone.type === "expense" ? "expenses" : "settlements";
+              const docId = `${tombstone.type}_${tombstone.transactionId}`;
+              ops.push({
+                ref: fx.storeMod.doc(groupRef, collectionName, docId),
+                data: { deletedAt: Number(tombstone.deletedAt) || Date.now() },
+                merge: true
+              });
+            });
+            for (let index = 0; index < ops.length; index += 450) {
+              const batch = fx.storeMod.writeBatch(fx.db);
+              ops.slice(index, index + 450).forEach(op => batch.set(op.ref, op.data, { merge: op.merge !== false }));
+              await batch.commit();
+            }
+            await fx.storeMod.setDoc(groupRef, {
+              normalizedVersion: 1,
+              normalizedAt: serverTimestamp(fx),
+              normalizedBy: (currentUser.email || "").toLowerCase().trim()
+            }, { merge: true });
+
+            const [memberSnap, expenseSnap, settlementSnap] = await Promise.all([
+              fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "members")),
+              fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "expenses")),
+              fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "settlements"))
+            ]);
+            const normalizedTotal = expenseSnap.docs.reduce((sum, docSnap) => {
+              return sum + (Number(docSnap.data().amountPaise) || 0);
+            }, 0);
+            const legacyTotal = plan.expenses.reduce((sum, expense) => sum + expense.amountPaise, 0);
+            const checkOk = memberSnap.size === plan.members.length
+              && expenseSnap.size >= plan.expenses.length
+              && settlementSnap.size >= plan.settlements.length
+              && normalizedTotal === legacyTotal;
+            group.normalizedVersion = 1;
+            group.normalizedAt = Date.now();
+            group.normalizedCheck = checkOk ? "ok" : "mismatch";
+            migrated += 1;
+            if (!checkOk) {
+              console.warn("Normalized compare mismatch:", group.name, {
+                members: memberSnap.size,
+                expenses: expenseSnap.size,
+                settlements: settlementSnap.size,
+                normalizedTotal,
+                legacyTotal
+              });
+            }
+          } catch (err) {
+            failed += 1;
+            console.warn("Normalized migration note:", group.name, err?.code || err);
+          }
+        }
+        persistLocalState();
+        if (statusEl) {
+          statusEl.textContent = `Normalized sync: ${migrated} migrated, ${skipped} skipped, ${failed} failed.`;
+        }
+        if (!quiet) {
+          toast(`Normalized migration: ${migrated} migrated, ${skipped} skipped, ${failed} failed.`);
+        }
+      } finally {
+        normalizedMigrationInFlight = false;
+      }
     };
 
     window.purgeDeletedGroupsFromCloud = async function() {
@@ -7522,6 +7646,9 @@
           if (cloudData.currency) group.currency = cloudData.currency;
           if (cloudData.name) group.name = cloudData.name;
           if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
+          if (cloudData.ownerUid) group.ownerUid = cloudData.ownerUid;
+          if (cloudData.ownerEmail) group.ownerEmail = cloudData.ownerEmail;
+          if (cloudData.normalizedVersion) group.normalizedVersion = cloudData.normalizedVersion;
           // A stale cloud member list must not leave payer/share keys orphaned.
           let repairedNames = false;
           if (migrateGroupSelfName(group)) repairedNames = true;
