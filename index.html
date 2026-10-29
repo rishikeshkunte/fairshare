@@ -610,9 +610,11 @@
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button type="button" class="btn btn-secondary" data-call="syncNow">Sync now</button>
+        <button type="button" class="btn btn-secondary" data-call="pullAllGroupsFromCloud">Pull all groups</button>
         <button type="button" class="btn btn-secondary" data-call="refreshAppData">Refresh app data</button>
+        <button type="button" class="btn btn-secondary" data-call="purgeDeletedGroupsFromCloud" style="color:var(--danger-text);">Purge deleted groups</button>
       </div>
-      <p class="group-hint" style="margin-top:10px;">Sync now reconnects cloud listeners. Refresh app data clears cached app files without deleting your ledger, sign-in, or cloud data.</p>
+      <p class="group-hint" style="margin-top:10px;">Sync now reconnects cloud listeners. Pull all groups merges every shared ledger from cloud. Purge deleted groups removes groups you already left from the cloud for every member.</p>
     </div>
   </section>
 
@@ -676,7 +678,8 @@
               <div style="display:flex; gap:6px;">
                 <button type="button" class="btn btn-secondary" data-call="reloadGroupFromCloud" title="Replace this device's copy with the shared cloud ledger">Reload cloud</button>
                 <button type="button" id="btn-rename-group" class="btn btn-secondary" title="Rename managed group">Rename</button>
-                <button type="button" id="btn-delete-group" class="btn btn-secondary" title="Delete managed group">Delete</button>
+                <button type="button" id="btn-delete-group" class="btn btn-secondary" title="Remove this group from your account">Leave</button>
+                <button type="button" id="btn-delete-group-everyone" class="btn btn-secondary" style="color:var(--danger-text);" title="Delete this group for every member">Delete for everyone</button>
               </div>
             </div>
 
@@ -1040,7 +1043,7 @@
     let authListenerAttached = false;
     let cloudSyncUid = null;
     let toldGroupSyncError = false;
-    const APP_BUILD = "v72";
+    const APP_BUILD = "v73";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1908,9 +1911,14 @@
       g.memberLinks = memberLinks;
 
       const groupRef = fx.storeMod.doc(fx.db, "groups", g.id);
+      let groupDeleted = false;
       fx.storeMod.runTransaction(fx.db, async transaction => {
         const snapshot = await transaction.get(groupRef);
         const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
+        if (cloudData.deletedAt) {
+          groupDeleted = true;
+          return null;
+        }
         // Never drop a member's discovery email. A save from one device used to
         // replace memberEmails with only that device's addresses, which made the
         // group disappear from other members' group lists.
@@ -1949,6 +1957,10 @@
         }, { merge: true });
         return merged;
       }).then(merged => {
+        if (groupDeleted) {
+          removeGroupLocally(g.id);
+          return;
+        }
         // Reconcile the cloud result with the original local objects so local receipt
         // data URLs remain available on this device while cloud copies stay lightweight.
         const localGroupTransactions = g.transactions || [];
@@ -2105,6 +2117,7 @@
     const btnNewGroupModal = document.getElementById("btn-new-group-inline");
     const btnRenameGroup = document.getElementById("btn-rename-group");
     const btnDeleteGroup = document.getElementById("btn-delete-group");
+    const btnDeleteGroupEveryone = document.getElementById("btn-delete-group-everyone");
 
     const newGroupModal = document.getElementById("new-group-modal");
     const newGroupForm = document.getElementById("new-group-form");
@@ -3491,11 +3504,26 @@
       });
     }
 
+    function removeGroupLocally(groupId) {
+      if (!groupId || !appState.groups[groupId]) return false;
+      appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(groupId)]));
+      delete appState.groups[groupId];
+      if (managedGroupId === groupId) managedGroupId = "";
+      if (appState.activeGroupId === groupId) {
+        appState.activeGroupId = Object.keys(appState.groups)[0] || null;
+      }
+      persistLocalState();
+      saveDeletedGroupsToCloud();
+      if (typeof listenToCloudGroup === "function") listenToCloudGroup(appState.activeGroupId);
+      renderAll();
+      return true;
+    }
+
     if (btnDeleteGroup) {
       btnDeleteGroup.addEventListener("click", async () => {
         const g = getGroup();
         if (!g.id) return;
-        if (await askConfirm({ message: `Delete group "${g.name}" from your account? Other members keep their copy.` })) {
+        if (await askConfirm({ message: `Leave group "${g.name}"? Other members keep their copy.` })) {
           appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(g.id)]));
           delete appState.groups[g.id];
           if (managedGroupId === g.id) managedGroupId = "";
@@ -3506,6 +3534,46 @@
           listenToCloudGroup(appState.activeGroupId);
           renderAll();
         }
+      });
+    }
+
+    if (btnDeleteGroupEveryone) {
+      btnDeleteGroupEveryone.addEventListener("click", async () => {
+        const g = getGroup();
+        if (!g.id || !currentUser) return;
+        const owner = normalizeEmail(g.ownerEmail || "");
+        if (owner && owner !== normalizeEmail(currentUser.email || "")) {
+          toast("Only the group owner can delete this group for everyone.");
+          return;
+        }
+        if (!fx) {
+          toast("Sign in with Gmail to delete a shared group.");
+          return;
+        }
+        if (!(await askConfirm({
+          title: "Delete for everyone",
+          message: `Delete "${g.name}" for every member? This removes the shared group and its expenses for everyone and cannot be undone.`,
+          confirmLabel: "Delete for everyone",
+          danger: true
+        }))) return;
+        try {
+          await fx.storeMod.updateDoc(fx.storeMod.doc(fx.db, "groups", g.id), {
+            deletedAt: Date.now(),
+            deletedBy: (currentUser.email || "").toLowerCase().trim()
+          });
+        } catch (err) {
+          toast(`Could not delete for everyone (${err?.code || "error"}).`);
+          return;
+        }
+        appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(g.id)]));
+        delete appState.groups[g.id];
+        if (managedGroupId === g.id) managedGroupId = "";
+        appState.activeGroupId = Object.keys(appState.groups)[0] || null;
+        persistLocalState();
+        saveDeletedGroupsToCloud();
+        listenToCloudGroup(appState.activeGroupId);
+        renderAll();
+        toast(`"${g.name}" deleted for every member.`);
       });
     }
 
@@ -3906,6 +3974,8 @@
           id: newId(),
           name: existing && mode === "copy" ? `${groupName} (imported)` : groupName,
           currency: state.currency || "₹",
+          ownerUid: currentUser?.uid || null,
+          ownerEmail: currentUser?.email || null,
           members: [],
           memberLinks: {},
           memberEmails: [],
@@ -4049,6 +4119,8 @@
           id: newId,
           name: name,
           currency: cur,
+          ownerUid: currentUser?.uid || null,
+          ownerEmail: currentUser?.email || null,
           members: Array.from(new Set(members)),
           simplifyDebts: true,
           transactions: []
@@ -7072,6 +7144,16 @@
             return;
           }
           const cloudData = docSnap.data() || {};
+          if (cloudData.deletedAt) {
+            if (!(appState.deletedGroups || []).includes(groupId)) {
+              appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), groupId]));
+            }
+            if (appState.groups[groupId]) {
+              delete appState.groups[groupId];
+              changed = true;
+            }
+            return;
+          }
           const migrated = cloudData.schemaVersion === 9
             ? cloudData
             : migrateMoney({ schemaVersion: 0, groups: { [groupId]: { ...cloudData, id: groupId } }, directTransactions: [] }).groups[groupId];
@@ -7278,6 +7360,80 @@
       toast("Cloud sync reconnected. Pulling the latest groups and ledgers.");
     };
 
+    window.pullAllGroupsFromCloud = async function() {
+      if (!fx || !currentUser) {
+        toast("Sign in with Gmail first.");
+        return;
+      }
+      if (!(await askConfirm({
+        title: "Pull all groups",
+        message: "Merge every shared group from the cloud into this device? Local receipts stay; cloud records win. This is safe for normal sync repair.",
+        confirmLabel: "Pull all"
+      }))) return;
+      let pulled = 0;
+      let missing = 0;
+      for (const group of Object.values(appState.groups || {})) {
+        try {
+          const snapshot = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "groups", group.id));
+          if (!snapshot.exists()) { missing += 1; continue; }
+          const cloudData = snapshot.data() || {};
+          if (cloudData.deletedAt) { removeGroupLocally(group.id); continue; }
+          if (Array.isArray(cloudData.members)) group.members = cloudData.members;
+          if (cloudData.memberLinks) group.memberLinks = cloudData.memberLinks;
+          if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
+          if (cloudData.currency) group.currency = cloudData.currency;
+          if (cloudData.name) group.name = cloudData.name;
+          if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
+          const localTransactions = group.transactions || [];
+          const merged = mergePairLedger({
+            localTransactions,
+            remoteTransactions: cloudData.transactions || [],
+            localDeleted: group.deletedTransactions || [],
+            remoteDeleted: cloudData.deletedTransactions || []
+          });
+          group.transactions = preserveLocalReceipts(merged.transactions, localTransactions);
+          group.deletedTransactions = merged.deletedTransactions;
+          pulled += 1;
+        } catch (err) {
+          console.warn("Pull group note:", err?.code || err);
+        }
+      }
+      persistLocalState();
+      renderAll();
+      toast(`Pulled ${pulled} group${pulled === 1 ? "" : "s"} from cloud.${missing ? ` ${missing} missing.` : ""}`);
+    };
+
+    window.purgeDeletedGroupsFromCloud = async function() {
+      if (!fx || !currentUser) {
+        toast("Sign in with Gmail first.");
+        return;
+      }
+      const ids = (appState.deletedGroups || []).map(String);
+      if (!ids.length) {
+        toast("No deleted groups to purge.");
+        return;
+      }
+      if (!(await askConfirm({
+        title: "Purge deleted groups",
+        message: `Delete ${ids.length} previously deleted group${ids.length === 1 ? "" : "s"} from the cloud for every member? This cannot be undone.`,
+        confirmLabel: "Delete for everyone",
+        danger: true
+      }))) return;
+      let purged = 0;
+      for (const groupId of ids) {
+        try {
+          await fx.storeMod.updateDoc(fx.storeMod.doc(fx.db, "groups", groupId), {
+            deletedAt: Date.now(),
+            deletedBy: (currentUser.email || "").toLowerCase().trim()
+          });
+          purged += 1;
+        } catch (err) {
+          console.warn("Purge group note:", err?.code || err);
+        }
+      }
+      toast(`Deleted ${purged} group${purged === 1 ? "" : "s"} for every member.`);
+    };
+
     window.refreshAppData = async function() {
       if (!(await askConfirm({
         title: "Refresh app data",
@@ -7321,6 +7477,7 @@
               // Reconcile both directions. Cloud transactions missing locally are
               // added, and local edits/tombstones are pushed to the shared ledger.
               const cloudData = snapshot.data() || {};
+              if (cloudData.deletedAt) return "deleted";
               const localTransactions = group.transactions || [];
               const merged = mergePairLedger({
                 localTransactions: stripReceiptBytes(localTransactions),
@@ -7398,6 +7555,10 @@
             }, { merge: true });
             return true;
           });
+          if (created === "deleted") {
+            removeGroupLocally(group.id);
+            continue;
+          }
           if (created) {
             persistLocalState();
             renderAll();
@@ -7421,6 +7582,10 @@
 
         if (docSnap.exists()) {
           const cloudData = docSnap.data() || {};
+          if (cloudData.deletedAt) {
+            removeGroupLocally(groupId);
+            return;
+          }
           const remote = cloudData.schemaVersion === 9
             ? cloudData
             : migrateMoney({ schemaVersion: 0, groups: { [groupId]: { ...cloudData, id: groupId } }, directTransactions: [] }).groups[groupId];
