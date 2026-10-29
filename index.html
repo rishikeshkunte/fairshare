@@ -1050,8 +1050,9 @@
     let normalizedMigrationScheduledFor = "";
     const normalizedUnsubs = new Map();
     const normalizedWriteTimers = new Map();
+    const membershipHydrated = new Set();
     let toldGroupSyncError = false;
-    const APP_BUILD = "v78";
+    const APP_BUILD = "v79";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -6796,6 +6797,7 @@
     let unsubscribeGroupListener = null;
     let unsubscribeDirectListener = null;
     let unsubscribeUserGroupsListener = null;
+    let unsubscribeMembershipListener = null;
 
     function enterSignedOutState(persist = true) {
       const previousUser = currentUser;
@@ -6803,7 +6805,7 @@
       currentUser = null;
       cloudSyncUid = null;
       toldGroupSyncError = false;
-      [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeFriendsRosterListener, unsubInvitesListener]
+      [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeMembershipListener, unsubscribeFriendsRosterListener, unsubInvitesListener]
         .forEach(unsubscribe => { if (typeof unsubscribe === "function") unsubscribe(); });
       unsubscribeFriendsRosterListener = null;
       unsubIncomingRequests = null;
@@ -6811,6 +6813,7 @@
       unsubscribeGroupListener = null;
       unsubscribeDirectListener = null;
       unsubscribeUserGroupsListener = null;
+      unsubscribeMembershipListener = null;
       unsubInvitesListener = null;
       localInvites = [];
       const inviteModal = document.getElementById("group-invite-modal");
@@ -7046,6 +7049,7 @@
       // or browser's local storage.
       listenToFriendsRoster(user);
       listenToInvites(user);
+      listenToMemberships(user);
       processPendingInvite();
 
       // 1. Listen for incoming friend requests
@@ -7706,6 +7710,72 @@
       }, 1200));
     }
 
+    function hydrateNormalizedGroupMetadata(groupId) {
+      if (!fx || !currentUser || !groupId || membershipHydrated.has(groupId)) return;
+      membershipHydrated.add(groupId);
+      fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "groups", groupId)).then(snapshot => {
+        if (!snapshot.exists()) return;
+        const data = snapshot.data() || {};
+        if (data.deletedAt) { removeGroupLocally(groupId); return; }
+        const group = appState.groups[groupId];
+        if (!group) return;
+        if (data.name) group.name = data.name;
+        if (data.currency) group.currency = data.currency;
+        if (data.ownerUid) group.ownerUid = data.ownerUid;
+        if (data.ownerEmail) group.ownerEmail = data.ownerEmail;
+        if (Array.isArray(data.memberEmails)) group.memberEmails = data.memberEmails;
+        if (typeof data.simplifyDebts === "boolean") group.simplifyDebts = data.simplifyDebts;
+        group.normalizedVersion = data.normalizedVersion || 1;
+        persistLocalState();
+        if (appState.activeGroupId === groupId) renderAll();
+      }).catch(err => {
+        membershipHydrated.delete(groupId);
+        console.warn("Membership metadata note:", err?.code || err);
+      });
+    }
+
+    function listenToMemberships(user) {
+      if (!fx || !user) return;
+      if (unsubscribeMembershipListener) unsubscribeMembershipListener();
+      const myEmail = normalizeEmail(user.email || "");
+      if (!myEmail) return;
+      const membershipQuery = fx.storeMod.query(
+        fx.storeMod.collectionGroup(fx.db, "members"),
+        fx.storeMod.where("emailCanonical", "==", myEmail)
+      );
+      unsubscribeMembershipListener = fx.storeMod.onSnapshot(membershipQuery, snapshot => {
+        let changed = false;
+        snapshot.forEach(docSnap => {
+          const groupId = docSnap.ref.parent?.parent?.id;
+          if (!groupId) return;
+          if ((appState.deletedGroups || []).includes(groupId)) return;
+          if (!appState.groups[groupId]) {
+            appState.groups[groupId] = {
+              id: groupId,
+              name: "Shared group",
+              currency: "₹",
+              members: [],
+              memberLinks: {},
+              memberEmails: [],
+              ownerUid: null,
+              ownerEmail: null,
+              normalizedVersion: 1,
+              simplifyDebts: true,
+              transactions: [],
+              deletedTransactions: []
+            };
+            changed = true;
+          }
+          listenToNormalizedGroup(groupId);
+          hydrateNormalizedGroupMetadata(groupId);
+        });
+        if (changed) {
+          persistLocalState();
+          renderAll();
+        }
+      }, err => console.warn("Membership discovery note:", err?.code || err));
+    }
+
     function listenToNormalizedGroup(groupId) {
       if (!fx || !currentUser || !groupId || normalizedUnsubs.has(groupId)) return;
       const groupRef = fx.storeMod.doc(fx.db, "groups", groupId);
@@ -7762,6 +7832,7 @@
         try { unsubscribe(); } catch { /* ignore */ }
       }
       normalizedUnsubs.clear();
+      membershipHydrated.clear();
       normalizedWriteTimers.forEach(timer => clearTimeout(timer));
       normalizedWriteTimers.clear();
     }

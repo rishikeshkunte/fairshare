@@ -49,6 +49,13 @@ service cloud.firestore {
         && inviteDoc(token).createdByEmail == inviterEmail;
     }
 
+    // Membership documents can be discovered across groups by the signed-in
+    // account. This is the Phase 5 discovery path; group access rules below still
+    // validate the group document itself.
+    match /{path=**}/members/{memberId} {
+      allow list, get: if signedIn() && resource.data.emailCanonical == canonical(email());
+    }
+
     // Each signed-in account owns its saved friends roster, independent of groups.
     match /user_profiles/{userId} {
       allow read, create, update, delete: if signedIn() && request.auth.uid == userId;

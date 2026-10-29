@@ -32,6 +32,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
   const { initializeTestEnvironment, assertFails, assertSucceeds } = await import("@firebase/rules-unit-testing");
   const {
     collection,
+    collectionGroup,
     deleteDoc,
     doc,
     getDoc,
@@ -240,5 +241,11 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       role: "member",
       status: "active"
     }));
+    const found = await assertSucceeds(getDocs(query(
+      collectionGroup(aliceDb, "members"),
+      where("emailCanonical", "==", ALICE_KEY)
+    )));
+    assert.equal(found.size, 1);
+    await assertFails(getDoc(doc(bobDb, "groups", "g1", "members", "email_alice_gmail_com")));
   });
 });

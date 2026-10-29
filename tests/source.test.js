@@ -604,3 +604,11 @@ test("phase 4 stops legacy ledger writes for normalized groups", () => {
   assert.match(html, /memberEmails: normalizedEmails/);
   assert.match(html, /if \(activeGroupForRepair && !activeGroupForRepair\.normalizedVersion\)/);
 });
+
+test("phase 5 discovers groups from membership documents", () => {
+  assert.match(html, /function listenToMemberships\(user\)/);
+  assert.match(html, /collectionGroup\(fx\.db, "members"\)/);
+  assert.match(html, /where\("emailCanonical", "==", myEmail\)/);
+  assert.match(html, /hydrateNormalizedGroupMetadata/);
+  assert.match(html, /listenToMemberships\(user\)/);
+});
