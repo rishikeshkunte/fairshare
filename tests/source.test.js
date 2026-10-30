@@ -627,3 +627,12 @@ test("quota saver limits background normalized listeners", () => {
   assert.match(html, /if \(quotaSaver && groupId !== appState\.activeGroupId\) return;/);
   assert.match(html, /fairshare_quota_saver/);
 });
+
+test("normalized write signatures ignore Firestore key order", () => {
+  assert.match(html, /import\s*\{[^}]*\bstableStringify\b[^}]*\}\s*from "\.\/js\/normalizedsync\.js"/);
+  assert.match(html, /const signature = stableStringify\(doc\);/);
+  assert.match(html, /const signature = stableStringify\(doc\);\s*if \(written\.get\(key\) === signature\) return;/);
+  assert.match(html, /memberDocs\.forEach\(doc => written\.set\(normalizedWriteKey\("members", doc\.id\), stableStringify\(doc\)\)\)/);
+  assert.match(html, /function normalizedSignature\(group\) \{\s*return stableStringify\(/);
+  assert.doesNotMatch(html, /written\.set\(normalizedWriteKey\([^)]*\), JSON\.stringify/);
+});
