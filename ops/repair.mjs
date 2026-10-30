@@ -55,6 +55,7 @@ function inspectNormalized(memberDocs, expenseDocs, settlementDocs, report) {
   });
   expenseDocs.forEach(doc => {
     const data = doc.data() || {};
+    if (data.deletedAt) return;
     const amount = Number(data.amountPaise);
     if (!Number.isInteger(amount) || amount <= 0) {
       issue(report, "error", "expense-amount", `${doc.id} amountPaise=${data.amountPaise}`);
@@ -75,6 +76,7 @@ function inspectNormalized(memberDocs, expenseDocs, settlementDocs, report) {
   });
   settlementDocs.forEach(doc => {
     const data = doc.data() || {};
+    if (data.deletedAt) return;
     if (!members.has(data.fromMemberId)) issue(report, "error", "settlement-from", `${doc.id} ${data.fromMemberId}`);
     if (!members.has(data.toMemberId)) issue(report, "error", "settlement-to", `${doc.id} ${data.toMemberId}`);
     if (!Number.isInteger(Number(data.amountPaise)) || Number(data.amountPaise) <= 0) {
@@ -134,7 +136,8 @@ async function repairGroup(docSnap) {
   }
 
   inspectNormalized(memberSnap.docs, expenseSnap.docs, settlementSnap.docs, report);
-  if (!memberSnap.size && !expenseSnap.size && !settlementSnap.size && plan.ok) {
+  const legacyHasContent = plan.members.length > 0 || plan.expenses.length > 0 || plan.settlements.length > 0;
+  if (!memberSnap.size && !expenseSnap.size && !settlementSnap.size && legacyHasContent && plan.ok) {
     issue(report, "warn", "empty-normalized", "legacy group has no normalized documents");
   }
   if (memberSnap.size && plan.members.length && memberSnap.size !== plan.members.length) {
