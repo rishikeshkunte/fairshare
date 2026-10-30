@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeLegacyGroup } from "../js/groupschema.js";
-import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs } from "../js/normalizedsync.js";
+import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, stableStringify } from "../js/normalizedsync.js";
 
 const legacy = {
   id: "g1",
@@ -55,4 +55,25 @@ test("excludes soft-deleted normalized records", () => {
   });
   assert.equal(transactions.filter(tx => tx.type === "expense").length, 0);
   assert.equal(transactions.length, 1);
+});
+
+test("stable signatures ignore object key order so snapshots never look changed", () => {
+  const plan = normalizeLegacyGroup(legacy, { ownerUid: "uid_rishi", ownerEmail: "rishikeshkunte@gmail.com" });
+  const doc = plan.expenses[0];
+  const { id, ...rest } = doc;
+  const reordered = { id };
+  Object.keys(rest).sort().forEach(key => { reordered[key] = rest[key]; });
+  assert.notEqual(JSON.stringify(doc), JSON.stringify(reordered));
+  assert.equal(stableStringify(doc), stableStringify(reordered));
+});
+
+test("stable signatures keep array order and distinguish nested changes", () => {
+  const first = { shares: { a: 1, b: 2 }, members: ["a", "b"], deletedAt: null };
+  const reordered = { deletedAt: null, members: ["a", "b"], shares: { b: 2, a: 1 } };
+  const changed = { ...first, shares: { a: 1, b: 3 } };
+  assert.equal(stableStringify(first), stableStringify(reordered));
+  assert.notEqual(stableStringify(first), stableStringify(changed));
+  assert.notEqual(stableStringify([1, 2]), stableStringify([2, 1]));
+  assert.equal(stableStringify(undefined), "null");
+  assert.equal(stableStringify({ a: undefined, b: 1 }), stableStringify({ b: 1 }));
 });

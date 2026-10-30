@@ -10,6 +10,20 @@ function stripPrefix(id, prefix) {
   return value.startsWith(prefix) ? value.slice(prefix.length) : value;
 }
 
+/**
+ * Signature serializer whose output does not depend on object key order.
+ * Firestore returns map fields in its own order, so comparing plain
+ * JSON.stringify output against a locally built document made every snapshot
+ * look "changed" and rewrote the whole ledger on each save.
+ */
+export function stableStringify(value) {
+  if (value === undefined) return "null";
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(item => stableStringify(item)).join(",")}]`;
+  const keys = Object.keys(value).filter(key => value[key] !== undefined).sort();
+  return `{${keys.map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+}
+
 function displayDate(doc) {
   if (doc.date) return doc.date;
   if (!doc.dateISO) return "";
