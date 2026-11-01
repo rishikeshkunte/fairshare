@@ -639,8 +639,15 @@ test("normalized write signatures ignore Firestore key order", () => {
 
 test("roster and legacy membership comparisons ignore Firestore key order", () => {
   assert.match(html, /const localChanged = stableStringify\(mergedFriends\) !== stableStringify\(appState\.friends \|\| \[\]\)/);
-  assert.match(html, /stableStringify\(cloudFriends\) !== stableStringify\(mergedFriends\)/);
   assert.match(html, /const signature = stableStringify\(payload\);\s*if \(signature === friendsRosterLastSig\) return;/);
   assert.match(html, /stableStringify\(group\.members\) !== stableStringify\(cloudMembers\)/);
   assert.match(html, /stableStringify\(localGroup\.memberLinks \|\| \{\}\) !== stableStringify\(cloudData\.memberLinks\)/);
+});
+
+test("profile sync only writes upward for records the cloud does not have", () => {
+  assert.match(html, /const hasLocalOnlyFriend = mergedFriends\.some\(friend => \{[\s\S]*?!cloudFriendKeys\.has\(key\)/);
+  assert.match(html, /if \(!snapshot\.exists\(\) \|\| hasLocalOnlyFriend\) \{\s*saveFriendsRosterToCloud\(\);/);
+  assert.match(html, /const hasLocalOnlyDeleted = \(appState\.deletedGroups \|\| \[\]\)\.some\(groupId => !cloudDeletedSet\.has\(String\(groupId\)\)\)/);
+  assert.match(html, /if \(!snapshot\.exists\(\) \|\| hasLocalOnlyDeleted\) \{\s*saveDeletedGroupsToCloud\(\);/);
+  assert.doesNotMatch(html, /JSON\.stringify\(cloudDeleted\) !== JSON\.stringify\(mergedDeleted\)/);
 });

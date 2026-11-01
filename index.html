@@ -1067,7 +1067,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v84";
+    const APP_BUILD = "v85";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2037,17 +2037,19 @@
     let deletedGroupsWriteInFlight = false;
     let deletedGroupsWriteQueued = false;
 
+    function friendRecordKey(friend) {
+      if (!friend || !friend.name) return "";
+      if (friend.email) return "email:" + normalizeEmail(friend.email);
+      if (friend.phone) return "phone:" + String(friend.phone).replace(/[^0-9]/g, "");
+      if (friend.id) return "id:" + friend.id;
+      return "name:" + friend.name.trim().toLowerCase();
+    }
+
     function mergeFriendRecords(...lists) {
       const merged = new Map();
       lists.flat().forEach(friend => {
-        if (!friend || !friend.name) return;
-        const key = friend.email
-          ? "email:" + normalizeEmail(friend.email)
-          : friend.phone
-            ? "phone:" + String(friend.phone).replace(/[^0-9]/g, "")
-            : friend.id
-              ? "id:" + friend.id
-              : "name:" + friend.name.trim().toLowerCase();
+        const key = friendRecordKey(friend);
+        if (!key) return;
         if (!merged.has(key)) merged.set(key, { ...friend });
         else merged.set(key, { ...merged.get(key), ...friend });
       });
@@ -2122,7 +2124,6 @@
           ...(appState.deletedGroups || []).map(String),
           ...cloudDeleted
         ]));
-        const deletedChanged = JSON.stringify(mergedDeleted) !== JSON.stringify((appState.deletedGroups || []).map(String));
         appState.deletedGroups = mergedDeleted;
         let groupsChanged = false;
         let removedActive = false;
@@ -2147,10 +2148,20 @@
           if (removedActive) listenToCloudGroup(appState.activeGroupId);
           renderAll();
         }
-        if (!snapshot.exists() || stableStringify(cloudFriends) !== stableStringify(mergedFriends)) {
+        // Push upward only when this device knows a contact the cloud roster
+        // does not. Field-level or key-order differences must never write back,
+        // otherwise a snapshot and its own write can keep rewriting forever.
+        const cloudFriendKeys = new Set(cloudFriends.map(friendRecordKey).filter(Boolean));
+        const hasLocalOnlyFriend = mergedFriends.some(friend => {
+          const key = friendRecordKey(friend);
+          return key && !cloudFriendKeys.has(key);
+        });
+        if (!snapshot.exists() || hasLocalOnlyFriend) {
           saveFriendsRosterToCloud();
         }
-        if (!snapshot.exists() || deletedChanged || JSON.stringify(cloudDeleted) !== JSON.stringify(mergedDeleted)) {
+        const cloudDeletedSet = new Set(cloudDeleted);
+        const hasLocalOnlyDeleted = (appState.deletedGroups || []).some(groupId => !cloudDeletedSet.has(String(groupId)));
+        if (!snapshot.exists() || hasLocalOnlyDeleted) {
           saveDeletedGroupsToCloud();
         }
       }, err => console.warn("Friends roster cloud sync note:", err?.code || err));
