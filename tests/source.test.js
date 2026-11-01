@@ -701,3 +701,13 @@ test("normalized writes wait for the first snapshot before diffing", () => {
   assert.match(html, /group\._pendingNormalizedWrite = true;/);
   assert.match(html, /normalizedHydrated\.add\(groupId\);/);
 });
+
+test("roster enrichment helpers never write from snapshot callbacks", () => {
+  const groupHelper = html.slice(html.indexOf("function addGroupMembersToRoster"), html.indexOf("function renderFriendRequestsUI"));
+  assert.doesNotMatch(groupHelper, /saveState\(\)|saveFriendsRosterToCloud\(\)/);
+  assert.match(groupHelper, /persistLocalState\(\);/);
+
+  const cleanup = html.slice(html.indexOf("function cleanupGroupOnlyFriends"), html.indexOf("function renderFriendRequestsUI"));
+  assert.doesNotMatch(cleanup, /saveState\(\)|saveFriendsRosterToCloud\(\)/);
+  assert.match(cleanup, /persistLocalState\(\);/);
+});

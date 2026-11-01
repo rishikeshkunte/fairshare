@@ -1068,7 +1068,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v90";
+    const APP_BUILD = "v91";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2953,7 +2953,6 @@
           selectedDirectFriend = "";
         }
         persistLocalState();
-        saveFriendsRosterToCloud();
         renderFriendsRoster();
         renderDirectFriendDropdown();
         renderFriendPickerDropdown();
@@ -2980,7 +2979,13 @@
           existing.email = String(email).toLowerCase().trim();
           existing.approved = true;
           existing.type = "google";
-          saveState();
+          // Enrichment only. Remote roster/1-on-1 sync happens in the explicit
+          // lifecycle flush, never from a group snapshot.
+          persistLocalState();
+          const pairId = pairIdFor(normalizeEmail(currentUser?.email || ""), normalizeEmail(existing.email));
+          const hasLocal = transactionsForFriend(appState.directTransactions, existing.name).length
+            || deletedForFriend(appState.deletedTransactions, existing.name, existing.email).length;
+          if (pairId && hasLocal) directPairDirty.add(pairId);
           renderFriendsRoster();
         }
       });
