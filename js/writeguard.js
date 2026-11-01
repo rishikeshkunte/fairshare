@@ -28,6 +28,7 @@ export function createWriteGuard(options = {}) {
     blockedUntil: 0,
     hydrationDepth: 0,
     blockedFromSnapshot: 0,
+    blockedByLabel: {},
     pauses: 0,
     lastLabel: ""
   };
@@ -50,6 +51,7 @@ export function createWriteGuard(options = {}) {
       pausedUntil: state.blockedUntil,
       pauses: state.pauses,
       blockedFromSnapshot: state.blockedFromSnapshot,
+      blockedByLabel: { ...state.blockedByLabel },
       lastLabel: state.lastLabel,
       hydrating: state.hydrationDepth > 0
     };
@@ -70,6 +72,7 @@ export function createWriteGuard(options = {}) {
     allow({ label = "write", docs = 1, now = Date.now() } = {}) {
       if (state.hydrationDepth > 0) {
         state.blockedFromSnapshot += 1;
+        state.blockedByLabel[label] = (state.blockedByLabel[label] || 0) + 1;
         state.lastLabel = label;
         return false;
       }

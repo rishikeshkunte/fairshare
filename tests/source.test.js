@@ -401,8 +401,7 @@ test("direct-pair listener merges snapshots through the shared tombstone-aware m
   const listener = html.slice(start, end);
   assert.match(listener, /const pairId = pairIdFor\(myEmail, friend\.email\)/);
   assert.match(listener, /applyRemotePair\(appState/);
-  assert.match(listener, /remotePairNeedsPush\(remote, localTx, localDel\)/);
-  assert.match(listener, /syncDirectPairExpense\(friendName, \{ quiet: true \}\)/);
+  assert.match(listener, /remotePairNeedsPush\(remote, localTx, localDel\)\) directPairDirty\.add\(pairId\)/);
   assert.doesNotMatch(listener, /filter\(tx => tx\.friend !== friendName\)\.concat/);
 });
 
@@ -664,8 +663,10 @@ test("all remote writes share one guarded path", () => {
   assert.match(firebase, /writeGuard\.withHydration\(\(\) => onNext\(snap\)\)/);
   assert.match(firebase, /metadata\.hasPendingWrites\) return/);
   assert.match(firebase, /includeMetadataChanges: true/);
-  assert.match(html, /fx\.writeGuard\.allow\(\{ label: "app", docs \}\)/);
+  assert.match(firebase, /meta && meta\.label\) \|\| "transaction"/);
+  assert.match(firebase, /const label = \(meta && meta\.label\) \|\| "batch"/);
   assert.match(html, /writeGuard: fx && fx\.writeGuard \? fx\.writeGuard\.stats\(\) : null/);
+  assert.doesNotMatch(html, /function cloudWriteBlocked/);
 });
 
 test("background commands skip writes when the cloud already matches", () => {
@@ -675,7 +676,21 @@ test("background commands skip writes when the cloud already matches", () => {
 });
 
 test("local-only changes flush outside snapshot callbacks", () => {
-  assert.match(html, /function flushPendingLocalMutations\(\)/);
-  assert.match(html, /flushPendingLocalMutations\(\);[\s\S]*?syncUserCloud\(currentUser\)/);
-  assert.match(html, /migrateDefaultGroupId\(\);\s*flushPendingLocalMutations\(\);/);
+  assert.match(html, /function flushPendingLocalMutations\(options = \{\}\)/);
+  assert.match(html, /flushPendingLocalMutations\(\{ all: true \}\)/);
+  assert.match(html, /flushPendingLocalMutations\(\);\s*syncUserCloud\(currentUser\)/);
+  const syncUser = html.slice(html.indexOf("function syncUserCloud(user)"), html.indexOf("function syncUserCloud(user)") + 400);
+  assert.doesNotMatch(syncUser, /flushPendingLocalMutations/);
+});
+
+test("direct-pair listeners never push transactions", () => {
+  const listeners = html.slice(html.indexOf("function refreshDirectListeners()"), html.indexOf("function syncDirectPairExpense("));
+  assert.doesNotMatch(listeners, /syncDirectPairExpense\(/);
+  assert.match(listeners, /directPairDirty\.add\(pairId\)/);
+});
+
+test("normalized writes wait for the first snapshot before diffing", () => {
+  assert.match(html, /if \(normalizedUnsubs\.has\(group\.id\) && !normalizedHydrated\.has\(group\.id\)\) \{/);
+  assert.match(html, /group\._pendingNormalizedWrite = true;/);
+  assert.match(html, /normalizedHydrated\.add\(groupId\);/);
 });

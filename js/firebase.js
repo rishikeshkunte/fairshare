@@ -21,23 +21,24 @@ export function setCloudIntent(on) {
 export function createGuardedStore(raw, writeGuard) {
   const guarded = { ...raw };
 
-  guarded.setDoc = (ref, data, opts) => {
-    if (!writeGuard.allow({ label: "setDoc", docs: 1 })) return Promise.resolve();
+  guarded.setDoc = (ref, data, opts, meta) => {
+    if (!writeGuard.allow({ label: (meta && meta.label) || "setDoc", docs: 1 })) return Promise.resolve();
     return raw.setDoc(ref, data, opts);
   };
-  guarded.updateDoc = (ref, data) => {
-    if (!writeGuard.allow({ label: "updateDoc", docs: 1 })) return Promise.resolve();
+  guarded.updateDoc = (ref, data, meta) => {
+    if (!writeGuard.allow({ label: (meta && meta.label) || "updateDoc", docs: 1 })) return Promise.resolve();
     return raw.updateDoc(ref, data);
   };
-  guarded.deleteDoc = (ref) => {
-    if (!writeGuard.allow({ label: "deleteDoc", docs: 1 })) return Promise.resolve();
+  guarded.deleteDoc = (ref, meta) => {
+    if (!writeGuard.allow({ label: (meta && meta.label) || "deleteDoc", docs: 1 })) return Promise.resolve();
     return raw.deleteDoc(ref);
   };
-  guarded.runTransaction = (db, updateFunction) => {
-    if (!writeGuard.allow({ label: "transaction", docs: 1 })) return Promise.resolve(null);
+  guarded.runTransaction = (db, updateFunction, meta) => {
+    if (!writeGuard.allow({ label: (meta && meta.label) || "transaction", docs: 1 })) return Promise.resolve(null);
     return raw.runTransaction(db, updateFunction);
   };
-  guarded.writeBatch = (db) => {
+  guarded.writeBatch = (db, meta) => {
+    const label = (meta && meta.label) || "batch";
     const batch = raw.writeBatch(db);
     let docs = 0;
     return {
@@ -45,7 +46,7 @@ export function createGuardedStore(raw, writeGuard) {
       update(...args) { docs += 1; return batch.update(...args); },
       delete(...args) { docs += 1; return batch.delete(...args); },
       commit() {
-        if (!writeGuard.allow({ label: "batch", docs: Math.max(1, docs) })) return Promise.resolve();
+        if (!writeGuard.allow({ label, docs: Math.max(1, docs) })) return Promise.resolve();
         return batch.commit();
       }
     };

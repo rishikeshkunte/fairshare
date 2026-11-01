@@ -58,3 +58,16 @@ test("resume clears the pause and the rolling window", () => {
   assert.equal(guard.stats(3).paused, false);
   assert.equal(guard.allow({ now: 4 }), true);
 });
+
+test("blocked snapshot writes are counted by label", () => {
+  const guard = createWriteGuard();
+  guard.withHydration(() => {
+    guard.allow({ label: "direct-pair-tx" });
+    guard.allow({ label: "direct-pair-tx" });
+    guard.allow({ label: "roster" });
+  });
+  const stats = guard.stats();
+  assert.equal(stats.blockedFromSnapshot, 3);
+  assert.equal(stats.blockedByLabel["direct-pair-tx"], 2);
+  assert.equal(stats.blockedByLabel.roster, 1);
+});

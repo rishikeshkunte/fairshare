@@ -1064,10 +1064,11 @@
     const normalizedWriteTimers = new Map();
     const membershipHydrated = new Set();
     const normalizedWrittenByGroup = new Map();
+    const normalizedHydrated = new Set();
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v88";
+    const APP_BUILD = "v89";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -1926,7 +1927,7 @@
           ownerUid: g.ownerUid || null,
           ownerEmail: g.ownerEmail || null
         });
-        if (g._normalizedMetaSig !== metaSig && !cloudWriteBlocked()) {
+        if (g._normalizedMetaSig !== metaSig) {
           g._normalizedMetaSig = metaSig;
           fx.storeMod.setDoc(fx.storeMod.doc(fx.db, "groups", g.id), {
             name: g.name,
@@ -1965,7 +1966,6 @@
 
       const groupRef = fx.storeMod.doc(fx.db, "groups", g.id);
       let groupDeleted = false;
-      if (cloudWriteBlocked()) return;
       fx.storeMod.runTransaction(fx.db, async transaction => {
         const snapshot = await transaction.get(groupRef);
         const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
@@ -2038,13 +2038,9 @@
     let deletedGroupsWriteInFlight = false;
     let deletedGroupsWriteQueued = false;
 
-    // Every remote write is gated by the shared write guard (js/firebase.js +
-    // js/writeguard.js). It refuses writes made from inside a snapshot
-    // listener and budgets the rest, so a feedback loop cannot drain quota.
-    function cloudWriteBlocked(docs = 1) {
-      if (fx && fx.writeGuard) return !fx.writeGuard.allow({ label: "app", docs });
-      return false;
-    }
+    // Every remote write is gated once, inside js/firebase.js: it refuses
+    // writes made from a snapshot listener and budgets the rest, so a feedback
+    // loop cannot drain quota.
 
     function friendRecordKey(friend) {
       if (!friend || !friend.name) return "";
@@ -2070,13 +2066,12 @@
       const payload = mergeFriendRecords(appState.friends || []);
       const signature = stableStringify(payload);
       if (signature === friendsRosterLastSig) return;
-      if (cloudWriteBlocked()) return;
       friendsRosterWriteInFlight = true;
       const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
       fx.storeMod.setDoc(profileRef, {
         friends: payload,
         updatedAt: serverTimestamp(fx)
-      }, { merge: true }).then(() => {
+      }, { merge: true }, { label: "roster" }).then(() => {
         friendsRosterLastSig = signature;
       }).catch(err => {
         console.warn("Friends roster cloud save note:", err);
@@ -2094,7 +2089,6 @@
         deletedGroupsWriteQueued = true;
         return;
       }
-      if (cloudWriteBlocked()) return;
       deletedGroupsWriteInFlight = true;
       const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
       fx.storeMod.runTransaction(fx.db, async (transaction) => {
@@ -2112,7 +2106,7 @@
           deletedGroups: merged,
           updatedAt: serverTimestamp(fx)
         }, { merge: true });
-      }).catch(err => {
+      }, { label: "deleted-groups-tx" }).catch(err => {
         console.warn("Deleted groups cloud save note:", err?.code || err);
       }).finally(() => {
         deletedGroupsWriteInFlight = false;
@@ -6894,12 +6888,15 @@
               if (repairGroupMoney(group)) migratedSelfName = true;
             });
             if (migratedSelfName) persistLocalState();
-            if (repairDirectMoney()) { persistLocalState(); pushAllDirectPairs(); }
+            if (repairDirectMoney()) persistLocalState();
             materializeRecurring();
             Object.values(appState.groups || {}).forEach(addGroupMembersToRoster);
             Object.values(appState.groups || {}).forEach(group => {
               if (group.normalizedVersion) listenToNormalizedGroup(group.id);
             });
+            // One explicit catch-up after a session is established; this is the
+            // only place offline changes were previously flushed by listeners.
+            flushPendingLocalMutations({ all: true });
           } catch (err) {
             console.error("Local state restore note:", err);
           }
@@ -7089,7 +7086,6 @@
     function syncUserCloud(user) {
       if (!fx || !user) return;
       migrateDefaultGroupId();
-      flushPendingLocalMutations();
       const myEmail = (user.email || "").toLowerCase().trim();
 
       if (myDisplayAccount) {
@@ -7909,8 +7905,7 @@
       if (ops.length) {
         for (let index = 0; index < ops.length; index += 450) {
           const chunk = ops.slice(index, index + 450);
-          if (cloudWriteBlocked(chunk.length)) return;
-          const batch = fx.storeMod.writeBatch(fx.db);
+          const batch = fx.storeMod.writeBatch(fx.db, { label: "normalized-ledger" });
           chunk.forEach(op => batch.set(op.ref, op.data, { merge: true }));
           await batch.commit();
           chunk.forEach(op => written.set(op.key, op.signature));
@@ -7926,13 +7921,12 @@
         normalizedWrittenByGroup.set(group.id, written);
         return;
       }
-      if (cloudWriteBlocked()) return;
       await fx.storeMod.setDoc(groupRef, {
         normalizedVersion: 1,
         normalizedAt: serverTimestamp(fx),
         normalizedBy: (currentUser.email || "").toLowerCase().trim(),
         memberEmails: normalizedEmails
-      }, { merge: true });
+      }, { merge: true }, { label: "normalized-metadata" });
       group.memberEmails = normalizedEmails;
       group._normalizedSig = normalizedSignature(group);
       normalizedWrittenByGroup.set(group.id, written);
@@ -7941,6 +7935,13 @@
 
     function scheduleNormalizedGroupWrite(group) {
       if (!fx || !currentUser || !group?.id || !group.normalizedVersion) return;
+      // Do not diff against an empty cache: wait until this group's first
+      // snapshots have seeded it, otherwise every ledger document is rewritten
+      // once per sign-in.
+      if (normalizedUnsubs.has(group.id) && !normalizedHydrated.has(group.id)) {
+        group._pendingNormalizedWrite = true;
+        return;
+      }
       const signature = normalizedSignature(group);
       if (group._normalizedSig === signature) return;
       if (normalizedWriteTimers.has(group.id)) clearTimeout(normalizedWriteTimers.get(group.id));
@@ -8047,8 +8048,13 @@
         expenseDocs.forEach(doc => written.set(normalizedWriteKey("expenses", doc.id), stableStringify(doc)));
         settlementDocs.forEach(doc => written.set(normalizedWriteKey("settlements", doc.id), stableStringify(doc)));
         normalizedWrittenByGroup.set(groupId, written);
+        normalizedHydrated.add(groupId);
         persistLocalState();
         if (appState.activeGroupId === groupId) renderAll();
+        if (group._pendingNormalizedWrite) {
+          group._pendingNormalizedWrite = false;
+          scheduleNormalizedGroupWrite(group);
+        }
       };
       const subscriptions = [
         fx.storeMod.onSnapshot(fx.storeMod.collection(groupRef, "members"), snapshot => {
@@ -8080,6 +8086,7 @@
       normalizedUnsubs.clear();
       membershipHydrated.clear();
       normalizedWrittenByGroup.clear();
+      normalizedHydrated.clear();
       normalizedWriteTimers.forEach(timer => clearTimeout(timer));
       normalizedWriteTimers.clear();
     }
@@ -8178,11 +8185,27 @@
     // Explicit, non-listener flush for changes made offline or before sign-in.
     // Snapshot listeners are blocked from writing, so this is the one command
     // that catches up local-only roster, tombstone and 1-on-1 edits.
-    function flushPendingLocalMutations() {
+    const directPairDirty = new Set();
+
+    function flushDirtyDirectPairs() {
+      if (!directPairDirty.size) return;
+      const myEmail = (currentUser?.email || "").toLowerCase().trim();
+      (appState.friends || []).forEach(friend => {
+        if (!friend?.email) return;
+        const pairId = pairIdFor(myEmail, friend.email);
+        if (pairId && directPairDirty.has(pairId)) {
+          directPairDirty.delete(pairId);
+          syncDirectPairExpense(friend.name, { quiet: true });
+        }
+      });
+    }
+
+    function flushPendingLocalMutations(options = {}) {
       if (!fx || !currentUser) return;
       saveFriendsRosterToCloud();
       saveDeletedGroupsToCloud();
-      pushAllDirectPairs();
+      if (options.all) pushAllDirectPairs();
+      else flushDirtyDirectPairs();
     }
 
     function refreshDirectListeners() {
@@ -8199,10 +8222,12 @@
         const friendName = friend.name;
         const friendEmail = friend.email;
         unsubs.push(watchDoc(fx, "direct_pairs", pairId, (docSnap) => {
+          // Listeners are read-only: never push from here, just remember that
+          // this pair has local data the cloud may not have.
           if (!docSnap.exists()) {
             const localTx = transactionsForFriend(appState.directTransactions, friendName);
             const localDel = deletedForFriend(appState.deletedTransactions, friendName, friendEmail);
-            if (localTx.length || localDel.length) syncDirectPairExpense(friendName, { quiet: true });
+            if (localTx.length || localDel.length) directPairDirty.add(pairId);
             return;
           }
           const remote = docSnap.data() || {};
@@ -8224,7 +8249,7 @@
           }
           const localTx = transactionsForFriend(appState.directTransactions, friendName);
           const localDel = deletedForFriend(appState.deletedTransactions, friendName, friendEmail);
-          if (remotePairNeedsPush(remote, localTx, localDel)) syncDirectPairExpense(friendName, { quiet: true });
+          if (remotePairNeedsPush(remote, localTx, localDel)) directPairDirty.add(pairId);
         }, (err) => notePairError(err)));
       }
       unsubscribeDirectListener = () => unsubs.forEach((unsubscribe) => unsubscribe());
@@ -8290,7 +8315,7 @@
         if (snapshot.exists() && stableStringify(pick(payload)) === stableStringify(pick(remote))) return;
         payload.updatedAt = serverTimestamp(fx);
         transaction.set(pairRef, payload, { merge: true });
-      });
+      }, { label: "direct-pair-tx" });
     }
 
     // URL Group Invites
@@ -8762,7 +8787,7 @@
     });
     window.addEventListener("online", () => {
       if (fx && currentUser) {
-        flushPendingLocalMutations();
+        flushPendingLocalMutations({ all: true });
         syncUserCloud(currentUser);
         cloudSyncUid = currentUser.uid;
       }
@@ -8780,6 +8805,7 @@
         return;
       }
       if (document.visibilityState === "visible" && fx && currentUser && Date.now() - hiddenAt > 30000) {
+        flushPendingLocalMutations();
         syncUserCloud(currentUser);
         cloudSyncUid = currentUser.uid;
       }
