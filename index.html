@@ -1067,7 +1067,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v83";
+    const APP_BUILD = "v84";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2033,6 +2033,7 @@
 
     let unsubscribeFriendsRosterListener = null;
     let friendsRosterWriteInFlight = false;
+    let friendsRosterLastSig = "";
     let deletedGroupsWriteInFlight = false;
     let deletedGroupsWriteQueued = false;
 
@@ -2055,12 +2056,17 @@
 
     function saveFriendsRosterToCloud() {
       if (!fx || !currentUser || !currentUser.uid || friendsRosterWriteInFlight) return;
+      const payload = mergeFriendRecords(appState.friends || []);
+      const signature = stableStringify(payload);
+      if (signature === friendsRosterLastSig) return;
       friendsRosterWriteInFlight = true;
       const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
       fx.storeMod.setDoc(profileRef, {
-        friends: mergeFriendRecords(appState.friends || []),
+        friends: payload,
         updatedAt: serverTimestamp(fx)
-      }, { merge: true }).catch(err => {
+      }, { merge: true }).then(() => {
+        friendsRosterLastSig = signature;
+      }).catch(err => {
         console.warn("Friends roster cloud save note:", err);
       }).finally(() => {
         friendsRosterWriteInFlight = false;
@@ -2108,7 +2114,7 @@
         const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
         const cloudFriends = Array.isArray(cloudData.friends) ? cloudData.friends : [];
         const mergedFriends = mergeFriendRecords(cloudFriends, appState.friends || []);
-        const localChanged = JSON.stringify(mergedFriends) !== JSON.stringify(appState.friends || []);
+        const localChanged = stableStringify(mergedFriends) !== stableStringify(appState.friends || []);
         appState.friends = mergedFriends;
 
         const cloudDeleted = Array.isArray(cloudData.deletedGroups) ? cloudData.deletedGroups.map(String) : [];
@@ -2141,7 +2147,7 @@
           if (removedActive) listenToCloudGroup(appState.activeGroupId);
           renderAll();
         }
-        if (!snapshot.exists() || JSON.stringify(cloudFriends) !== JSON.stringify(mergedFriends)) {
+        if (!snapshot.exists() || stableStringify(cloudFriends) !== stableStringify(mergedFriends)) {
           saveFriendsRosterToCloud();
         }
         if (!snapshot.exists() || deletedChanged || JSON.stringify(cloudDeleted) !== JSON.stringify(mergedDeleted)) {
@@ -7209,11 +7215,11 @@
             }
             if (cloudData.name && localGroup.name !== cloudData.name) { localGroup.name = cloudData.name; changed = true; }
             if (cloudData.currency && localGroup.currency !== cloudData.currency) { localGroup.currency = cloudData.currency; changed = true; }
-            if (Array.isArray(cloudData.members) && JSON.stringify(localGroup.members) !== JSON.stringify(cloudData.members)) {
+            if (Array.isArray(cloudData.members) && stableStringify(localGroup.members) !== stableStringify(cloudData.members)) {
               localGroup.members = cloudData.members;
               changed = true;
             }
-            if (cloudData.memberLinks && JSON.stringify(localGroup.memberLinks || {}) !== JSON.stringify(cloudData.memberLinks)) {
+            if (cloudData.memberLinks && stableStringify(localGroup.memberLinks || {}) !== stableStringify(cloudData.memberLinks)) {
               localGroup.memberLinks = cloudData.memberLinks;
               changed = true;
             }
@@ -7748,11 +7754,11 @@
               // Never push a placeholder over a clean cloud list.
               const membersNeedRepair = cloudMembers.length > 0
                 && !group.members.includes("You")
-                && JSON.stringify(group.members) !== JSON.stringify(cloudMembers);
+                && stableStringify(group.members) !== stableStringify(cloudMembers);
               const changed = groupRepaired
                 || membersNeedRepair
-                || JSON.stringify(merged.transactions) !== JSON.stringify(cloudTransactions)
-                || JSON.stringify(merged.deletedTransactions) !== JSON.stringify(cloudDeleted);
+                || stableStringify(merged.transactions) !== stableStringify(cloudTransactions)
+                || stableStringify(merged.deletedTransactions) !== stableStringify(cloudDeleted);
               group.transactions = preserveLocalReceipts(merged.transactions, localTransactions);
               group.deletedTransactions = merged.deletedTransactions;
               if (!changed) return false;

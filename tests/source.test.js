@@ -636,3 +636,11 @@ test("normalized write signatures ignore Firestore key order", () => {
   assert.match(html, /function normalizedSignature\(group\) \{\s*return stableStringify\(/);
   assert.doesNotMatch(html, /written\.set\(normalizedWriteKey\([^)]*\), JSON\.stringify/);
 });
+
+test("roster and legacy membership comparisons ignore Firestore key order", () => {
+  assert.match(html, /const localChanged = stableStringify\(mergedFriends\) !== stableStringify\(appState\.friends \|\| \[\]\)/);
+  assert.match(html, /stableStringify\(cloudFriends\) !== stableStringify\(mergedFriends\)/);
+  assert.match(html, /const signature = stableStringify\(payload\);\s*if \(signature === friendsRosterLastSig\) return;/);
+  assert.match(html, /stableStringify\(group\.members\) !== stableStringify\(cloudMembers\)/);
+  assert.match(html, /stableStringify\(localGroup\.memberLinks \|\| \{\}\) !== stableStringify\(cloudData\.memberLinks\)/);
+});
