@@ -114,7 +114,7 @@ test("group deletions sync across devices of the same account", () => {
   const listener = between(html, "function listenToFriendsRoster(user)", "\n    // --- DOM Elements");
   assert.match(listener, /cloudData\.deletedGroups/);
   assert.match(listener, /delete appState\.groups\[groupId\]/);
-  assert.match(listener, /saveDeletedGroupsToCloud\(\)/);
+  assert.doesNotMatch(listener, /saveDeletedGroupsToCloud\(\)/);
 
   const del = between(html, "btnDeleteGroup.addEventListener", "// Modal Create Group");
   assert.match(del, /saveDeletedGroupsToCloud\(\)/);
@@ -135,6 +135,6 @@ test("phone contact entry is removed and sign-in copy says Gmail", () => {
 });
 
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v86"/);
+  assert.match(sw, /const CACHE = "fairshare-v87"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });

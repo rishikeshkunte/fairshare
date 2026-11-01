@@ -1,3 +1,5 @@
+import { createWriteGuard } from "./writeguard.js";
+
 const VERSION = "10.12.5";
 const base = `https://www.gstatic.com/firebasejs/${VERSION}`;
 
@@ -9,6 +11,53 @@ export function cloudIntent() {
 
 export function setCloudIntent(on) {
   try { localStorage.setItem("fairshare_cloud", on ? "1" : "0"); } catch { /* ignore */ }
+}
+
+/**
+ * Every remote write goes through the guard, and every snapshot callback runs
+ * inside it. A listener therefore cannot write, no matter which module it is
+ * in: the write is refused and counted as blockedFromSnapshot.
+ */
+function guardedStore(raw, writeGuard) {
+  const guarded = { ...raw };
+
+  guarded.setDoc = (ref, data, opts) => {
+    if (!writeGuard.allow({ label: "setDoc", docs: 1 })) return Promise.resolve();
+    return raw.setDoc(ref, data, opts);
+  };
+  guarded.updateDoc = (ref, data) => {
+    if (!writeGuard.allow({ label: "updateDoc", docs: 1 })) return Promise.resolve();
+    return raw.updateDoc(ref, data);
+  };
+  guarded.deleteDoc = (ref) => {
+    if (!writeGuard.allow({ label: "deleteDoc", docs: 1 })) return Promise.resolve();
+    return raw.deleteDoc(ref);
+  };
+  guarded.runTransaction = (db, updateFunction) => {
+    if (!writeGuard.allow({ label: "transaction", docs: 1 })) return Promise.resolve(null);
+    return raw.runTransaction(db, updateFunction);
+  };
+  guarded.writeBatch = (db) => {
+    const batch = raw.writeBatch(db);
+    let docs = 0;
+    return {
+      set(...args) { docs += 1; return batch.set(...args); },
+      update(...args) { docs += 1; return batch.update(...args); },
+      delete(...args) { docs += 1; return batch.delete(...args); },
+      commit() {
+        if (!writeGuard.allow({ label: "batch", docs: Math.max(1, docs) })) return Promise.resolve();
+        return batch.commit();
+      }
+    };
+  };
+  guarded.onSnapshot = (target, onNext, onError, ...rest) => raw.onSnapshot(target, (snap) => {
+    // Local echoes carry optimistic data; projecting them makes comparisons
+    // against the server copy meaningless.
+    if (snap && snap.metadata && snap.metadata.hasPendingWrites) return;
+    writeGuard.withHydration(() => onNext(snap));
+  }, onError, ...rest);
+
+  return guarded;
 }
 
 export function loadFirebase(config) {
@@ -24,7 +73,8 @@ export function loadFirebase(config) {
     const auth = authMod.getAuth(app);
     const db = storeMod.getFirestore(app);
     const storage = storageMod.getStorage(app);
-    return { app, auth, db, authMod, storeMod, storageMod, storage };
+    const writeGuard = createWriteGuard();
+    return { app, auth, db, authMod, storeMod: guardedStore(storeMod, writeGuard), storageMod, storage, writeGuard };
   })().catch((err) => {
     loaded = null;
     throw err;

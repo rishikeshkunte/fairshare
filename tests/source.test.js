@@ -11,6 +11,7 @@ const html = readFileSync(join(root, "index.html"), "utf8");
 const css = readFileSync(join(root, "fairshare.css"), "utf8");
 const rules = readFileSync(join(root, "firestore.rules"), "utf8");
 const sync = readFileSync(join(root, "js", "sync.js"), "utf8");
+const firebase = readFileSync(join(root, "js", "firebase.js"), "utf8");
 
 test("inline application module parses as valid JavaScript", () => {
   const match = html.match(/<script\s+type="module">([\s\S]*?)<\/script>/i);
@@ -644,19 +645,24 @@ test("roster and legacy membership comparisons ignore Firestore key order", () =
   assert.match(html, /stableStringify\(localGroup\.memberLinks \|\| \{\}\) !== stableStringify\(cloudData\.memberLinks\)/);
 });
 
-test("profile sync only writes upward for records the cloud does not have", () => {
-  assert.match(html, /const hasLocalOnlyFriend = mergedFriends\.some\(friend => \{[\s\S]*?!cloudFriendKeys\.has\(key\)/);
-  assert.match(html, /if \(!snapshot\.exists\(\) \|\| hasLocalOnlyFriend\) \{\s*saveFriendsRosterToCloud\(\);/);
-  assert.match(html, /const hasLocalOnlyDeleted = \(appState\.deletedGroups \|\| \[\]\)\.some\(groupId => !cloudDeletedSet\.has\(String\(groupId\)\)\)/);
-  assert.match(html, /if \(!snapshot\.exists\(\) \|\| hasLocalOnlyDeleted\) \{\s*saveDeletedGroupsToCloud\(\);/);
-  assert.doesNotMatch(html, /JSON\.stringify\(cloudDeleted\) !== JSON\.stringify\(mergedDeleted\)/);
+test("snapshot listeners never write to the cloud", () => {
+  assert.match(html, /Snapshot listeners are read-only/);
+  assert.match(html, /Repairs stay local/);
+  assert.match(html, /A missing cloud document must never be recreated from a listener/);
+  const roster = html.slice(html.indexOf("function listenToFriendsRoster"), html.indexOf("function friendRecordKey"));
+  assert.doesNotMatch(roster, /saveFriendsRosterToCloud\(\)|saveDeletedGroupsToCloud\(\)/);
+  const groupListener = html.slice(html.indexOf("function listenToCloudGroup"), html.indexOf("function refreshDirectListeners"));
+  assert.doesNotMatch(groupListener, /saveState\(/);
 });
 
-test("a client-side write budget can pause runaway cloud writes", () => {
-  assert.match(html, /function cloudWriteBlocked\(\)/);
-  assert.match(html, /if \(cloudWriteBudget\.count > 150\)/);
-  assert.match(html, /cloudWriteBudget\.blockedUntil = now \+ 300000/);
-  assert.match(html, /Sync paused briefly to protect your Firestore quota/);
-  const guards = html.match(/cloudWriteBlocked\(\)/g) || [];
-  assert.ok(guards.length >= 6, `expected write paths to consult the budget, saw ${guards.length}`);
+test("all remote writes share one guarded path", () => {
+  assert.match(firebase, /import \{ createWriteGuard \} from "\.\/writeguard\.js"/);
+  assert.match(firebase, /guarded\.setDoc = /);
+  assert.match(firebase, /guarded\.writeBatch = /);
+  assert.match(firebase, /guarded\.runTransaction = /);
+  assert.match(firebase, /guarded\.onSnapshot = /);
+  assert.match(firebase, /writeGuard\.withHydration\(\(\) => onNext\(snap\)\)/);
+  assert.match(firebase, /metadata\.hasPendingWrites\) return/);
+  assert.match(html, /fx\.writeGuard\.allow\(\{ label: "app", docs \}\)/);
+  assert.match(html, /writeGuard: fx && fx\.writeGuard \? fx\.writeGuard\.stats\(\) : null/);
 });

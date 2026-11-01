@@ -1067,7 +1067,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v86";
+    const APP_BUILD = "v87";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2038,28 +2038,11 @@
     let deletedGroupsWriteInFlight = false;
     let deletedGroupsWriteQueued = false;
 
-    // A runaway write loop once burned a full day of Firestore quota in
-    // minutes. Cap remote write calls per minute; past the cap, writes pause
-    // briefly and the user is told, instead of silently exhausting quota.
-    const cloudWriteBudget = { windowStart: 0, count: 0, blockedUntil: 0, warned: false };
-    function cloudWriteBlocked() {
-      const now = Date.now();
-      if (now < cloudWriteBudget.blockedUntil) return true;
-      if (now - cloudWriteBudget.windowStart > 60000) {
-        cloudWriteBudget.windowStart = now;
-        cloudWriteBudget.count = 0;
-        cloudWriteBudget.warned = false;
-      }
-      cloudWriteBudget.count += 1;
-      if (cloudWriteBudget.count > 150) {
-        cloudWriteBudget.blockedUntil = now + 300000;
-        console.warn("Cloud write budget exceeded; pausing remote writes for 5 minutes.");
-        if (!cloudWriteBudget.warned) {
-          cloudWriteBudget.warned = true;
-          toast("Sync paused briefly to protect your Firestore quota.");
-        }
-        return true;
-      }
+    // Every remote write is gated by the shared write guard (js/firebase.js +
+    // js/writeguard.js). It refuses writes made from inside a snapshot
+    // listener and budgets the rest, so a feedback loop cannot drain quota.
+    function cloudWriteBlocked(docs = 1) {
+      if (fx && fx.writeGuard) return !fx.writeGuard.allow({ label: "app", docs });
       return false;
     }
 
@@ -2176,22 +2159,9 @@
           if (removedActive) listenToCloudGroup(appState.activeGroupId);
           renderAll();
         }
-        // Push upward only when this device knows a contact the cloud roster
-        // does not. Field-level or key-order differences must never write back,
-        // otherwise a snapshot and its own write can keep rewriting forever.
-        const cloudFriendKeys = new Set(cloudFriends.map(friendRecordKey).filter(Boolean));
-        const hasLocalOnlyFriend = mergedFriends.some(friend => {
-          const key = friendRecordKey(friend);
-          return key && !cloudFriendKeys.has(key);
-        });
-        if (!snapshot.exists() || hasLocalOnlyFriend) {
-          saveFriendsRosterToCloud();
-        }
-        const cloudDeletedSet = new Set(cloudDeleted);
-        const hasLocalOnlyDeleted = (appState.deletedGroups || []).some(groupId => !cloudDeletedSet.has(String(groupId)));
-        if (!snapshot.exists() || hasLocalOnlyDeleted) {
-          saveDeletedGroupsToCloud();
-        }
+        // Snapshot listeners are read-only. Local-only contacts and tombstones
+        // are uploaded by the user commands that create them; writing back from
+        // a snapshot is what caused the 2026-11-01 profile write loop.
       }, err => console.warn("Friends roster cloud sync note:", err?.code || err));
     }
 
@@ -6958,6 +6928,12 @@
       if (ensureCloudPromise) return ensureCloudPromise;
       ensureCloudPromise = (async () => {
         fx = await loadFirebase(firebaseConfig);
+        if (fx.writeGuard) {
+          fx.writeGuard.setPauseHandler(() => {
+            toast("Sync paused for a few minutes to protect your Firestore quota.");
+            updateSyncHealth();
+          });
+        }
         // Register the auth listener before any other async work. Persisted
         // sessions must restore even if redirect/popup completion is slow.
         if (!authListenerAttached) {
@@ -7674,6 +7650,12 @@
         return counts;
       }, { ok: 0, mismatch: 0 });
       statusEl.textContent = `Sync health: ${normalized}/${groups.length} groups normalized, ${pending} pending, ${checks.mismatch} mismatch, ${normalizedUnsubs.size} live listeners.`;
+      const guardStats = fx && fx.writeGuard ? fx.writeGuard.stats() : null;
+      if (guardStats) {
+        const paused = guardStats.paused ? " | writes paused" : "";
+        const blocked = guardStats.blockedFromSnapshot ? ` | ${guardStats.blockedFromSnapshot} listener writes blocked` : "";
+        statusEl.textContent += `${paused}${blocked}`;
+      }
     }
 
     window.exportDiagnostics = function() {
@@ -7696,6 +7678,7 @@
         directTransactions: (appState.directTransactions || []).length,
         deletedTransactions: (appState.deletedTransactions || []).length,
         deletedGroups: (appState.deletedGroups || []).length,
+        writeGuard: fx && fx.writeGuard ? fx.writeGuard.stats() : null,
         timestamp: new Date().toISOString()
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -7921,8 +7904,8 @@
       });
       if (ops.length) {
         for (let index = 0; index < ops.length; index += 450) {
-          if (cloudWriteBlocked()) return;
           const chunk = ops.slice(index, index + 450);
+          if (cloudWriteBlocked(chunk.length)) return;
           const batch = fx.storeMod.writeBatch(fx.db);
           chunk.forEach(op => batch.set(op.ref, op.data, { merge: true }));
           await batch.commit();
@@ -8156,11 +8139,13 @@
           persistLocalState();
           if (group.normalizedVersion) listenToNormalizedGroup(groupId);
           if (appState.activeGroupId === groupId) renderAll();
-          if (repairedNames) saveState(group);
+          // Repairs stay local. Uploading them here made a group snapshot write
+          // to the profile/ledger, which is how write loops started; the next
+          // explicit user action in this group pushes the repaired state.
         } else if (appState.activeGroupId === groupId) {
-          // Only initialise the currently selected group. Never save whichever group
-          // happens to be active from a callback for a different group.
-          saveState();
+          // A missing cloud document must never be recreated from a listener.
+          persistLocalState();
+          renderAll();
         }
       }, (err) => console.warn("Firestore group note:", err));
     }
