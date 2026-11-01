@@ -1067,7 +1067,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v87";
+    const APP_BUILD = "v88";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2100,11 +2100,14 @@
       fx.storeMod.runTransaction(fx.db, async (transaction) => {
         const snapshot = await transaction.get(profileRef);
         const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
-        const merged = Array.from(new Set([
-          ...(Array.isArray(cloudData.deletedGroups) ? cloudData.deletedGroups : []).map(String),
-          ...(appState.deletedGroups || []).map(String)
-        ]));
+        const cloudIds = (Array.isArray(cloudData.deletedGroups) ? cloudData.deletedGroups : []).map(String);
+        const cloudSet = new Set(cloudIds);
+        const localNew = (appState.deletedGroups || []).map(String).filter(id => !cloudSet.has(id));
+        const merged = Array.from(new Set([...cloudIds, ...(appState.deletedGroups || []).map(String)]));
         appState.deletedGroups = merged;
+        // Nothing new to add: commit nothing so the profile document (and its
+        // server timestamp) is left untouched.
+        if (!localNew.length && snapshot.exists()) return;
         transaction.set(profileRef, {
           deletedGroups: merged,
           updatedAt: serverTimestamp(fx)
@@ -7086,6 +7089,7 @@
     function syncUserCloud(user) {
       if (!fx || !user) return;
       migrateDefaultGroupId();
+      flushPendingLocalMutations();
       const myEmail = (user.email || "").toLowerCase().trim();
 
       if (myDisplayAccount) {
@@ -8171,6 +8175,16 @@
       });
     }
 
+    // Explicit, non-listener flush for changes made offline or before sign-in.
+    // Snapshot listeners are blocked from writing, so this is the one command
+    // that catches up local-only roster, tombstone and 1-on-1 edits.
+    function flushPendingLocalMutations() {
+      if (!fx || !currentUser) return;
+      saveFriendsRosterToCloud();
+      saveDeletedGroupsToCloud();
+      pushAllDirectPairs();
+    }
+
     function refreshDirectListeners() {
       if (!fx || !currentUser) return;
       if (unsubscribeDirectListener) unsubscribeDirectListener();
@@ -8269,6 +8283,11 @@
           remoteDeleted: remote.deletedTransactions || []
         });
         if (payload.participants.length !== 2 || payload.participantKeys.length !== 2) return;
+        // Skip no-op commits: a transaction that writes an identical document
+        // still costs a write and re-triggers every listener.
+        const payloadKeys = Object.keys(payload).filter(key => key !== "updatedAt");
+        const pick = (source) => Object.fromEntries(payloadKeys.filter(key => key in source).map(key => [key, source[key]]));
+        if (snapshot.exists() && stableStringify(pick(payload)) === stableStringify(pick(remote))) return;
         payload.updatedAt = serverTimestamp(fx);
         transaction.set(pairRef, payload, { merge: true });
       });
@@ -8743,6 +8762,7 @@
     });
     window.addEventListener("online", () => {
       if (fx && currentUser) {
+        flushPendingLocalMutations();
         syncUserCloud(currentUser);
         cloudSyncUid = currentUser.uid;
       }

@@ -663,6 +663,19 @@ test("all remote writes share one guarded path", () => {
   assert.match(firebase, /guarded\.onSnapshot = /);
   assert.match(firebase, /writeGuard\.withHydration\(\(\) => onNext\(snap\)\)/);
   assert.match(firebase, /metadata\.hasPendingWrites\) return/);
+  assert.match(firebase, /includeMetadataChanges: true/);
   assert.match(html, /fx\.writeGuard\.allow\(\{ label: "app", docs \}\)/);
   assert.match(html, /writeGuard: fx && fx\.writeGuard \? fx\.writeGuard\.stats\(\) : null/);
+});
+
+test("background commands skip writes when the cloud already matches", () => {
+  assert.match(html, /const localNew = \(appState\.deletedGroups \|\| \[\]\)\.map\(String\)\.filter\(id => !cloudSet\.has\(id\)\)/);
+  assert.match(html, /if \(!localNew\.length && snapshot\.exists\(\)\) return;/);
+  assert.match(html, /if \(snapshot\.exists\(\) && stableStringify\(pick\(payload\)\) === stableStringify\(pick\(remote\)\)\) return;/);
+});
+
+test("local-only changes flush outside snapshot callbacks", () => {
+  assert.match(html, /function flushPendingLocalMutations\(\)/);
+  assert.match(html, /flushPendingLocalMutations\(\);[\s\S]*?syncUserCloud\(currentUser\)/);
+  assert.match(html, /migrateDefaultGroupId\(\);\s*flushPendingLocalMutations\(\);/);
 });

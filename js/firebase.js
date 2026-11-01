@@ -18,7 +18,7 @@ export function setCloudIntent(on) {
  * inside it. A listener therefore cannot write, no matter which module it is
  * in: the write is refused and counted as blockedFromSnapshot.
  */
-function guardedStore(raw, writeGuard) {
+export function createGuardedStore(raw, writeGuard) {
   const guarded = { ...raw };
 
   guarded.setDoc = (ref, data, opts) => {
@@ -50,12 +50,13 @@ function guardedStore(raw, writeGuard) {
       }
     };
   };
-  guarded.onSnapshot = (target, onNext, onError, ...rest) => raw.onSnapshot(target, (snap) => {
-    // Local echoes carry optimistic data; projecting them makes comparisons
-    // against the server copy meaningless.
+  // Request metadata changes so the acknowledgement of a local write is still
+  // delivered after we skip its optimistic echo. Without this, a remote change
+  // batched into the optimistic snapshot could be missed.
+  guarded.onSnapshot = (target, onNext, onError) => raw.onSnapshot(target, { includeMetadataChanges: true }, (snap) => {
     if (snap && snap.metadata && snap.metadata.hasPendingWrites) return;
     writeGuard.withHydration(() => onNext(snap));
-  }, onError, ...rest);
+  }, onError);
 
   return guarded;
 }
@@ -74,7 +75,7 @@ export function loadFirebase(config) {
     const db = storeMod.getFirestore(app);
     const storage = storageMod.getStorage(app);
     const writeGuard = createWriteGuard();
-    return { app, auth, db, authMod, storeMod: guardedStore(storeMod, writeGuard), storageMod, storage, writeGuard };
+    return { app, auth, db, authMod, storeMod: createGuardedStore(storeMod, writeGuard), storageMod, storage, writeGuard };
   })().catch((err) => {
     loaded = null;
     throw err;
