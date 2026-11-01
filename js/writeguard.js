@@ -29,6 +29,7 @@ export function createWriteGuard(options = {}) {
     hydrationDepth: 0,
     blockedFromSnapshot: 0,
     blockedByLabel: {},
+    lastBlockedStack: "",
     pauses: 0,
     lastLabel: ""
   };
@@ -52,6 +53,7 @@ export function createWriteGuard(options = {}) {
       pauses: state.pauses,
       blockedFromSnapshot: state.blockedFromSnapshot,
       blockedByLabel: { ...state.blockedByLabel },
+      lastBlockedStack: state.lastBlockedStack,
       lastLabel: state.lastLabel,
       hydrating: state.hydrationDepth > 0
     };
@@ -74,6 +76,10 @@ export function createWriteGuard(options = {}) {
         state.blockedFromSnapshot += 1;
         state.blockedByLabel[label] = (state.blockedByLabel[label] || 0) + 1;
         state.lastLabel = label;
+        if (!state.lastBlockedStack) {
+          const stack = String((new Error()).stack || "");
+          state.lastBlockedStack = stack.split("\n").slice(1, 5).join(" <- ").slice(0, 700);
+        }
         return false;
       }
       if (state.blockedUntil) {

@@ -71,3 +71,11 @@ test("blocked snapshot writes are counted by label", () => {
   assert.equal(stats.blockedByLabel["direct-pair-tx"], 2);
   assert.equal(stats.blockedByLabel.roster, 1);
 });
+
+test("blocked writes record the caller stack", () => {
+  const guard = createWriteGuard();
+  guard.withHydration(() => guard.allow({ label: "direct-pair-tx" }));
+  const stats = guard.stats();
+  assert.equal(stats.blockedByLabel["direct-pair-tx"], 1);
+  assert.ok(stats.lastBlockedStack.length > 0);
+});
