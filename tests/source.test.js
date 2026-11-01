@@ -651,3 +651,12 @@ test("profile sync only writes upward for records the cloud does not have", () =
   assert.match(html, /if \(!snapshot\.exists\(\) \|\| hasLocalOnlyDeleted\) \{\s*saveDeletedGroupsToCloud\(\);/);
   assert.doesNotMatch(html, /JSON\.stringify\(cloudDeleted\) !== JSON\.stringify\(mergedDeleted\)/);
 });
+
+test("a client-side write budget can pause runaway cloud writes", () => {
+  assert.match(html, /function cloudWriteBlocked\(\)/);
+  assert.match(html, /if \(cloudWriteBudget\.count > 150\)/);
+  assert.match(html, /cloudWriteBudget\.blockedUntil = now \+ 300000/);
+  assert.match(html, /Sync paused briefly to protect your Firestore quota/);
+  const guards = html.match(/cloudWriteBlocked\(\)/g) || [];
+  assert.ok(guards.length >= 6, `expected write paths to consult the budget, saw ${guards.length}`);
+});
