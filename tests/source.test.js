@@ -711,3 +711,11 @@ test("roster enrichment helpers never write from snapshot callbacks", () => {
   assert.doesNotMatch(cleanup, /saveState\(\)|saveFriendsRosterToCloud\(\)/);
   assert.match(cleanup, /persistLocalState\(\);/);
 });
+
+test("renderAll never pushes cloud writes", () => {
+  const start = html.indexOf("function renderAll()");
+  const end = html.indexOf("\n    function ", start + 20);
+  const body = html.slice(start, end);
+  assert.ok(end > start, "renderAll can be located");
+  assert.doesNotMatch(body, /pushAllDirectPairs\(|syncDirectPairExpense\(|saveState\(|saveFriendsRosterToCloud\(/);
+});

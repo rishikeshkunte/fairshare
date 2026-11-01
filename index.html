@@ -1068,7 +1068,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v92";
+    const APP_BUILD = "v93";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -6807,7 +6807,10 @@
         if (groupRepaired) persistLocalState();
       }
       if (reconcileDirectFriendNames()) persistLocalState();
-      if (repairDirectMoney()) { persistLocalState(); pushAllDirectPairs(); }
+      // Repairs are local. Pushing 1-on-1 ledgers from here ran inside snapshot
+      // listeners (renderAll is called by every listener); the lifecycle flush
+      // uploads repaired pairs instead.
+      if (repairDirectMoney()) persistLocalState();
       renderDirectFriendDropdown();
       applyTheme();
       renderGroupSelector();
