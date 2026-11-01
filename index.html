@@ -1068,7 +1068,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v89";
+    const APP_BUILD = "v90";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2836,7 +2836,7 @@
       }
     };
 
-    function addApprovedFriend(email, name) {
+    function addApprovedFriend(email, name, options = {}) {
       const em = normalizeEmail(email || "");
       const nm = String(name || (em ? em.split("@")[0] : "Friend")).trim() || "Friend";
       // Match by email first. If a local contact with this name was created
@@ -2877,6 +2877,24 @@
         changed = true;
       }
       if (changed) {
+        if (options.defer) {
+          // Called from a friend-request snapshot: update the local roster only.
+          // The lifecycle flush uploads it and pushes any dirty 1-on-1 pair.
+          const linked = em
+            ? appState.friends.find(friend => normalizeEmail(friend.email || "") === em)
+            : null;
+          if (linked) {
+            const pairId = pairIdFor(normalizeEmail(currentUser?.email || ""), normalizeEmail(linked.email || ""));
+            const hasLocal = transactionsForFriend(appState.directTransactions, linked.name).length
+              || deletedForFriend(appState.deletedTransactions, linked.name, linked.email).length;
+            if (pairId && hasLocal) directPairDirty.add(pairId);
+          }
+          persistLocalState();
+          renderFriendsRoster();
+          renderFriendPickerDropdown();
+          renderDirectFriendDropdown();
+          return;
+        }
         saveState();
         renderFriendsRoster();
         renderFriendPickerDropdown();
@@ -7135,7 +7153,7 @@
             if (data.status === "accepted") {
               if (data.toEmail) outgoingAcceptedEmails.add(normalizeEmail(data.toEmail));
               const friendName = data.acceptedByName || data.toEmail.split("@")[0];
-              addApprovedFriend(data.toEmail, friendName);
+              addApprovedFriend(data.toEmail, friendName, { defer: true });
             }
           });
           renderFriendRequestsUI();
@@ -8792,12 +8810,9 @@
         cloudSyncUid = currentUser.uid;
       }
     });
-    setInterval(() => {
-      if (fx && currentUser && document.visibilityState === "visible") {
-        syncUserCloud(currentUser);
-        cloudSyncUid = currentUser.uid;
-      }
-    }, 5 * 60 * 1000);
+    // No periodic polling: sync re-runs on sign-in, on reconnect and when the
+    // tab becomes visible again. A timer here re-subscribed every listener
+    // every five minutes, which cost reads and replayed snapshots for nothing.
     let hiddenAt = 0;
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") {

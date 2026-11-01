@@ -434,7 +434,7 @@ test("shared ledgers use the timestamp-aware merge from the sync module", () => 
 });
 
 test("Gmail linking upgrades a same-name local friend without an email", () => {
-  const start = html.indexOf("function addApprovedFriend(email, name)");
+  const start = html.indexOf("function addApprovedFriend(email, name, options = {})");
   const end = html.indexOf("function renderFriendRequestsUI()", start);
   const fn = html.slice(start, end);
   assert.ok(fn.includes("existing.email = em"));
@@ -557,8 +557,15 @@ test("ledger identity and money repairs run automatically on load, snapshots, an
   assert.match(html, /function repairDirectMoney\(\)/);
   assert.match(html, /if \(repairGroupIdentity\(group\)\) migratedSelfName = true/);
   assert.match(html, /if \(repairGroupMoney\(group\)\) repairedNames = true/);
-  assert.match(html, /if \(repairDirectMoney\(\)\) \{ persistLocalState\(\); pushAllDirectPairs\(\); \}/);
-  assert.match(html, /setInterval\(\(\) => \{[\s\S]*?syncUserCloud\(currentUser\)/);
+  assert.match(html, /if \(repairDirectMoney\(\)\) persistLocalState\(\);/);
+  assert.doesNotMatch(html, /setInterval\(\(\) => \{[\s\S]*?syncUserCloud\(currentUser\)/);
+  assert.match(html, /flushPendingLocalMutations\(\);\s*syncUserCloud\(currentUser\)/);
+});
+
+test("friend-request snapshots never write from the listener", () => {
+  assert.match(html, /addApprovedFriend\(data\.toEmail, friendName, \{ defer: true \}\)/);
+  assert.match(html, /if \(options\.defer\) \{/);
+  assert.match(html, /if \(pairId && hasLocal\) directPairDirty\.add\(pairId\);/);
 });
 
 test("group creation and CSV import confirm success and open group-scoped activity", () => {
