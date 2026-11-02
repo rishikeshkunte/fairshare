@@ -733,3 +733,15 @@ test("renders never tear down a focused expense field", () => {
   assert.match(render, /if \(!typingInExpenseForm\) renderMembers\(\);/);
   assert.match(html, /payerSelect && document\.activeElement !== payerSelect/);
 });
+
+test("adding a connected friend to a group links their Gmail", () => {
+  const add = html.slice(html.indexOf("window.addMemberToActiveGroup"), html.indexOf("window.removeMember"));
+  assert.match(add, /const linkedFriend = \(appState\.friends \|\| \[\]\)\.find/);
+  assert.match(add, /g\.memberLinks = \{ \.\.\.\(g\.memberLinks \|\| \{\}\), \[name\]: normalizeEmail\(linkedFriend\.email\) \}/);
+});
+
+test("stale name-only member documents are retired after an email link", () => {
+  assert.match(html, /if \(!id\.startsWith\("name_"\) \|\| planMemberIds\.has\(id\)\) continue;/);
+  assert.match(html, /planNameEmails\.has\(name\)/);
+  assert.match(html, /status: "removed", removedAt: Date\.now\(\)/);
+});

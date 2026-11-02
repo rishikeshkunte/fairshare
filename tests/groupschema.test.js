@@ -56,3 +56,29 @@ test("creates stable ids from uid, canonical email, or name", () => {
   assert.equal(memberIdFor({ email: "Rishi.Kunte@gmail.com" }), "email_rishikunte_gmail_com");
   assert.equal(memberIdFor({ name: "Local Friend" }), "name_local_friend");
 });
+
+test("duplicate member names produce a single member document", () => {
+  const plan = normalizeLegacyGroup({
+    id: "g1",
+    name: "G",
+    currency: "INR",
+    members: ["You", "Shivam", "Shivam"],
+    memberLinks: { You: "a@example.com", Shivam: "shivam@example.com" },
+    transactions: []
+  }, { ownerEmail: "a@example.com" });
+  assert.equal(plan.members.length, 2);
+});
+
+test("a stale name-only member id is retired when the same name gains an email", () => {
+  const plan = normalizeLegacyGroup({
+    id: "g1",
+    name: "G",
+    currency: "INR",
+    members: ["You", "Shivam"],
+    memberLinks: { You: "a@example.com", Shivam: "shivam@example.com" },
+    transactions: []
+  }, { ownerEmail: "a@example.com" });
+  const shivam = plan.members.find(member => member.displayName === "Shivam");
+  assert.match(shivam.id, /^email_/);
+  assert.equal(plan.members.filter(member => member.displayName === "Shivam").length, 1);
+});

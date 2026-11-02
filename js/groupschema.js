@@ -42,6 +42,9 @@ function memberMapFor(group, { ownerUid = "", ownerEmail = "" } = {}) {
   const map = new Map();
   const docs = [];
   members.forEach((name, index) => {
+    // A duplicate name in the member list (the usual result of linking an
+    // email after a name-only member existed) is one person, one document.
+    if (map.has(name)) return;
     const email = canonicalEmail(links[name] || "");
     const isOwner = Boolean(ownerEmail) && email === canonicalEmail(ownerEmail);
     const uid = isOwner && ownerUid ? ownerUid : "";

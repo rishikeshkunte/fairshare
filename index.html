@@ -1069,7 +1069,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v95";
+    const APP_BUILD = "v96";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2507,6 +2507,19 @@
         return;
       }
       g.members.push(name);
+
+      // A connected friend already has a Gmail; link it here so the group is
+      // discoverable for them immediately instead of requiring a manual link.
+      const linkedFriend = (appState.friends || []).find(friend => {
+        const email = normalizeEmail(friend.email || "");
+        if (!email) return false;
+        if (String(friend.name || "").trim().toLowerCase() === name.toLowerCase()) return true;
+        return Array.isArray(friend.aliases)
+          && friend.aliases.some(alias => String(alias).trim().toLowerCase() === name.toLowerCase());
+      });
+      if (linkedFriend?.email) {
+        g.memberLinks = { ...(g.memberLinks || {}), [name]: normalizeEmail(linkedFriend.email) };
+      }
 
       if (!appState.friends.some(f => f.name.toLowerCase() === name.toLowerCase())) {
         appState.friends.push({ id: "f_" + Date.now(), name: name, type: "custom" });
@@ -7928,6 +7941,32 @@
       plan.members.forEach(member => put("members", member));
       plan.expenses.forEach(expense => put("expenses", expense));
       plan.settlements.forEach(settlement => put("settlements", settlement));
+      // When a member gains an email link, their document id changes from
+      // name_* to email_*. Retire the stale same-name document, otherwise the
+      // group projects two members with the same name.
+      const planMemberIds = new Set(plan.members.map(member => member.id));
+      const planNameEmails = new Map();
+      plan.members.forEach(member => {
+        if (!member.emailCanonical) return;
+        planNameEmails.set(String(member.displayName || "").trim().toLowerCase(), member.emailCanonical);
+      });
+      for (const [key, signature] of Array.from(written.entries())) {
+        if (!key.startsWith("members/")) continue;
+        const id = key.slice("members/".length);
+        if (!id.startsWith("name_") || planMemberIds.has(id)) continue;
+        let record = null;
+        try { record = JSON.parse(signature); } catch { continue; }
+        if (!record || record.status === "removed" || record.emailCanonical) continue;
+        const name = String(record.displayName || "").trim().toLowerCase();
+        if (!name || !planNameEmails.has(name)) continue;
+        const retired = { status: "removed", removedAt: Date.now() };
+        ops.push({
+          ref: fx.storeMod.doc(groupRef, "members", id),
+          data: retired,
+          key,
+          signature: stableStringify(retired)
+        });
+      }
       plan.tombstones.forEach(tombstone => {
         const collectionName = tombstone.type === "expense" ? "expenses" : "settlements";
         const docId = `${tombstone.type}_${tombstone.transactionId}`;
@@ -8240,6 +8279,11 @@
       saveDeletedGroupsToCloud();
       if (options.all) pushAllDirectPairs();
       else flushDirtyDirectPairs();
+      // Lifecycle repair: diff each group against its last snapshot. Clean
+      // groups produce no ops, but retired/renamed member documents get fixed.
+      Object.values(appState.groups || {}).forEach(group => {
+        if (group.normalizedVersion) scheduleNormalizedGroupWrite(group);
+      });
     }
 
     function refreshDirectListeners() {
