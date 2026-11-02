@@ -597,44 +597,6 @@
       </div>
       <p id="app-build-footer" class="group-hint" style="margin-top:14px; cursor:default;">What's My Share?</p>
     </div>
-    <div class="card" id="invites-card" style="margin-top:16px;" hidden>
-      <div class="card-header-row">
-        <div>
-          <h2>Invite links</h2>
-          <span style="font-size:0.82rem; color:var(--muted);">Secure links expire after 24 hours.</span>
-        </div>
-      </div>
-      <div id="invites-list" style="margin-top:12px;"></div>
-    </div>
-    <div class="card" id="sync-card" style="margin-top:16px;" hidden>
-      <div class="card-header-row">
-        <div>
-          <h2>Sync &amp; app data</h2>
-          <span id="sync-build-label" style="font-size:0.82rem; color:var(--muted);">Build …</span>
-        </div>
-      </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button type="button" class="btn btn-secondary" data-call="syncNow">Sync now</button>
-        <button type="button" class="btn btn-secondary" data-call="pullAllGroupsFromCloud">Pull all groups</button>
-        <button type="button" class="btn btn-secondary" data-call="runNormalizedMigration">Migrate to normalized</button>
-        <button type="button" class="btn btn-secondary" data-call="refreshAppData">Refresh app data</button>
-        <button type="button" class="btn btn-secondary" data-call="purgeDeletedGroupsFromCloud" style="color:var(--danger-text);">Purge deleted groups</button>
-        <button type="button" class="btn btn-secondary" data-call="exportDiagnostics">Export diagnostics</button>
-      </div>
-      <div class="toggle-row" style="margin-top:12px;">
-        <div>
-          <strong style="font-size:0.92rem;">Quota saver</strong>
-          <div class="toggle-desc">Live sync only the open group. Other groups refresh when opened or via Pull all groups. This turns off background listeners to reduce Firestore reads.</div>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="toggle-quota-saver">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <p id="sync-health-status" class="group-hint" style="margin-top:10px;"></p>
-      <p id="normalized-sync-status" class="group-hint" style="margin-top:10px;"></p>
-      <p class="group-hint" style="margin-top:10px;">Sync now reconnects cloud listeners. Pull all groups merges every shared ledger from cloud. Purge deleted groups removes groups you already left from the cloud for every member.</p>
-    </div>
   </section>
 
   <!-- ================= PAGE 6: FRIENDS & GROUPS ================= -->
@@ -1074,7 +1036,7 @@
     let quotaSaver = true;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") !== "0"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v99";
+    const APP_BUILD = "v100";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7789,48 +7751,18 @@
       toast("Your data has been downloaded.");
     };
 
-    // The maintenance panel is developer-only: five taps on the build line, or
-    // ?debug=1. Ordinary users only see the friendly app version text.
     const buildFooter = document.getElementById("app-build-footer");
-    if (buildFooter) {
-      buildFooter.textContent = `What's My Share? ${APP_BUILD}`;
-      let buildTaps = 0;
-      let tapTimer = 0;
-      buildFooter.addEventListener("click", () => {
-        buildTaps += 1;
-        window.clearTimeout(tapTimer);
-        tapTimer = window.setTimeout(() => { buildTaps = 0; }, 1500);
-        if (buildTaps < 5) return;
-        buildTaps = 0;
-        try { localStorage.setItem("fairshare_debug", "1"); } catch { /* ignore */ }
-        document.getElementById("sync-card")?.removeAttribute("hidden");
-        toast("Developer tools enabled.");
-      });
-    }
-    try {
-      const debug = new URLSearchParams(window.location.search).get("debug") === "1"
-        || localStorage.getItem("fairshare_debug") === "1";
-      if (debug) document.getElementById("sync-card")?.removeAttribute("hidden");
-    } catch { /* ignore */ }
+    if (buildFooter) buildFooter.textContent = `What's My Share? ${APP_BUILD}`;
+
+    // DevTools-only escape hatch. No maintenance UI ships to users.
+    window.fairshareDiag = () => ({
+      build: APP_BUILD,
+      ...(fx && fx.writeGuard ? fx.writeGuard.stats() : {})
+    });
 
     const quotaSaverToggle = document.getElementById("toggle-quota-saver");
-    if (quotaSaverToggle) {
-      quotaSaverToggle.checked = quotaSaver;
-      quotaSaverToggle.addEventListener("change", () => {
-        quotaSaver = quotaSaverToggle.checked;
-        try { localStorage.setItem("fairshare_quota_saver", quotaSaver ? "1" : "0"); } catch { /* ignore */ }
-        if (quotaSaver) {
-          for (const [groupId, unsubscribe] of Array.from(normalizedUnsubs.entries())) {
-            if (groupId !== appState.activeGroupId) unsubscribe();
-          }
-        } else {
-          Object.values(appState.groups || {}).forEach(group => {
-            if (group.normalizedVersion) listenToNormalizedGroup(group.id);
-          });
-        }
-        updateSyncHealth();
-      });
-    }
+    // Quota saver is always on; the toggle no longer ships to users.
+    if (quotaSaverToggle) quotaSaverToggle.checked = quotaSaver;
 
     window.refreshAppData = async function() {
       if (!(await askConfirm({

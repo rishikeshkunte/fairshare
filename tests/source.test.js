@@ -185,7 +185,7 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
   assert.match(html, /data-call="createFriendInvite"/);
   assert.match(html, /data-call="createGroupInvite"/);
   assert.match(html, /id="invite-link-note"/);
-  assert.match(html, /id="invites-list"/);
+  assert.doesNotMatch(html, /id="invites-list"/);
   assert.match(html, /function newInviteToken\(\)/);
   assert.match(html, /async function createInvite\(type, group\)/);
   assert.match(html, /window\.createFriendInvite = async function\(\)/);
@@ -249,16 +249,15 @@ test("group sync can be repaired from cloud and pushes local edits", () => {
   assert.match(html, /Local-only changes in this group will be lost/);
 });
 
-test("account offers sync repair and app refresh without clearing login", () => {
-  assert.match(html, /data-call="syncNow"/);
-  assert.match(html, /data-call="refreshAppData"/);
-  assert.match(html, /window\.syncNow = function\(\)/);
-  assert.match(html, /window\.refreshAppData = async function\(\)/);
-  assert.match(html, /serviceWorker\.getRegistrations/);
-  assert.match(html, /caches\.delete/);
-  assert.match(html, /syncUserCloud\(currentUser\)/);
-  assert.match(html, /sync-build-label/);
-  assert.match(html, /addEventListener\("online"/);
+test("maintenance controls are not exposed to users", () => {
+  assert.doesNotMatch(html, /data-call="syncNow"/);
+  assert.doesNotMatch(html, /data-call="refreshAppData"/);
+  assert.doesNotMatch(html, /data-call="pullAllGroupsFromCloud"/);
+  assert.doesNotMatch(html, /data-call="purgeDeletedGroupsFromCloud"/);
+  assert.doesNotMatch(html, /id="sync-card"/);
+  assert.doesNotMatch(html, /fairshare_debug/);
+  assert.match(html, /window\.fairshareDiag = \(\) => \(/);
+  assert.match(html, /data-call="exportMyData"/);
 });
 
 test("settlement scope distinguishes the active group from overall standing", () => {
@@ -620,19 +619,18 @@ test("phase 5 discovers groups from membership documents", () => {
   assert.match(html, /listenToMemberships\(user\)/);
 });
 
-test("sync health and sanitized diagnostics are available for support", () => {
-  assert.match(html, /id="sync-health-status"/);
+test("diagnostics remain available to the developer only", () => {
+  assert.doesNotMatch(html, /id="sync-health-status"/);
   assert.match(html, /window\.exportDiagnostics = function\(\)/);
   assert.match(html, /whatsmyshare-diagnostics/);
+  assert.match(html, /window\.fairshareDiag/);
   assert.match(html, /function updateSyncHealth\(\)/);
-  assert.match(html, /updateSyncHealth\(\);/);
 });
 
 test("quota saver limits background normalized listeners", () => {
-  assert.match(html, /id="toggle-quota-saver"/);
+  assert.doesNotMatch(html, /id="toggle-quota-saver"/);
   assert.match(html, /let quotaSaver = true/);
   assert.match(html, /if \(quotaSaver && groupId !== appState\.activeGroupId\) return;/);
-  assert.match(html, /fairshare_quota_saver/);
 });
 
 test("normalized write signatures ignore Firestore key order", () => {
@@ -757,12 +755,12 @@ test("rules enforce the current-client write fence", () => {
   assert.match(html, /onWriteDenied: handleUpdateRequired/);
 });
 
-test("ordinary users do not see maintenance or invite-management panels", () => {
-  assert.match(html, /id="invites-card"[^>]*hidden/);
-  assert.match(html, /id="sync-card"[^>]*hidden/);
+test("ordinary users only see account, export, and version", () => {
+  assert.doesNotMatch(html, /id="invites-card"/);
+  assert.doesNotMatch(html, /id="sync-card"/);
   assert.doesNotMatch(html, /listenToInvites\(user\);/);
   assert.match(html, /id="app-build-footer"/);
-  assert.match(html, /fairshare_debug/);
+  assert.doesNotMatch(html, /fairshare_debug/);
   assert.match(html, /data-call="exportMyData"/);
   assert.match(html, /window\.exportMyData = function\(\)/);
 });
