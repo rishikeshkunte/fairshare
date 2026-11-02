@@ -699,7 +699,7 @@ test("direct-pair listeners never push transactions", () => {
 });
 
 test("normalized writes wait for the first snapshot before diffing", () => {
-  assert.match(html, /if \(normalizedUnsubs\.has\(group\.id\) && !normalizedHydrated\.has\(group\.id\)\) \{/);
+  assert.match(html, /if \(!normalizedHydrated\.has\(group\.id\)\) \{/);
   assert.match(html, /group\._pendingNormalizedWrite = true;/);
   assert.match(html, /normalizedHydrated\.add\(groupId\);/);
 });
