@@ -187,3 +187,39 @@ test("call budget pauses then resumes after the cooldown", async () => {
   await flush();
   assert.equal(backend.counters.writes, 3, "resume allows writes again");
 });
+
+test("every write is stamped with the client build and a fresh id", async () => {
+  const backend = createFakeFirestore();
+  const guard = createWriteGuard();
+  const client = createGuardedStore(backend, guard, { clientBuild: 97 });
+  const ref = backend.doc(null, "user_profiles", "u1");
+
+  client.setDoc(ref, { friendsMap: { a: 1 } }, { merge: true });
+  await flush();
+  const first = backend.docs.get(ref.path);
+  assert.equal(first.clientBuild, 97);
+  assert.ok(String(first.clientWriteId).length >= 8);
+
+  client.setDoc(ref, { friendsMap: { a: 1, b: 2 } }, { merge: true });
+  await flush();
+  assert.notEqual(backend.docs.get(ref.path).clientWriteId, first.clientWriteId);
+});
+
+test("batch and transaction writes are stamped too", async () => {
+  const backend = createFakeFirestore();
+  const guard = createWriteGuard();
+  const client = createGuardedStore(backend, guard, { clientBuild: 97 });
+
+  const batch = client.writeBatch(null);
+  batch.set(backend.doc(null, "groups", "g1"), { name: "G" }, { merge: true });
+  await batch.commit();
+  await flush();
+  assert.equal(backend.docs.get("groups/g1").clientBuild, 97);
+
+  await client.runTransaction(null, async (tx) => {
+    tx.set(backend.doc(null, "direct_pairs", "p1"), { updatedBy: "a" }, { merge: true });
+  });
+  await flush();
+  assert.equal(backend.docs.get("direct_pairs/p1").clientBuild, 97);
+  assert.ok(String(backend.docs.get("direct_pairs/p1").clientWriteId).length >= 8);
+});

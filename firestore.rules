@@ -17,6 +17,23 @@ service cloud.firestore {
     function mine() {
       return canonical(email());
     }
+    // Server-side version fence. Current clients stamp every write with their
+    // build and a fresh per-write id. A stale client cannot produce the id, and
+    // merge-only writes retain the previous one, so its writes are rejected
+    // before they can bill quota or wake listeners.
+    function freshClientWrite() {
+      return request.resource.data.clientBuild is int
+        && request.resource.data.clientBuild >= 97
+        && request.resource.data.clientWriteId is string
+        && request.resource.data.clientWriteId.size() >= 8;
+    }
+    function freshClientUpdate() {
+      return freshClientWrite()
+        && (
+          !('clientWriteId' in resource.data)
+          || resource.data.clientWriteId != request.resource.data.clientWriteId
+        );
+    }
     function isMember(data) {
       return signedIn()
         && data.memberEmails is list
@@ -58,7 +75,9 @@ service cloud.firestore {
 
     // Each signed-in account owns its saved friends roster, independent of groups.
     match /user_profiles/{userId} {
-      allow read, create, update, delete: if signedIn() && request.auth.uid == userId;
+      allow read, delete: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() && request.auth.uid == userId && freshClientWrite();
+      allow update: if signedIn() && request.auth.uid == userId && freshClientUpdate();
     }
 
     match /groups/{groupId} {
@@ -72,12 +91,14 @@ service cloud.firestore {
       allow list: if signedIn() && email() in resource.data.memberEmails;
       allow create: if signedIn()
         && request.resource.data.memberEmails is list
-        && email() in request.resource.data.memberEmails;
-      allow update: if isMember(resource.data);
+        && email() in request.resource.data.memberEmails
+        && freshClientWrite();
+      allow update: if isMember(resource.data) && freshClientUpdate();
       // A signed-in recipient of a valid, unexpired, unrevoked group invite may
       // add themselves. They cannot change the group's name, currency, ledger,
       // or remove existing members in this write.
       allow update: if signedIn()
+        && freshClientUpdate()
         && request.resource.data.memberEmails is list
         && email() in request.resource.data.memberEmails
         && request.resource.data.lastJoinToken is string
@@ -90,7 +111,8 @@ service cloud.firestore {
         && request.resource.data.members.hasAll(resource.data.members)
         && request.resource.data.members.size() <= resource.data.members.size() + 1
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'memberEmails', 'members', 'lastJoinToken', 'lastJoinAt', 'updatedAt', 'updatedBy'
+             'memberEmails', 'members', 'lastJoinToken', 'lastJoinAt', 'updatedAt', 'updatedBy',
+             'clientBuild', 'clientWriteId'
            ]);
       allow delete: if isMember(resource.data);
 
@@ -98,13 +120,19 @@ service cloud.firestore {
       // the legacy memberEmails list until phase 3 switches the client to member
       // documents.
       match /members/{memberId} {
-        allow read, write: if groupMember(groupId);
+        allow read, delete: if groupMember(groupId);
+        allow create: if groupMember(groupId) && freshClientWrite();
+        allow update: if groupMember(groupId) && freshClientUpdate();
       }
       match /expenses/{expenseId} {
-        allow read, write: if groupMember(groupId);
+        allow read, delete: if groupMember(groupId);
+        allow create: if groupMember(groupId) && freshClientWrite();
+        allow update: if groupMember(groupId) && freshClientUpdate();
       }
       match /settlements/{settlementId} {
-        allow read, write: if groupMember(groupId);
+        allow read, delete: if groupMember(groupId);
+        allow create: if groupMember(groupId) && freshClientWrite();
+        allow update: if groupMember(groupId) && freshClientUpdate();
       }
     }
 
@@ -162,8 +190,9 @@ service cloud.firestore {
       // List authorization is evaluated against the canonical field used by the
       // participantKeys query; it remains derived from the authenticated token.
       allow list: if signedIn() && mine() in resource.data.participantKeys;
-      allow create: if signedIn() && validPair(request.resource.data);
-      allow update: if pairMember(resource.data) && validPair(request.resource.data) && stableMembership();
+      allow create: if signedIn() && validPair(request.resource.data) && freshClientWrite();
+      allow update: if pairMember(resource.data) && validPair(request.resource.data)
+        && stableMembership() && freshClientUpdate();
       allow delete: if pairMember(resource.data);
     }
 

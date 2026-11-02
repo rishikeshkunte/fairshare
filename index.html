@@ -1069,7 +1069,8 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v96";
+    const APP_BUILD = "v97";
+    const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -6970,11 +6971,34 @@
       }
     }
 
+    // The server rejects writes from clients older than the minimum supported
+    // build. When that happens, drop caches and reload onto the current bundle
+    // once per session instead of showing raw Firebase errors.
+    function handleUpdateRequired() {
+      try {
+        if (sessionStorage.getItem("fairshare_update_required") === "1") return;
+        sessionStorage.setItem("fairshare_update_required", "1");
+      } catch { /* ignore */ }
+      toast("This version is out of date. Updating to the latest version…");
+      window.setTimeout(async () => {
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(registration => registration.unregister()));
+          const keys = await caches.keys();
+          await Promise.all(keys.map(key => caches.delete(key)));
+        } catch { /* ignore */ }
+        window.location.reload();
+      }, 1500);
+    }
+
     async function ensureCloud() {
       if (fx) return fx;
       if (ensureCloudPromise) return ensureCloudPromise;
       ensureCloudPromise = (async () => {
-        fx = await loadFirebase(firebaseConfig);
+        fx = await loadFirebase(firebaseConfig, {
+          clientBuild: BUILD_NUMBER,
+          onWriteDenied: handleUpdateRequired
+        });
         if (fx.writeGuard) {
           fx.writeGuard.setPauseHandler(() => {
             toast("Sync paused for a few minutes to protect your Firestore quota.");
@@ -7914,6 +7938,13 @@
       return `${collection}/${id}`;
     }
 
+    // Server write stamps are transport metadata; they must not participate in
+    // the local "already written" comparison or every snapshot looks changed.
+    function signatureDoc(doc) {
+      const { clientBuild, clientWriteId, ...rest } = doc || {};
+      return rest;
+    }
+
     function seedNormalizedWritten(groupId, plan) {
       const written = new Map();
       (plan.members || []).forEach(member => written.set(normalizedWriteKey("members", member.id), stableStringify(member)));
@@ -8117,9 +8148,9 @@
         group.normalizedVersion = 1;
         group._normalizedSig = normalizedSignature(group);
         const written = new Map();
-        memberDocs.forEach(doc => written.set(normalizedWriteKey("members", doc.id), stableStringify(doc)));
-        expenseDocs.forEach(doc => written.set(normalizedWriteKey("expenses", doc.id), stableStringify(doc)));
-        settlementDocs.forEach(doc => written.set(normalizedWriteKey("settlements", doc.id), stableStringify(doc)));
+        memberDocs.forEach(doc => written.set(normalizedWriteKey("members", doc.id), stableStringify(signatureDoc(doc))));
+        expenseDocs.forEach(doc => written.set(normalizedWriteKey("expenses", doc.id), stableStringify(signatureDoc(doc))));
+        settlementDocs.forEach(doc => written.set(normalizedWriteKey("settlements", doc.id), stableStringify(signatureDoc(doc))));
         normalizedWrittenByGroup.set(groupId, written);
         normalizedHydrated.add(groupId);
         persistLocalState();

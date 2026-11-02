@@ -471,8 +471,8 @@ test("direct-pair rules derive canonical membership from the auth token and stab
   assert.match(rules, /function legacyPairKeys\(\)[\s\S]*?canonical\(resource\.data\.participants\[0\]\)[\s\S]*?canonical\(resource\.data\.participants\[1\]\)/);
   assert.match(rules, /function stableMembership\(\)[\s\S]*?resource\.data\.participants is list[\s\S]*?\('participantKeys' in resource\.data\)[\s\S]*?hasAll\(request\.resource\.data\.participantKeys\)[\s\S]*?request\.resource\.data\.participantKeys\.hasAll\(resource\.data\.participantKeys\)/);
   assert.match(rules, /request\.resource\.data\.participantKeys\.hasAll\(legacyPairKeys\(\)\)[\s\S]*?legacyPairKeys\(\)\.hasAll\(request\.resource\.data\.participantKeys\)/);
-  assert.match(rules, /allow create:\s*if signedIn\(\) && validPair\(request\.resource\.data\);/);
-  assert.match(rules, /allow update:\s*if pairMember\(resource\.data\) && validPair\(request\.resource\.data\) && stableMembership\(\);/);
+  assert.match(rules, /allow create:\s*if signedIn\(\) && validPair\(request\.resource\.data\) && freshClientWrite\(\);/);
+  assert.match(rules, /allow update:\s*if pairMember\(resource\.data\) && validPair\(request\.resource\.data\)\s*&& stableMembership\(\) && freshClientUpdate\(\);/);
   assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?!exists\([\s\S]*?pairMember\(resource\.data\)/);
 });
 
@@ -639,7 +639,7 @@ test("normalized write signatures ignore Firestore key order", () => {
   assert.match(html, /import\s*\{[^}]*\bstableStringify\b[^}]*\}\s*from "\.\/js\/normalizedsync\.js"/);
   assert.match(html, /const signature = stableStringify\(doc\);/);
   assert.match(html, /const signature = stableStringify\(doc\);\s*if \(written\.get\(key\) === signature\) return;/);
-  assert.match(html, /memberDocs\.forEach\(doc => written\.set\(normalizedWriteKey\("members", doc\.id\), stableStringify\(doc\)\)\)/);
+  assert.match(html, /memberDocs\.forEach\(doc => written\.set\(normalizedWriteKey\("members", doc\.id\), stableStringify\(signatureDoc\(doc\)\)\)\)/);
   assert.match(html, /function normalizedSignature\(group\) \{\s*return stableStringify\(/);
   assert.doesNotMatch(html, /written\.set\(normalizedWriteKey\([^)]*\), JSON\.stringify/);
 });
@@ -744,4 +744,15 @@ test("stale name-only member documents are retired after an email link", () => {
   assert.match(html, /if \(!id\.startsWith\("name_"\) \|\| planMemberIds\.has\(id\)\) continue;/);
   assert.match(html, /planNameEmails\.has\(name\)/);
   assert.match(html, /status: "removed", removedAt: Date\.now\(\)/);
+});
+
+test("rules enforce the current-client write fence", () => {
+  assert.match(rules, /function freshClientWrite\(\)/);
+  assert.match(rules, /clientBuild >= 97/);
+  assert.match(rules, /resource\.data\.clientWriteId != request\.resource\.data\.clientWriteId/);
+  assert.match(rules, /allow update: if signedIn\(\) && request\.auth\.uid == userId && freshClientUpdate\(\)/);
+  assert.match(firebase, /clientBuild,/);
+  assert.match(firebase, /clientWriteId:/);
+  assert.match(html, /clientBuild: BUILD_NUMBER/);
+  assert.match(html, /onWriteDenied: handleUpdateRequired/);
 });

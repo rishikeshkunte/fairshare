@@ -18,16 +18,52 @@ export function setCloudIntent(on) {
  * inside it. A listener therefore cannot write, no matter which module it is
  * in: the write is refused and counted as blockedFromSnapshot.
  */
-export function createGuardedStore(raw, writeGuard) {
+export function createGuardedStore(raw, writeGuard, options = {}) {
   const guarded = { ...raw };
+  const clientBuild = Number(options.clientBuild) || 0;
+
+  // Every write is stamped with this build and a fresh per-write id. Firestore
+  // rules require the id to change on updates, which an old cached client
+  // cannot produce, so its writes are rejected server-side.
+  function stamp(data) {
+    if (!clientBuild || !data || typeof data !== "object" || Array.isArray(data)) return data;
+    return {
+      ...data,
+      clientBuild,
+      clientWriteId: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    };
+  }
+
+  function guardTransaction(tx) {
+    return new Proxy(tx, {
+      get(target, prop) {
+        if (prop === "set") return (ref, data, opts) => target.set(ref, stamp(data), opts);
+        if (prop === "update") return (ref, data) => target.update(ref, stamp(data));
+        const value = target[prop];
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+    });
+  }
+
+  function watchDenied(promise) {
+    if (options.onWriteDenied && promise && typeof promise.catch === "function") {
+      return promise.catch((err) => {
+        if (err && err.code === "permission-denied") {
+          try { options.onWriteDenied(err); } catch { /* ignore */ }
+        }
+        throw err;
+      });
+    }
+    return promise;
+  }
 
   guarded.setDoc = (ref, data, opts, meta) => {
     if (!writeGuard.allow({ label: (meta && meta.label) || "setDoc", docs: 1 })) return Promise.resolve();
-    return raw.setDoc(ref, data, opts);
+    return watchDenied(raw.setDoc(ref, stamp(data), opts));
   };
   guarded.updateDoc = (ref, data, meta) => {
     if (!writeGuard.allow({ label: (meta && meta.label) || "updateDoc", docs: 1 })) return Promise.resolve();
-    return raw.updateDoc(ref, data);
+    return watchDenied(raw.updateDoc(ref, stamp(data)));
   };
   guarded.deleteDoc = (ref, meta) => {
     if (!writeGuard.allow({ label: (meta && meta.label) || "deleteDoc", docs: 1 })) return Promise.resolve();
@@ -35,19 +71,19 @@ export function createGuardedStore(raw, writeGuard) {
   };
   guarded.runTransaction = (db, updateFunction, meta) => {
     if (!writeGuard.allow({ label: (meta && meta.label) || "transaction", docs: 1 })) return Promise.resolve(null);
-    return raw.runTransaction(db, updateFunction);
+    return watchDenied(raw.runTransaction(db, (tx) => updateFunction(guardTransaction(tx))));
   };
   guarded.writeBatch = (db, meta) => {
     const label = (meta && meta.label) || "batch";
     const batch = raw.writeBatch(db);
     let docs = 0;
     return {
-      set(...args) { docs += 1; return batch.set(...args); },
-      update(...args) { docs += 1; return batch.update(...args); },
-      delete(...args) { docs += 1; return batch.delete(...args); },
+      set(ref, data, opts) { docs += 1; return batch.set(ref, stamp(data), opts); },
+      update(ref, data) { docs += 1; return batch.update(ref, stamp(data)); },
+      delete(ref) { docs += 1; return batch.delete(ref); },
       commit() {
         if (!writeGuard.allow({ label, docs: Math.max(1, docs) })) return Promise.resolve();
-        return batch.commit();
+        return watchDenied(batch.commit());
       }
     };
   };
@@ -62,7 +98,7 @@ export function createGuardedStore(raw, writeGuard) {
   return guarded;
 }
 
-export function loadFirebase(config) {
+export function loadFirebase(config, options = {}) {
   if (loaded) return loaded;
   loaded = (async () => {
     const [{ initializeApp }, authMod, storeMod, storageMod] = await Promise.all([
@@ -76,7 +112,7 @@ export function loadFirebase(config) {
     const db = storeMod.getFirestore(app);
     const storage = storageMod.getStorage(app);
     const writeGuard = createWriteGuard();
-    return { app, auth, db, authMod, storeMod: createGuardedStore(storeMod, writeGuard), storageMod, storage, writeGuard };
+    return { app, auth, db, authMod, storeMod: createGuardedStore(storeMod, writeGuard, options), storageMod, storage, writeGuard };
   })().catch((err) => {
     loaded = null;
     throw err;

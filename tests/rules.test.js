@@ -24,8 +24,19 @@ function pairDoc(keys = [ALICE_KEY, BOB_KEY], participants = keys, extra = {}) {
     transactions: [],
     deletedTransactions: [],
     updatedBy: ALICE_RAW,
+    clientBuild: 97,
+    clientWriteId: nextWriteId(),
     ...extra
   };
+}
+
+let writeSeq = 0;
+function nextWriteId() {
+  writeSeq += 1;
+  return `w${String(writeSeq).padStart(8, "0")}`;
+}
+function stamped(data = {}) {
+  return { ...data, clientBuild: 97, clientWriteId: nextWriteId() };
 }
 
 test("Firestore emulator rules", { skip: skipReason }, async (t) => {
@@ -179,7 +190,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     await assertSucceeds(getDoc(doc(aliceDb, "groups", "g1")));
     await assertFails(getDoc(doc(bobDb, "groups", "g1")));
     await assertFails(getDocs(collection(bobDb, "groups")));
-    await assertSucceeds(updateDoc(doc(aliceDb, "groups", "g1"), { name: "Renamed" }));
+    await assertSucceeds(updateDoc(doc(aliceDb, "groups", "g1"), stamped({ name: "Renamed" })));
     await assertFails(updateDoc(doc(bobDb, "groups", "g1"), { name: "Nope" }));
     await assertFails(deleteDoc(doc(bobDb, "groups", "g1")));
 
@@ -189,11 +200,11 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     )));
     assert.equal(listed.size, 1);
 
-    await assertSucceeds(setDoc(doc(aliceDb, "groups", "g2"), {
+    await assertSucceeds(setDoc(doc(aliceDb, "groups", "g2"), stamped({
       ...group,
       id: "g2",
       name: "New group"
-    }));
+    })));
     await assertFails(setDoc(doc(aliceDb, "groups", "g3"), {
       ...group,
       id: "g3",
@@ -225,16 +236,16 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     };
     await env.clearFirestore();
     await seed(["groups", "g1"], group);
-    await assertSucceeds(setDoc(doc(aliceDb, "groups", "g1", "expenses", "expense_t1"), expense));
+    await assertSucceeds(setDoc(doc(aliceDb, "groups", "g1", "expenses", "expense_t1"), stamped(expense)));
     await assertFails(setDoc(doc(bobDb, "groups", "g1", "expenses", "expense_t2"), expense));
     await assertSucceeds(getDocs(collection(aliceDb, "groups", "g1", "expenses")));
     await assertFails(getDocs(collection(bobDb, "groups", "g1", "expenses")));
-    await assertSucceeds(setDoc(doc(aliceDb, "groups", "g1", "members", "email_alice_gmail_com"), {
+    await assertSucceeds(setDoc(doc(aliceDb, "groups", "g1", "members", "email_alice_gmail_com"), stamped({
       displayName: "Alice",
       emailCanonical: ALICE_KEY,
       role: "owner",
       status: "active"
-    }));
+    })));
     await assertFails(setDoc(doc(bobDb, "groups", "g1", "members", "email_bob_outlook_com"), {
       displayName: "Bob",
       emailCanonical: BOB_KEY,
@@ -247,5 +258,26 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     )));
     assert.equal(found.size, 1);
     await assertFails(getDoc(doc(bobDb, "groups", "g1", "members", "email_alice_gmail_com")));
+  });
+
+  await t.test("stale clients without a fresh write stamp are rejected", async () => {
+    await env.clearFirestore();
+    const unstamped = {
+      pairId: "pair1",
+      schemaVersion: 9,
+      participantKeys: [ALICE_KEY, BOB_KEY],
+      participants: [ALICE_KEY, BOB_KEY],
+      transactions: [],
+      deletedTransactions: [],
+      updatedBy: ALICE_RAW
+    };
+    await assertFails(setDoc(pairRef(aliceDb), unstamped));
+    await assertSucceeds(setDoc(pairRef(aliceDb), pairDoc()));
+    const existing = await assertSucceeds(getDoc(pairRef(aliceDb)));
+    await assertFails(setDoc(pairRef(aliceDb), {
+      ...pairDoc(),
+      clientWriteId: existing.data().clientWriteId
+    }));
+    await assertSucceeds(setDoc(pairRef(aliceDb), pairDoc()));
   });
 });
