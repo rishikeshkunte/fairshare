@@ -75,7 +75,9 @@ service cloud.firestore {
 
     // Each signed-in account owns its saved friends roster, independent of groups.
     match /user_profiles/{userId} {
-      allow read, delete: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && request.auth.uid == userId;
+      // Deletes bypass write stamps, so clients may not delete documents.
+      allow delete: if false;
       allow create: if signedIn() && request.auth.uid == userId && freshClientWrite();
       allow update: if signedIn() && request.auth.uid == userId && freshClientUpdate();
     }
@@ -114,23 +116,26 @@ service cloud.firestore {
              'memberEmails', 'members', 'lastJoinToken', 'lastJoinAt', 'updatedAt', 'updatedBy',
              'clientBuild', 'clientWriteId'
            ]);
-      allow delete: if isMember(resource.data);
+      allow delete: if false;
 
       // Normalized group subcollections (migration phase). Membership still uses
       // the legacy memberEmails list until phase 3 switches the client to member
       // documents.
       match /members/{memberId} {
-        allow read, delete: if groupMember(groupId);
+        allow read: if groupMember(groupId);
+        allow delete: if false;
         allow create: if groupMember(groupId) && freshClientWrite();
         allow update: if groupMember(groupId) && freshClientUpdate();
       }
       match /expenses/{expenseId} {
-        allow read, delete: if groupMember(groupId);
+        allow read: if groupMember(groupId);
+        allow delete: if false;
         allow create: if groupMember(groupId) && freshClientWrite();
         allow update: if groupMember(groupId) && freshClientUpdate();
       }
       match /settlements/{settlementId} {
-        allow read, delete: if groupMember(groupId);
+        allow read: if groupMember(groupId);
+        allow delete: if false;
         allow create: if groupMember(groupId) && freshClientWrite();
         allow update: if groupMember(groupId) && freshClientUpdate();
       }
@@ -193,7 +198,7 @@ service cloud.firestore {
       allow create: if signedIn() && validPair(request.resource.data) && freshClientWrite();
       allow update: if pairMember(resource.data) && validPair(request.resource.data)
         && stableMembership() && freshClientUpdate();
-      allow delete: if pairMember(resource.data);
+      allow delete: if false;
     }
 
     match /friend_requests/{requestId} {

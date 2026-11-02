@@ -92,7 +92,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       where("participantKeys", "array-contains", BOB_KEY)
     )));
     assert.equal(bobListed.size, 1);
-    await assertSucceeds(deleteDoc(pairRef(aliceDb)));
+    await assertFails(deleteDoc(pairRef(aliceDb)));
   });
 
   await t.test("creation requires matching canonical participants and the caller", async () => {
@@ -211,7 +211,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       name: "Not allowed",
       memberEmails: [BOB_RAW]
     }));
-    await assertSucceeds(deleteDoc(doc(aliceDb, "groups", "g2")));
+    await assertFails(deleteDoc(doc(aliceDb, "groups", "g2")));
   });
 
   await t.test("normalized group subcollections are member-only", async () => {

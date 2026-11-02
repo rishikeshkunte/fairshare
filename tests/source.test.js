@@ -190,7 +190,7 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
   assert.match(html, /async function createInvite\(type, group\)/);
   assert.match(html, /window\.createFriendInvite = async function\(\)/);
   assert.match(html, /window\.createGroupInvite = async function\(\)/);
-  assert.match(html, /window\.revokeInvite = async function\(token\)/);
+  assert.doesNotMatch(html, /window\.revokeInvite = async function\(token\)/);
   assert.match(html, /window\.acceptInvite = async function\(\)/);
   assert.match(html, /window\.declineInvite = function\(\)/);
   assert.match(html, /24 \* 60 \* 60 \* 1000/);
@@ -589,8 +589,8 @@ test("groups can be left locally or soft-deleted for everyone, with cloud repair
   assert.match(html, /id="btn-delete-group-everyone"/);
   assert.match(html, /deletedAt: Date\.now\(\)/);
   assert.match(html, /cloudData\.deletedAt/);
-  assert.match(html, /window\.pullAllGroupsFromCloud = async function\(\)/);
-  assert.match(html, /window\.purgeDeletedGroupsFromCloud = async function\(\)/);
+  assert.doesNotMatch(html, /window\.pullAllGroupsFromCloud = async function\(\)/);
+  assert.doesNotMatch(html, /window\.purgeDeletedGroupsFromCloud = async function\(\)/);
   assert.match(html, /function removeGroupLocally\(groupId\)/);
 });
 
@@ -629,7 +629,7 @@ test("diagnostics remain available to the developer only", () => {
 
 test("quota saver limits background normalized listeners", () => {
   assert.doesNotMatch(html, /id="toggle-quota-saver"/);
-  assert.match(html, /let quotaSaver = true/);
+  assert.match(html, /const quotaSaver = true/);
   assert.match(html, /if \(quotaSaver && groupId !== appState\.activeGroupId\) return;/);
 });
 
@@ -769,4 +769,11 @@ test("invites expire after 24 hours and the rules cap matches", () => {
   assert.match(html, /Date\.now\(\) \+ 24 \* 60 \* 60 \* 1000/);
   assert.match(rules, /duration\.value\(1, 'd'\)/);
   assert.doesNotMatch(rules, /duration\.value\(7, 'd'\)/);
+});
+
+test("quota saver cannot be disabled by an old preference", () => {
+  assert.match(html, /const quotaSaver = true;/);
+  assert.doesNotMatch(html, /quotaSaver = localStorage/);
+  assert.match(html, /localStorage\.removeItem\("fairshare_quota_saver"\)/);
+  assert.doesNotMatch(html, /id="toggle-quota-saver"/);
 });
