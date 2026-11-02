@@ -1034,6 +1034,7 @@
     import { repairGroupNames } from "./js/groupnames.js";
     import { normalizeLegacyGroup, validateNormalizedGroup } from "./js/groupschema.js";
     import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, stableStringify } from "./js/normalizedsync.js";
+    import { diffFriendsMap, friendsFromCloud, diffDeletedGroupsMap, deletedGroupsFromCloud } from "./js/profileschema.js";
 
     document.body.addEventListener("click", (event) => {
       const node = event.target.closest("[data-call]");
@@ -1068,7 +1069,7 @@
     let quotaSaver = false;
     try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v93";
+    const APP_BUILD = "v94";
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
     console.info("[What's My Share?] build", APP_BUILD);
@@ -2061,60 +2062,50 @@
       return Array.from(merged.values());
     }
 
+    let cloudFriendsMap = {};
+    let cloudDeletedGroupsMap = {};
+    let rosterFlushQueued = false;
+
     function saveFriendsRosterToCloud() {
-      if (!fx || !currentUser || !currentUser.uid || friendsRosterWriteInFlight) return;
-      const payload = mergeFriendRecords(appState.friends || []);
-      const signature = stableStringify(payload);
+      if (!fx || !currentUser || !currentUser.uid) return;
+      if (friendsRosterWriteInFlight) {
+        rosterFlushQueued = true;
+        return;
+      }
+      const friendDelta = diffFriendsMap(appState.friends || [], cloudFriendsMap);
+      const deletedDelta = diffDeletedGroupsMap(appState.deletedGroups || [], cloudDeletedGroupsMap);
+      const friendKeys = Object.keys(friendDelta);
+      const deletedKeys = Object.keys(deletedDelta);
+      // Nothing changed on this device: write nothing. This is what makes a
+      // second device's migration and every idle cycle free.
+      if (!friendKeys.length && !deletedKeys.length) return;
+      const signature = stableStringify({ friendDelta, deletedDelta });
       if (signature === friendsRosterLastSig) return;
       friendsRosterWriteInFlight = true;
       const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
-      fx.storeMod.setDoc(profileRef, {
-        friends: payload,
-        updatedAt: serverTimestamp(fx)
-      }, { merge: true }, { label: "roster" }).then(() => {
+      const payload = { updatedAt: serverTimestamp(fx) };
+      if (friendKeys.length) payload.friendsMap = friendDelta;
+      if (deletedKeys.length) payload.deletedGroupsMap = deletedDelta;
+      fx.storeMod.setDoc(profileRef, payload, { merge: true }, { label: "roster-map" }).then(() => {
         friendsRosterLastSig = signature;
+        cloudFriendsMap = { ...cloudFriendsMap, ...friendDelta };
+        cloudDeletedGroupsMap = { ...cloudDeletedGroupsMap, ...deletedDelta };
       }).catch(err => {
         console.warn("Friends roster cloud save note:", err);
       }).finally(() => {
         friendsRosterWriteInFlight = false;
+        if (rosterFlushQueued) {
+          rosterFlushQueued = false;
+          saveFriendsRosterToCloud();
+        }
       });
     }
 
-    // Account-wide group deletions. deletedGroups lives on user_profiles/{uid}
-    // so a group deleted on one device stays deleted on every device signed in
-    // with the same Gmail account, while other members keep their own copy.
+    // Account-wide group deletions live in `deletedGroupsMap` on the profile,
+    // so a deletion on one device applies to every device of this account while
+    // other members keep their copy. Kept as a separate call site for clarity.
     function saveDeletedGroupsToCloud() {
-      if (!fx || !currentUser || !currentUser.uid) return;
-      if (deletedGroupsWriteInFlight) {
-        deletedGroupsWriteQueued = true;
-        return;
-      }
-      deletedGroupsWriteInFlight = true;
-      const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
-      fx.storeMod.runTransaction(fx.db, async (transaction) => {
-        const snapshot = await transaction.get(profileRef);
-        const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
-        const cloudIds = (Array.isArray(cloudData.deletedGroups) ? cloudData.deletedGroups : []).map(String);
-        const cloudSet = new Set(cloudIds);
-        const localNew = (appState.deletedGroups || []).map(String).filter(id => !cloudSet.has(id));
-        const merged = Array.from(new Set([...cloudIds, ...(appState.deletedGroups || []).map(String)]));
-        appState.deletedGroups = merged;
-        // Nothing new to add: commit nothing so the profile document (and its
-        // server timestamp) is left untouched.
-        if (!localNew.length && snapshot.exists()) return;
-        transaction.set(profileRef, {
-          deletedGroups: merged,
-          updatedAt: serverTimestamp(fx)
-        }, { merge: true });
-      }, { label: "deleted-groups-tx" }).catch(err => {
-        console.warn("Deleted groups cloud save note:", err?.code || err);
-      }).finally(() => {
-        deletedGroupsWriteInFlight = false;
-        if (deletedGroupsWriteQueued) {
-          deletedGroupsWriteQueued = false;
-          saveDeletedGroupsToCloud();
-        }
-      });
+      saveFriendsRosterToCloud();
     }
 
     function listenToFriendsRoster(user) {
@@ -2122,12 +2113,17 @@
       if (unsubscribeFriendsRosterListener) unsubscribeFriendsRosterListener();
       unsubscribeFriendsRosterListener = watchDoc(fx, "user_profiles", user.uid, snapshot => {
         const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
-        const cloudFriends = Array.isArray(cloudData.friends) ? cloudData.friends : [];
+        cloudFriendsMap = cloudData.friendsMap && typeof cloudData.friendsMap === "object" ? cloudData.friendsMap : {};
+        cloudDeletedGroupsMap = cloudData.deletedGroupsMap && typeof cloudData.deletedGroupsMap === "object" ? cloudData.deletedGroupsMap : {};
+        const cloudFriends = friendsFromCloud(
+          cloudFriendsMap,
+          Array.isArray(cloudData.friends) ? cloudData.friends : []
+        );
         const mergedFriends = mergeFriendRecords(cloudFriends, appState.friends || []);
         const localChanged = stableStringify(mergedFriends) !== stableStringify(appState.friends || []);
         appState.friends = mergedFriends;
 
-        const cloudDeleted = Array.isArray(cloudData.deletedGroups) ? cloudData.deletedGroups.map(String) : [];
+        const cloudDeleted = deletedGroupsFromCloud(cloudDeletedGroupsMap, cloudData.deletedGroups || []);
         const mergedDeleted = Array.from(new Set([
           ...(appState.deletedGroups || []).map(String),
           ...cloudDeleted

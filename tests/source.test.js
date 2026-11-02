@@ -646,7 +646,7 @@ test("normalized write signatures ignore Firestore key order", () => {
 
 test("roster and legacy membership comparisons ignore Firestore key order", () => {
   assert.match(html, /const localChanged = stableStringify\(mergedFriends\) !== stableStringify\(appState\.friends \|\| \[\]\)/);
-  assert.match(html, /const signature = stableStringify\(payload\);\s*if \(signature === friendsRosterLastSig\) return;/);
+  assert.match(html, /const signature = stableStringify\(\{ friendDelta, deletedDelta \}\);\s*if \(signature === friendsRosterLastSig\) return;/);
   assert.match(html, /stableStringify\(group\.members\) !== stableStringify\(cloudMembers\)/);
   assert.match(html, /stableStringify\(localGroup\.memberLinks \|\| \{\}\) !== stableStringify\(cloudData\.memberLinks\)/);
 });
@@ -655,7 +655,7 @@ test("snapshot listeners never write to the cloud", () => {
   assert.match(html, /Snapshot listeners are read-only/);
   assert.match(html, /Repairs stay local/);
   assert.match(html, /A missing cloud document must never be recreated from a listener/);
-  const roster = html.slice(html.indexOf("function listenToFriendsRoster"), html.indexOf("function friendRecordKey"));
+  const roster = html.slice(html.indexOf("function listenToFriendsRoster"), html.indexOf("// --- DOM Elements"));
   assert.doesNotMatch(roster, /saveFriendsRosterToCloud\(\)|saveDeletedGroupsToCloud\(\)/);
   const groupListener = html.slice(html.indexOf("function listenToCloudGroup"), html.indexOf("function refreshDirectListeners"));
   assert.doesNotMatch(groupListener, /saveState\(/);
@@ -677,8 +677,10 @@ test("all remote writes share one guarded path", () => {
 });
 
 test("background commands skip writes when the cloud already matches", () => {
-  assert.match(html, /const localNew = \(appState\.deletedGroups \|\| \[\]\)\.map\(String\)\.filter\(id => !cloudSet\.has\(id\)\)/);
-  assert.match(html, /if \(!localNew\.length && snapshot\.exists\(\)\) return;/);
+  assert.match(html, /const friendDelta = diffFriendsMap\(appState\.friends \|\| \[\], cloudFriendsMap\)/);
+  assert.match(html, /const deletedDelta = diffDeletedGroupsMap\(appState\.deletedGroups \|\| \[\], cloudDeletedGroupsMap\)/);
+  assert.match(html, /if \(!friendKeys\.length && !deletedKeys\.length\) return;/);
+  assert.match(html, /payload\.friendsMap = friendDelta/);
   assert.match(html, /if \(snapshot\.exists\(\) && stableStringify\(pick\(payload\)\) === stableStringify\(pick\(remote\)\)\) return;/);
 });
 

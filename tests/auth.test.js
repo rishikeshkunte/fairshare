@@ -107,12 +107,15 @@ test("cloud sync status is visible without exposing account data", () => {
 
 test("group deletions sync across devices of the same account", () => {
   const save = between(html, "function saveDeletedGroupsToCloud()", "function listenToFriendsRoster");
-  assert.match(save, /user_profiles", currentUser\.uid/);
-  assert.match(save, /cloudData\.deletedGroups/);
-  assert.match(save, /deletedGroups: merged/);
+  assert.match(save, /saveFriendsRosterToCloud\(\)/);
+
+  const writer = between(html, "function saveFriendsRosterToCloud()", "function saveDeletedGroupsToCloud");
+  assert.match(writer, /user_profiles", currentUser\.uid/);
+  assert.match(writer, /diffDeletedGroupsMap/);
+  assert.match(writer, /deletedGroupsMap = deletedDelta/);
 
   const listener = between(html, "function listenToFriendsRoster(user)", "\n    // --- DOM Elements");
-  assert.match(listener, /cloudData\.deletedGroups/);
+  assert.match(listener, /deletedGroupsFromCloud/);
   assert.match(listener, /delete appState\.groups\[groupId\]/);
   assert.doesNotMatch(listener, /saveDeletedGroupsToCloud\(\)/);
 
@@ -135,6 +138,6 @@ test("phone contact entry is removed and sign-in copy says Gmail", () => {
 });
 
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v93"/);
+  assert.match(sw, /const CACHE = "fairshare-v94"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });
