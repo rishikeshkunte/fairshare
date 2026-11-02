@@ -721,3 +721,15 @@ test("renderAll never pushes cloud writes", () => {
   assert.ok(end > start, "renderAll can be located");
   assert.doesNotMatch(body, /pushAllDirectPairs\(|syncDirectPairExpense\(|saveState\(|saveFriendsRosterToCloud\(/);
 });
+
+test("renders never tear down a focused expense field", () => {
+  const split = html.slice(html.indexOf("function renderSplitBreakdown()"), html.indexOf("window.updateEqualPreview"));
+  assert.match(split, /splitBreakdownContainer\.contains\(document\.activeElement\)/);
+
+  const start = html.indexOf("function renderAll()");
+  const end = html.indexOf("\n    // --- Firebase Auth", start);
+  const render = html.slice(start, end);
+  assert.match(render, /typingInExpenseForm/);
+  assert.match(render, /if \(!typingInExpenseForm\) renderMembers\(\);/);
+  assert.match(html, /payerSelect && document\.activeElement !== payerSelect/);
+});
