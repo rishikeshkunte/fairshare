@@ -246,7 +246,7 @@ service cloud.firestore {
         && request.resource.data.type in ["group", "friend"]
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt < request.time + duration.value(7, 'd')
+        && request.resource.data.expiresAt < request.time + duration.value(1, 'd')
         && (
           request.resource.data.type == "friend"
           || (

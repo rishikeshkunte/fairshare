@@ -193,7 +193,7 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
   assert.match(html, /window\.revokeInvite = async function\(token\)/);
   assert.match(html, /window\.acceptInvite = async function\(\)/);
   assert.match(html, /window\.declineInvite = function\(\)/);
-  assert.match(html, /48 \* 60 \* 60 \* 1000/);
+  assert.match(html, /24 \* 60 \* 60 \* 1000/);
   assert.match(html, /Old invite links are no longer supported/);
 });
 
@@ -630,7 +630,7 @@ test("sync health and sanitized diagnostics are available for support", () => {
 
 test("quota saver limits background normalized listeners", () => {
   assert.match(html, /id="toggle-quota-saver"/);
-  assert.match(html, /let quotaSaver = false/);
+  assert.match(html, /let quotaSaver = true/);
   assert.match(html, /if \(quotaSaver && groupId !== appState\.activeGroupId\) return;/);
   assert.match(html, /fairshare_quota_saver/);
 });
@@ -755,4 +755,20 @@ test("rules enforce the current-client write fence", () => {
   assert.match(firebase, /clientWriteId:/);
   assert.match(html, /clientBuild: BUILD_NUMBER/);
   assert.match(html, /onWriteDenied: handleUpdateRequired/);
+});
+
+test("ordinary users do not see maintenance or invite-management panels", () => {
+  assert.match(html, /id="invites-card"[^>]*hidden/);
+  assert.match(html, /id="sync-card"[^>]*hidden/);
+  assert.doesNotMatch(html, /listenToInvites\(user\);/);
+  assert.match(html, /id="app-build-footer"/);
+  assert.match(html, /fairshare_debug/);
+  assert.match(html, /data-call="exportMyData"/);
+  assert.match(html, /window\.exportMyData = function\(\)/);
+});
+
+test("invites expire after 24 hours and the rules cap matches", () => {
+  assert.match(html, /Date\.now\(\) \+ 24 \* 60 \* 60 \* 1000/);
+  assert.match(rules, /duration\.value\(1, 'd'\)/);
+  assert.doesNotMatch(rules, /duration\.value\(7, 'd'\)/);
 });

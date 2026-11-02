@@ -591,17 +591,22 @@
     <div class="card account-settings-card">
       <h2>Settings</h2>
       <div id="account-actions-slot"></div>
+      <div style="margin-top:14px;">
+        <button type="button" class="btn btn-secondary" data-call="exportMyData">Download my data</button>
+        <p class="group-hint" style="margin-top:8px;">Saves a JSON copy of your groups, expenses, settlements and contacts.</p>
+      </div>
+      <p id="app-build-footer" class="group-hint" style="margin-top:14px; cursor:default;">What's My Share?</p>
     </div>
-    <div class="card" id="invites-card" style="margin-top:16px;">
+    <div class="card" id="invites-card" style="margin-top:16px;" hidden>
       <div class="card-header-row">
         <div>
           <h2>Invite links</h2>
-          <span style="font-size:0.82rem; color:var(--muted);">Secure links expire after 48 hours. Revoke any active link.</span>
+          <span style="font-size:0.82rem; color:var(--muted);">Secure links expire after 24 hours.</span>
         </div>
       </div>
       <div id="invites-list" style="margin-top:12px;"></div>
     </div>
-    <div class="card" id="sync-card" style="margin-top:16px;">
+    <div class="card" id="sync-card" style="margin-top:16px;" hidden>
       <div class="card-header-row">
         <div>
           <h2>Sync &amp; app data</h2>
@@ -787,7 +792,7 @@
               <button type="button" class="btn btn-secondary" data-call="shareViaWhatsApp">Share via WhatsApp</button>
             </div>
             <p id="invite-link-note" style="font-size:0.75rem; color:var(--muted); margin:8px 0 0; line-height:1.4;">
-              Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from You -> Invite links.
+              Friend invite links expire in 24 hours and can be used by multiple people.
             </p>
           </div>
 
@@ -1066,10 +1071,10 @@
     const membershipHydrated = new Set();
     const normalizedWrittenByGroup = new Map();
     const normalizedHydrated = new Set();
-    let quotaSaver = false;
-    try { quotaSaver = localStorage.getItem("fairshare_quota_saver") === "1"; } catch { /* ignore */ }
+    let quotaSaver = true;
+    try { quotaSaver = localStorage.getItem("fairshare_quota_saver") !== "0"; } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v97";
+    const APP_BUILD = "v98";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -6853,7 +6858,7 @@
       if (balancesScopeLabel) balancesScopeLabel.textContent = g.id ? `Active group: ${g.name}` : "No group selected";
       const inviteNote = document.getElementById("invite-link-note");
       if (inviteNote) {
-        inviteNote.textContent = "Friend invite links expire in 48 hours, can be used by multiple people, and can be revoked from You -> Invite links.";
+        inviteNote.textContent = "Friend invite links expire in 24 hours and can be used by multiple people.";
       }
       const manageCard = document.getElementById("group-management-card");
       if (manageCard) manageCard.hidden = groups.length === 0;
@@ -6878,7 +6883,6 @@
       renderAnalytics();
       renderTransactions();
       renderFriendsRoster();
-      renderInvites();
     }
 
     // --- Firebase Auth & Firestore Sync (loaded only for sign-in) ---
@@ -7168,7 +7172,6 @@
       // Friend contacts belong to the signed-in account, not to a particular group
       // or browser's local storage.
       listenToFriendsRoster(user);
-      listenToInvites(user);
       listenToMemberships(user);
       processPendingInvite();
 
@@ -7763,6 +7766,52 @@
       URL.revokeObjectURL(url);
       toast("Diagnostics downloaded.");
     };
+
+    // User-facing data export. This is the only data tool ordinary users need.
+    window.exportMyData = function() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        schemaVersion: appState.schemaVersion || 0,
+        groups: appState.groups || {},
+        directTransactions: appState.directTransactions || [],
+        deletedTransactions: appState.deletedTransactions || [],
+        friends: appState.friends || []
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `whatsmyshare-data-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast("Your data has been downloaded.");
+    };
+
+    // The maintenance panel is developer-only: five taps on the build line, or
+    // ?debug=1. Ordinary users only see the friendly app version text.
+    const buildFooter = document.getElementById("app-build-footer");
+    if (buildFooter) {
+      buildFooter.textContent = `What's My Share? ${APP_BUILD}`;
+      let buildTaps = 0;
+      let tapTimer = 0;
+      buildFooter.addEventListener("click", () => {
+        buildTaps += 1;
+        window.clearTimeout(tapTimer);
+        tapTimer = window.setTimeout(() => { buildTaps = 0; }, 1500);
+        if (buildTaps < 5) return;
+        buildTaps = 0;
+        try { localStorage.setItem("fairshare_debug", "1"); } catch { /* ignore */ }
+        document.getElementById("sync-card")?.removeAttribute("hidden");
+        toast("Developer tools enabled.");
+      });
+    }
+    try {
+      const debug = new URLSearchParams(window.location.search).get("debug") === "1"
+        || localStorage.getItem("fairshare_debug") === "1";
+      if (debug) document.getElementById("sync-card")?.removeAttribute("hidden");
+    } catch { /* ignore */ }
 
     const quotaSaverToggle = document.getElementById("toggle-quota-saver");
     if (quotaSaverToggle) {
@@ -8566,7 +8615,7 @@
           createdByEmail: myEmail,
           createdByName: myName,
           createdAt: serverTimestamp(fx),
-          expiresAt: fx.storeMod.Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000),
+          expiresAt: fx.storeMod.Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
           revoked: false,
           uses: 0
         });
@@ -8582,7 +8631,7 @@
       const url = inviteUrlFor(token);
       try {
         await navigator.clipboard.writeText(url);
-        toast(`${label} copied. It expires in 48 hours. Revoke it from You -> Invite links.`);
+        toast(`${label} copied. It expires in 24 hours.`);
       } catch {
         await askPrompt({ message: `${label}:`, defaultValue: url });
       }
@@ -8607,14 +8656,14 @@
       const toEmail = (inputEl ? inputEl.value : "").trim();
       const myName = myInviteName();
       const subject = encodeURIComponent(`Connect with ${myName} on What's My Share?`);
-      const body = encodeURIComponent(`Hey! I am using What's My Share? to track and split expenses. Connect with me using this link:\n${inviteUrlFor(token)}\n\nThe link expires in 48 hours. Sign in with Gmail to sync.\n\nCheers`);
+      const body = encodeURIComponent(`Hey! I am using What's My Share? to track and split expenses. Connect with me using this link:\n${inviteUrlFor(token)}\n\nThe link expires in 24 hours. Sign in with Gmail to sync.\n\nCheers`);
       window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`, "_blank");
     };
 
     window.shareViaWhatsApp = async function() {
       const token = await createInvite("friend");
       if (!token) return;
-      const text = encodeURIComponent(`Hey! Connect with me on What's My Share? to track and split expenses: ${inviteUrlFor(token)} (expires in 48 hours)`);
+      const text = encodeURIComponent(`Hey! Connect with me on What's My Share? to track and split expenses: ${inviteUrlFor(token)} (expires in 24 hours)`);
       window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
     };
 
@@ -8749,8 +8798,8 @@
         if (title) title.textContent = data.type === "group" ? "Group invitation" : "Friend invitation";
         if (desc) {
           desc.textContent = data.type === "group"
-            ? `${inviter} invited you to join "${data.groupName || "their group"}". This link expires in 48 hours and can be used by multiple people.`
-            : `${inviter} wants to connect with you on What's My Share?. This link expires in 48 hours and can be used by multiple people.`;
+            ? `${inviter} invited you to join "${data.groupName || "their group"}". This link expires in 24 hours and can be used by multiple people.`
+            : `${inviter} wants to connect with you on What's My Share?. This link expires in 24 hours and can be used by multiple people.`;
         }
         if (modal) modal.classList.add("active");
       } catch (err) {
