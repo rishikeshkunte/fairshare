@@ -425,7 +425,7 @@
     <div id="balances-settings-overlay" class="balances-overlay" hidden>
       <div class="balances-sheet" role="dialog" aria-modal="true" aria-labelledby="balances-settings-title">
         <div class="balances-sheet-head">
-          <strong id="balances-settings-title">Balances settings</strong>
+          <strong id="balances-settings-title">Display options</strong>
           <button type="button" class="btn btn-secondary" data-call="closeBalancesSettings">Close</button>
         </div>
         <div class="balances-sheet-body" id="balances-settings-body"></div>
@@ -1064,7 +1064,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v110";
+    const APP_BUILD = "v111";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3527,10 +3527,32 @@
       const visibility = page.querySelector(".settlement-filter");
 
       if (settingsBody) {
-        if (scopeBar) settingsBody.appendChild(scopeBar);
         if (visibility) settingsBody.appendChild(visibility);
         if (simplify) settingsBody.appendChild(simplify);
       }
+      const heading = page.querySelector(".home-section-heading");
+      const backBar = page.querySelector(".page-back-bar");
+      if (heading) {
+        let actions = heading.querySelector(".balances-heading-actions");
+        if (!actions) {
+          actions = document.createElement("div");
+          actions.className = "balances-heading-actions";
+          heading.appendChild(actions);
+        }
+        if (scopeBar) {
+          scopeBar.classList.add("balances-scope-inline");
+          actions.appendChild(scopeBar);
+        }
+        const recordBtn = page.querySelector('[data-call="openSettleUp"]');
+        const displayBtn = page.querySelector('[data-call="openBalancesSettings"]');
+        if (recordBtn) actions.appendChild(recordBtn);
+        if (displayBtn) {
+          displayBtn.textContent = "Display options";
+          displayBtn.setAttribute("aria-label", "Balance display options");
+          actions.appendChild(displayBtn);
+        }
+      }
+      if (backBar) backBar.remove();
       if (settleBody && settle) settleBody.appendChild(settle);
       if (layout && memberCard) layout.insertBefore(memberCard, layout.firstChild);
       if (side && summary) {

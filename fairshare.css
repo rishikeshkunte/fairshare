@@ -1728,3 +1728,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 @media (max-width: 1100px) and (min-width: 861px) {
   .balances-layout { grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); gap: 14px; }
 }
+
+
+/* Balances header: tight spacing, one clear action row */
+.home-balance-details > .home-section-heading { margin-bottom: 6px; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.balances-heading-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.balances-scope-inline { display: flex; align-items: center; gap: 6px; margin: 0; }
+.balances-scope-inline label { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--muted); margin: 0; }
+.balances-scope-inline select { width: auto; min-width: 150px; padding: 6px 10px; font-size: .82rem; }
+.balances-summary-strip { margin: 0 0 10px; }
+.balances-heading-actions .btn { padding: 7px 12px; font-size: .82rem; }
+@media (max-width: 860px) {
+  .balances-heading-actions { width: 100%; }
+  .balances-heading-actions .balances-scope-inline { flex: 1 1 100%; }
+  .balances-heading-actions .balances-scope-inline select { flex: 1; min-width: 0; }
+}
