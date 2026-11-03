@@ -1064,7 +1064,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v109";
+    const APP_BUILD = "v110";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3537,7 +3537,9 @@
         const strip = document.createElement("div");
         strip.className = "balances-summary-strip";
         strip.appendChild(summary);
-        side.replaceWith(strip);
+        // The strip belongs above the two-pane grid, not inside it.
+        if (layout && layout.parentElement) layout.parentElement.insertBefore(strip, layout);
+        side.remove();
       }
 
       const body = document.getElementById("member-balance-body");
