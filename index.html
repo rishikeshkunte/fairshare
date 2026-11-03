@@ -1036,7 +1036,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v103";
+    const APP_BUILD = "v104";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7835,7 +7835,7 @@
         const key = normalizedWriteKey(collection, doc.id);
         const signature = stableStringify(doc);
         if (written.get(key) === signature) return;
-        ops.push({ ref: fx.storeMod.doc(groupRef, collection, doc.id), data: doc, key, signature });
+        ops.push({ ref: fx.storeMod.doc(groupRef, collection, doc.id), data: doc, key, signature, merge: false });
       };
       plan.members.forEach(member => put("members", member));
       plan.expenses.forEach(expense => put("expenses", expense));
@@ -7863,7 +7863,8 @@
           ref: fx.storeMod.doc(groupRef, "members", id),
           data: retired,
           key,
-          signature: stableStringify(retired)
+          signature: stableStringify(retired),
+          merge: true
         });
       }
       plan.tombstones.forEach(tombstone => {
@@ -7872,13 +7873,13 @@
         const key = normalizedWriteKey(collectionName, docId);
         const signature = `deleted:${tombstone.deletedAt}`;
         if (written.get(key) === signature) return;
-        ops.push({ ref: fx.storeMod.doc(groupRef, collectionName, docId), data: { deletedAt: Number(tombstone.deletedAt) || Date.now() }, key, signature });
+        ops.push({ ref: fx.storeMod.doc(groupRef, collectionName, docId), data: { deletedAt: Number(tombstone.deletedAt) || Date.now() }, key, signature, merge: true });
       });
       if (ops.length) {
         for (let index = 0; index < ops.length; index += 450) {
           const chunk = ops.slice(index, index + 450);
           const batch = fx.storeMod.writeBatch(fx.db, { label: "normalized-ledger" });
-          chunk.forEach(op => batch.set(op.ref, op.data, { merge: true }));
+          chunk.forEach(op => { if (op.merge) batch.set(op.ref, op.data, { merge: true }); else batch.set(op.ref, op.data); });
           await batch.commit();
           chunk.forEach(op => written.set(op.key, op.signature));
         }

@@ -806,3 +806,9 @@ test("the UPI payment UI is removed", () => {
   assert.doesNotMatch(html, /qrcode/);
   assert.doesNotMatch(sw, /qrcode\.js/);
 });
+
+test("normalized ledger documents replace instead of merging stale share keys", () => {
+  assert.ok(html.includes("signature, merge: false"));
+  assert.ok(html.includes("if (op.merge) batch.set(op.ref, op.data, { merge: true }); else batch.set(op.ref, op.data);"));
+  assert.ok(html.includes("signature, merge: true"));
+});
