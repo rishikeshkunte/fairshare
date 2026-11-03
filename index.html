@@ -1064,7 +1064,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v108";
+    const APP_BUILD = "v109";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7385,6 +7385,12 @@
                 localGroup.simplifyDebts = cloudData.simplifyDebts;
                 changed = true;
               }
+              const normalizedStamp = cloudData.normalizedAt?.toMillis?.() || Number(cloudData.normalizedAt) || 0;
+              if (groupId !== appState.activeGroupId && !normalizedUnsubs.has(groupId)
+                && normalizedStamp && localGroup._cloudNormAt !== normalizedStamp) {
+                localGroup._cloudNormAt = normalizedStamp;
+                refreshInactiveGroupLedgers({ groupId });
+              }
               listenToNormalizedGroup(groupId);
               return;
             }
@@ -8324,6 +8330,70 @@
       });
     }
 
+    // With quota saver on, inactive groups have no listeners, so their ledgers
+    // (and therefore Home's overall balance) would stay stale until opened.
+    // Refresh them with one-off reads on lifecycle events, throttled.
+    let lastInactiveRefreshAt = 0;
+    async function refreshInactiveGroupLedgers(options = {}) {
+      if (!fx || !currentUser) return;
+      const onlyGroupId = String(options.groupId || '');
+      if (!onlyGroupId) {
+        const now = Date.now();
+        if (now - lastInactiveRefreshAt < 5 * 60 * 1000) return;
+        lastInactiveRefreshAt = now;
+      }
+      let changed = false;
+      for (const group of Object.values(appState.groups || {})) {
+        if (!group || !group.id || !group.normalizedVersion) continue;
+        if (onlyGroupId && group.id !== onlyGroupId) continue;
+        if (group.id === appState.activeGroupId) continue;
+        if (normalizedUnsubs.has(group.id)) continue;
+        try {
+          const ref = fx.storeMod.doc(fx.db, "groups", group.id);
+          const [memberSnap, expenseSnap, settlementSnap] = await Promise.all([
+            fx.storeMod.getDocs(fx.storeMod.collection(ref, "members")),
+            fx.storeMod.getDocs(fx.storeMod.collection(ref, "expenses")),
+            fx.storeMod.getDocs(fx.storeMod.collection(ref, "settlements"))
+          ]);
+          const memberDocs = memberSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const expenseDocs = expenseSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const settlementDocs = settlementSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const projected = projectGroupTransactions({ memberDocs, expenseDocs, settlementDocs });
+          const merged = mergePairLedger({
+            localTransactions: group.transactions || [],
+            remoteTransactions: projected,
+            localDeleted: group.deletedTransactions || [],
+            remoteDeleted: []
+          });
+          const nextTransactions = preserveLocalReceipts(merged.transactions, group.transactions || []);
+          if (stableStringify(nextTransactions) !== stableStringify(group.transactions || [])) {
+            group.transactions = nextTransactions;
+            changed = true;
+          }
+          const members = projectGroupMembers(memberDocs);
+          if (members.length) {
+            const names = members.map(member => member.name);
+            if (stableStringify(names) !== stableStringify(group.members || [])) {
+              group.members = names;
+              changed = true;
+            }
+            group.memberLinks = { ...(group.memberLinks || {}), ...memberLinksFromDocs(memberDocs) };
+          }
+          const written = new Map();
+          memberDocs.forEach(doc => written.set(normalizedWriteKey("members", doc.id), stableStringify(signatureDoc(doc))));
+          expenseDocs.forEach(doc => written.set(normalizedWriteKey("expenses", doc.id), stableStringify(signatureDoc(doc))));
+          settlementDocs.forEach(doc => written.set(normalizedWriteKey("settlements", doc.id), stableStringify(signatureDoc(doc))));
+          normalizedWrittenByGroup.set(group.id, written);
+        } catch (err) {
+          console.warn("Inactive group refresh note:", err?.code || err);
+        }
+      }
+      if (changed) {
+        persistLocalState();
+        renderAll();
+      }
+    }
+
     function flushPendingLocalMutations(options = {}) {
       if (!fx || !currentUser) return;
       saveFriendsRosterToCloud();
@@ -8335,6 +8405,7 @@
       Object.values(appState.groups || {}).forEach(group => {
         if (group.normalizedVersion) scheduleNormalizedGroupWrite(group);
       });
+      refreshInactiveGroupLedgers();
     }
 
     function refreshDirectListeners() {

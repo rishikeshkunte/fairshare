@@ -857,3 +857,10 @@ test("balances settings and settle share one overlay component", () => {
   assert.match(html, /data-call="closeSettleOverlay"/);
   assert.match(html, /data-call="openBalancesSettings"/);
 });
+
+test("inactive group ledgers refresh without background listeners", () => {
+  assert.ok(html.includes("async function refreshInactiveGroupLedgers(options = {})"));
+  assert.ok(html.includes("refreshInactiveGroupLedgers({ groupId })"));
+  assert.ok(html.includes("lastInactiveRefreshAt < 5 * 60 * 1000"));
+  assert.ok(html.includes("localGroup._cloudNormAt"));
+});

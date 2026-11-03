@@ -478,7 +478,7 @@ input:focus, select:focus, textarea:focus {
 .metric-val { font-size: 1.35rem; font-weight: 700; margin-top: 4px; }
 .balances-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -1110,7 +1110,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 @media (min-width: 1200px) {
   .home-balance-details .balances-layout {
-    grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.5fr) minmax(340px, 1fr);
     gap: 22px;
   }
   .home-balance-details .settlement-card {
@@ -1700,4 +1700,31 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .balances-members-card > .card-header-row > div { display: none; }
   .balances-overlay { align-items: flex-end; padding: 0; }
   .balances-sheet { max-width: none; border-radius: 16px 16px 0 0; max-height: 82vh; }
+}
+
+
+/* Compact balances presentation */
+.balances-summary-strip { margin: 0 0 12px; }
+.balances-summary-strip .summary-grid {
+  display: flex; flex-wrap: wrap; gap: 8px; margin: 0;
+}
+.balances-summary-strip .metric-box {
+  flex: 0 1 auto; display: flex; align-items: baseline; gap: 8px;
+  padding: 8px 12px; border-radius: 10px; box-shadow: none;
+}
+.balances-summary-strip .metric-label {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700;
+}
+.balances-summary-strip .metric-val {
+  font-size: 1rem; margin: 0; font-weight: 750;
+}
+.balances-members-card .card-header-row { margin-bottom: 6px; }
+.balances-members-card .member-spend-table th,
+.balances-members-card .member-spend-table td { padding: 8px 10px; font-size: .85rem; }
+.balances-members-card .member-spend-table th { font-size: .72rem; }
+.home-balance-details .settlement-card { padding: 16px; }
+.home-balance-details .settlement-list { gap: 6px; }
+.home-balance-details .settlement-list .settlement-card { padding: 10px 12px; }
+@media (max-width: 1100px) and (min-width: 861px) {
+  .balances-layout { grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr); gap: 14px; }
 }
