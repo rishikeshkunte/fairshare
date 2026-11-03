@@ -826,3 +826,12 @@ test("settle up opens inside the groups tab", () => {
   assert.match(html, /function mountSettleBox\(target = "home"\)/);
   assert.match(html, /if \(target !== "groups"\) navigateTo\("balances"\)/);
 });
+
+test("group management is hidden until Manage is chosen", () => {
+  assert.match(html, /id="group-management-card" hidden/);
+  assert.match(html, /if \(card\) card\.hidden = !hasManaged;/);
+  assert.doesNotMatch(html, /manageCard\.hidden = groups\.length === 0/);
+  assert.match(html, /data-call="closeGroupManagement"/);
+  assert.match(html, /window\.closeGroupManagement = function\(\)/);
+  assert.match(html, /data-call="openGroupManagement"/);
+});

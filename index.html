@@ -638,12 +638,13 @@
         </div>
 
         <!-- Group Management -->
-        <div class="card" id="group-management-card">
+        <div class="card" id="group-management-card" hidden>
           <div class="card-header-row">
             <div>
-              <h2 style="margin:0;">Group management</h2>
-              <span style="font-size:0.82rem; color:var(--muted);">Choose a group, then manage its members, currency, and settings.</span>
+              <h2 id="group-management-title" style="margin:0;">Manage group</h2>
+              <span style="font-size:0.82rem; color:var(--muted);">Members, currency, invites and group settings.</span>
             </div>
+            <button type="button" class="btn btn-secondary" data-call="closeGroupManagement">Done</button>
           </div>
 
           <div class="form-group" style="margin-bottom:12px;" hidden>
@@ -1039,7 +1040,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v105";
+    const APP_BUILD = "v106";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3452,9 +3453,20 @@
         entries.map(([id, group]) => `<option value="${escapeHtml(id)}">${escapeHtml(group.name)}</option>`).join("");
       manageGroupSelect.value = current;
       const hasManaged = Boolean(current);
+      const card = document.getElementById("group-management-card");
+      if (card) card.hidden = !hasManaged;
+      const title = document.getElementById("group-management-title");
+      if (title) title.textContent = hasManaged
+        ? `Manage ${appState.groups[current].name || "group"}`
+        : "Manage group";
       if (groupManagementBody) groupManagementBody.hidden = !hasManaged;
-      if (groupManagementHint) groupManagementHint.hidden = hasManaged;
+      if (groupManagementHint) groupManagementHint.hidden = true;
     }
+
+    window.closeGroupManagement = function() {
+      managedGroupId = "";
+      renderManageGroupSelector();
+    };
 
     function switchActiveGroup(groupId, options = {}) {
       if (!groupId || !appState.groups[groupId]) return;
@@ -6839,8 +6851,6 @@
       if (inviteNote) {
         inviteNote.textContent = "Friend invite links expire in 24 hours and can be used by multiple people.";
       }
-      const manageCard = document.getElementById("group-management-card");
-      if (manageCard) manageCard.hidden = groups.length === 0;
       if (currencySelect && document.activeElement !== currencySelect) {
         const known = ["₹", "$", "€", "£", "¥"];
         [...currencySelect.options].forEach((option) => { if (option.dataset.extra === "1") option.remove(); });
