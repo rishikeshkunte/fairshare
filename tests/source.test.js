@@ -849,13 +849,13 @@ test("balances use two panes on desktop and one-tap sections on mobile", () => {
   assert.match(html, /function organizeBalancesPage\(\)/);
 });
 
-test("balances settings and settle share one overlay component", () => {
-  assert.match(html, /id="balances-settings-overlay"/);
+test("settlement controls live in the settlements card", () => {
+  assert.doesNotMatch(html, /id="balances-settings-overlay"/);
+  assert.doesNotMatch(html, /data-call="openBalancesSettings"/);
   assert.match(html, /id="settle-overlay"/);
-  assert.match(html, /function openBalancesOverlay\(/);
-  assert.match(html, /function closeBalancesOverlays\(/);
   assert.match(html, /data-call="closeSettleOverlay"/);
-  assert.match(html, /data-call="openBalancesSettings"/);
+  assert.match(html, /settlementCard\.appendChild\(simplify\)/);
+  assert.match(html, /id="settlement-visibility"/);
 });
 
 test("inactive group ledgers refresh without background listeners", () => {

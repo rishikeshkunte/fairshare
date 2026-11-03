@@ -305,7 +305,6 @@
     <div class="page-back-bar">
       <button type="button" class="btn-back-home" data-call="navigateTo" data-arg="home">← Back to Home</button>
       <button type="button" class="btn btn-settle" style="padding:6px 12px; font-size:0.82rem;" data-call="openSettleUp">Record a payment</button>
-      <button type="button" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem;" data-call="openBalancesSettings">Settings</button>
     </div>
 
     <div class="balances-scope-bar">
@@ -363,7 +362,7 @@
           <div>
             <strong style="font-size:0.92rem;">Simplify debts</strong>
             <div class="toggle-desc" id="simplify-desc">
-              On: Minimizes payments. If A owes B and B owes C, A pays C directly.
+              On: fewer payments in this list. If A owes B and B owes C, A pays C directly.
             </div>
           </div>
           <label class="switch">
@@ -376,7 +375,7 @@
       <!-- Suggested Settlements Card -->
       <div class="settlement-card">
         <div class="settlement-header">
-          <div class="settlement-title" id="settlement-header-label">Suggested debt settlements</div>
+          <div class="settlement-title" id="settlement-header-label">Who pays whom</div>
           <div class="settlement-filter">
             <label for="settlement-visibility">Show</label>
             <select id="settlement-visibility" aria-label="Who to show in suggested settlements">
@@ -385,7 +384,7 @@
             </select>
           </div>
         </div>
-        <p class="group-hint" style="margin:8px 0 0;">Click “Settle” to record the payment in the right group or 1-on-1 ledger.</p>
+        <p class="group-hint" style="margin:8px 0 0;">The shortest way to settle up. Tap Settle to record the payment in the right group or 1-on-1 ledger.</p>
         <p id="settlement-scope-note" class="group-hint" style="margin:8px 0 0;" hidden></p>
         <ul id="settlement-list" class="settlement-list"></ul>
       </div>
@@ -419,16 +418,6 @@
           </thead>
           <tbody id="member-spend-tbody"></tbody>
         </table>
-      </div>
-    </div>
-
-    <div id="balances-settings-overlay" class="balances-overlay" hidden>
-      <div class="balances-sheet" role="dialog" aria-modal="true" aria-labelledby="balances-settings-title">
-        <div class="balances-sheet-head">
-          <strong id="balances-settings-title">Display options</strong>
-          <button type="button" class="btn btn-secondary" data-call="closeBalancesSettings">Close</button>
-        </div>
-        <div class="balances-sheet-body" id="balances-settings-body"></div>
       </div>
     </div>
 
@@ -1064,7 +1053,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v111";
+    const APP_BUILD = "v112";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3505,12 +3494,7 @@
       document.body.classList.add("balances-overlay-open");
     }
 
-    window.closeBalancesSettings = closeBalancesOverlays;
     window.closeSettleOverlay = closeBalancesOverlays;
-    window.openBalancesSettings = function() {
-      closeBalancesOverlays();
-      openBalancesOverlay("balances-settings-overlay");
-    };
 
     function organizeBalancesPage() {
       const page = document.getElementById("page-balances") || document.getElementById("home-balance-details");
@@ -3521,14 +3505,13 @@
       const simplify = side ? side.querySelector(".toggle-row") : null;
       const scopeBar = page.querySelector(".balances-scope-bar");
       const settle = document.getElementById("settle-up-box");
-      const settingsBody = document.getElementById("balances-settings-body");
       const settleBody = document.getElementById("settle-overlay-body");
       const memberCard = document.getElementById("member-balance-card");
-      const visibility = page.querySelector(".settlement-filter");
 
-      if (settingsBody) {
-        if (visibility) settingsBody.appendChild(visibility);
-        if (simplify) settingsBody.appendChild(simplify);
+      const settlementCard = layout ? layout.querySelector(":scope > .settlement-card") : null;
+      if (settlementCard && simplify) {
+        simplify.classList.add("settlement-simplify");
+        settlementCard.appendChild(simplify);
       }
       const heading = page.querySelector(".home-section-heading");
       const backBar = page.querySelector(".page-back-bar");
@@ -3544,13 +3527,7 @@
           actions.appendChild(scopeBar);
         }
         const recordBtn = page.querySelector('[data-call="openSettleUp"]');
-        const displayBtn = page.querySelector('[data-call="openBalancesSettings"]');
         if (recordBtn) actions.appendChild(recordBtn);
-        if (displayBtn) {
-          displayBtn.textContent = "Display options";
-          displayBtn.setAttribute("aria-label", "Balance display options");
-          actions.appendChild(displayBtn);
-        }
       }
       if (backBar) backBar.remove();
       if (settleBody && settle) settleBody.appendChild(settle);
@@ -5860,7 +5837,7 @@
           : "Pick a single group to change its simplify setting. The all-groups view uses each group's own setting.";
       }
       if (settlementHeaderLabel) {
-        settlementHeaderLabel.textContent = `Suggested settlements · ${data.label}`;
+        settlementHeaderLabel.textContent = `Who pays whom · ${data.label}`;
       }
 
       const allItems = allOpenSettlementItems(data);

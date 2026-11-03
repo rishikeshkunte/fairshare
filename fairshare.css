@@ -1743,3 +1743,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .balances-heading-actions .balances-scope-inline { flex: 1 1 100%; }
   .balances-heading-actions .balances-scope-inline select { flex: 1; min-width: 0; }
 }
+
+
+/* Controls that belong to the suggested-settlements card */
+.settlement-simplify {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+.settlement-simplify .toggle-desc { font-size: .76rem; }
+.settlement-filter label { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; color: var(--muted); }
