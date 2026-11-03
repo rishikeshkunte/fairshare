@@ -331,7 +331,7 @@ test("groups page shows its own expense totals and balances", () => {
   assert.match(html, /data-call="openGroupSettleUp"/);
   assert.match(html, /window\.openGroupSettleUp = function\(\)/);
   assert.match(html, /window\.openSettleUp = function\(\)[\s\S]*?showSettleForm\(\);/);
-  assert.match(html, /function showSettleForm\([\s\S]*?navigateTo\("balances"\)/);
+  assert.match(html, /function showSettleForm\([\s\S]*?openBalancesOverlay\("settle-overlay"\)/);
   const render = html.slice(html.indexOf("function renderGroupExpenseSummary()"), html.indexOf("window.openGroupExpenseForm"));
   assert.match(render, /totalExpense/);
   assert.match(render, /netBalances\(g\)/);
@@ -823,8 +823,8 @@ test("groups page uses a picker with an in-tab manage panel", () => {
 
 test("settle up opens inside the groups tab", () => {
   assert.match(html, /showSettleForm\(debts\[0\]\.from, debts\[0\]\.to, debts\[0\]\.amount, "groups"\)/);
-  assert.match(html, /function mountSettleBox\(target = "home"\)/);
-  assert.match(html, /if \(target !== "groups"\) navigateTo\("balances"\)/);
+  assert.match(html, /id="settle-overlay"/);
+  assert.match(html, /openBalancesOverlay\("settle-overlay"\)/);
 });
 
 test("group management is hidden until Manage is chosen", () => {
@@ -839,4 +839,21 @@ test("group management is hidden until Manage is chosen", () => {
 test("opening a group forces one diff to repair stale ledger documents", () => {
   assert.ok(html.includes("scheduleNormalizedGroupWrite(group, { force: true });"));
   assert.ok(html.includes("if (!options.force && group._normalizedSig === signature) return;"));
+});
+
+test("balances use two panes on desktop and one-tap sections on mobile", () => {
+  assert.match(css, /\.balances-layout > \.balances-members-card/);
+  assert.match(css, /#member-balance-body\[hidden\] \{ display: block !important; \}/);
+  assert.match(html, /id="btn-toggle-member-sheet"/);
+  assert.match(html, /fairshare_members_sheet/);
+  assert.match(html, /function organizeBalancesPage\(\)/);
+});
+
+test("balances settings and settle share one overlay component", () => {
+  assert.match(html, /id="balances-settings-overlay"/);
+  assert.match(html, /id="settle-overlay"/);
+  assert.match(html, /function openBalancesOverlay\(/);
+  assert.match(html, /function closeBalancesOverlays\(/);
+  assert.match(html, /data-call="closeSettleOverlay"/);
+  assert.match(html, /data-call="openBalancesSettings"/);
 });

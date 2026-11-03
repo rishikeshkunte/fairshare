@@ -1658,3 +1658,46 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .csv-import-check input { width: auto; margin-top: 3px; }
 .csv-import-error { padding: 4px 0; font-size: .78rem; color: var(--danger-text); }
+
+
+/* --- Responsive balances: two panes on desktop, one-tap sections on mobile --- */
+.balances-summary-strip { margin: 0 0 16px; }
+.balances-summary-strip .summary-grid { margin: 0; }
+.balances-collapse-btn {
+  display: none; width: 100%; align-items: center; justify-content: space-between;
+  padding: 12px 4px; margin: 0; border: 0; background: transparent; color: var(--text);
+  font-size: .95rem; font-weight: 700; cursor: pointer;
+}
+.balances-overlay {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  padding: 18px; background: rgba(10, 14, 12, .48);
+}
+.balances-overlay[hidden] { display: none; }
+.balances-overlay-open { overflow: hidden; }
+.balances-sheet {
+  width: 100%; max-width: 560px; max-height: 85vh; overflow: auto;
+  background: var(--surface-solid); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 18px 50px -20px rgba(0, 0, 0, .45); padding: 16px;
+}
+.balances-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.balances-sheet-body .balances-scope-bar,
+.balances-sheet-body .settlement-filter,
+.balances-sheet-body .toggle-row { margin: 0 0 12px; }
+.balances-sheet-body .settle-up-box { display: block !important; margin: 0; border: 0; padding: 0; box-shadow: none; }
+
+@media (min-width: 861px) {
+  .balances-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; align-items: start; }
+  .balances-layout > .balances-members-card { grid-column: 1; margin: 0 !important; }
+  .balances-layout > .settlement-card { grid-column: 2; }
+  .balances-collapse-btn { display: none; }
+  #member-balance-body[hidden] { display: block !important; }
+}
+
+@media (max-width: 860px) {
+  .balances-layout { display: block; }
+  .balances-members-card { margin: 0 0 14px !important; }
+  .balances-collapse-btn { display: flex; }
+  .balances-members-card > .card-header-row > div { display: none; }
+  .balances-overlay { align-items: flex-end; padding: 0; }
+  .balances-sheet { max-width: none; border-radius: 16px 16px 0 0; max-height: 82vh; }
+}

@@ -304,7 +304,8 @@
   <section id="page-balances" class="app-page">
     <div class="page-back-bar">
       <button type="button" class="btn-back-home" data-call="navigateTo" data-arg="home">← Back to Home</button>
-      <button type="button" id="btn-toggle-settle-form" class="btn btn-settle" style="padding:6px 12px; font-size:0.82rem;">+ Custom settlement</button>
+      <button type="button" class="btn btn-settle" style="padding:6px 12px; font-size:0.82rem;" data-call="openSettleUp">Record a payment</button>
+      <button type="button" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem;" data-call="openBalancesSettings">Settings</button>
     </div>
 
     <div class="balances-scope-bar">
@@ -391,7 +392,10 @@
     </div>
 
     <!-- Member Standing Table -->
-    <div class="card" style="margin-top:18px;">
+    <div class="card balances-members-card" id="member-balance-card" style="margin-top:18px;">
+      <button type="button" id="btn-toggle-member-sheet" class="balances-collapse-btn" aria-expanded="false">
+        Member balances <span aria-hidden="true">▾</span>
+      </button>
       <div class="card-header-row">
         <div>
           <h2>Member balance sheet</h2>
@@ -402,7 +406,7 @@
         </select>
       </div>
 
-      <div style="overflow-x:auto;">
+      <div id="member-balance-body" style="overflow-x:auto;" hidden>
         <table class="member-spend-table">
           <thead>
             <tr>
@@ -415,6 +419,26 @@
           </thead>
           <tbody id="member-spend-tbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <div id="balances-settings-overlay" class="balances-overlay" hidden>
+      <div class="balances-sheet" role="dialog" aria-modal="true" aria-labelledby="balances-settings-title">
+        <div class="balances-sheet-head">
+          <strong id="balances-settings-title">Balances settings</strong>
+          <button type="button" class="btn btn-secondary" data-call="closeBalancesSettings">Close</button>
+        </div>
+        <div class="balances-sheet-body" id="balances-settings-body"></div>
+      </div>
+    </div>
+
+    <div id="settle-overlay" class="balances-overlay" hidden>
+      <div class="balances-sheet" role="dialog" aria-modal="true" aria-labelledby="settle-overlay-title">
+        <div class="balances-sheet-head">
+          <strong id="settle-overlay-title">Record a payment</strong>
+          <button type="button" class="btn btn-secondary" data-call="closeSettleOverlay">Close</button>
+        </div>
+        <div class="balances-sheet-body" id="settle-overlay-body"></div>
       </div>
     </div>
 
@@ -1040,7 +1064,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v107";
+    const APP_BUILD = "v108";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3468,6 +3492,88 @@
       renderManageGroupSelector();
     };
 
+    function closeBalancesOverlays() {
+      document.querySelectorAll(".balances-overlay").forEach(overlay => { overlay.hidden = true; });
+      document.body.classList.remove("balances-overlay-open");
+    }
+
+    function openBalancesOverlay(id) {
+      closeBalancesOverlays();
+      const overlay = document.getElementById(id);
+      if (!overlay) return;
+      overlay.hidden = false;
+      document.body.classList.add("balances-overlay-open");
+    }
+
+    window.closeBalancesSettings = closeBalancesOverlays;
+    window.closeSettleOverlay = closeBalancesOverlays;
+    window.openBalancesSettings = function() {
+      closeBalancesOverlays();
+      openBalancesOverlay("balances-settings-overlay");
+    };
+
+    function organizeBalancesPage() {
+      const page = document.getElementById("page-balances") || document.getElementById("home-balance-details");
+      if (!page) return;
+      const layout = page.querySelector(".balances-layout");
+      const side = page.querySelector(".balances-side");
+      const summary = side ? side.querySelector(".summary-grid") : null;
+      const simplify = side ? side.querySelector(".toggle-row") : null;
+      const scopeBar = page.querySelector(".balances-scope-bar");
+      const settle = document.getElementById("settle-up-box");
+      const settingsBody = document.getElementById("balances-settings-body");
+      const settleBody = document.getElementById("settle-overlay-body");
+      const memberCard = document.getElementById("member-balance-card");
+      const visibility = page.querySelector(".settlement-filter");
+
+      if (settingsBody) {
+        if (scopeBar) settingsBody.appendChild(scopeBar);
+        if (visibility) settingsBody.appendChild(visibility);
+        if (simplify) settingsBody.appendChild(simplify);
+      }
+      if (settleBody && settle) settleBody.appendChild(settle);
+      if (layout && memberCard) layout.insertBefore(memberCard, layout.firstChild);
+      if (side && summary) {
+        const strip = document.createElement("div");
+        strip.className = "balances-summary-strip";
+        strip.appendChild(summary);
+        side.replaceWith(strip);
+      }
+
+      const body = document.getElementById("member-balance-body");
+      const toggle = document.getElementById("btn-toggle-member-sheet");
+      const syncMemberSheet = () => {
+        if (!body || !toggle) return;
+        if (window.matchMedia("(min-width: 861px)").matches) {
+          body.hidden = false;
+          toggle.setAttribute("aria-expanded", "true");
+          return;
+        }
+        let stored = false;
+        try { stored = localStorage.getItem("fairshare_members_sheet") === "1"; } catch { /* ignore */ }
+        body.hidden = !stored;
+        toggle.setAttribute("aria-expanded", String(stored));
+      };
+      if (toggle && body && !toggle.dataset.bound) {
+        toggle.dataset.bound = "1";
+        toggle.addEventListener("click", () => {
+          body.hidden = !body.hidden;
+          try { localStorage.setItem("fairshare_members_sheet", body.hidden ? "0" : "1"); } catch { /* ignore */ }
+          toggle.setAttribute("aria-expanded", String(!body.hidden));
+        });
+        window.matchMedia("(min-width: 861px)").addEventListener("change", syncMemberSheet);
+      }
+      syncMemberSheet();
+
+      document.querySelectorAll(".balances-overlay").forEach(overlay => {
+        if (overlay.dataset.bound) return;
+        overlay.dataset.bound = "1";
+        overlay.addEventListener("click", (event) => {
+          if (event.target === overlay) closeBalancesOverlays();
+        });
+      });
+    }
+
     function switchActiveGroup(groupId, options = {}) {
       if (!groupId || !appState.groups[groupId]) return;
       if (!options.keepManaged) managedGroupId = "";
@@ -5010,8 +5116,7 @@
 
     if (btnCancelSettle) {
       btnCancelSettle.addEventListener("click", () => {
-        if (settleUpBox) settleUpBox.style.display = "none";
-        if (btnToggleSettleForm) btnToggleSettleForm.textContent = "+ Custom settlement";
+        closeBalancesOverlays();
       });
     }
 
@@ -5057,8 +5162,7 @@
         triggerConfetti();
         renderAll();
 
-        if (settleUpBox) settleUpBox.style.display = "none";
-        if (btnToggleSettleForm) btnToggleSettleForm.textContent = "+ Custom settlement";
+        closeBalancesOverlays();
       });
     }
 
@@ -5296,8 +5400,7 @@
         const simplifyRow = toggleSimplify.closest(".toggle-row");
         if (simplifyRow) simplifyRow.hidden = !groupOnly;
       }
-      if (btnToggleSettleForm) btnToggleSettleForm.hidden = !groupOnly;
-      if (!groupOnly && settleUpBox) settleUpBox.style.display = "none";
+
 
       // Executive Home Standings (incorporating Group + 1-on-1)
       let overallOwed = 0;
@@ -5908,16 +6011,13 @@
       }
     }
 
-    function showSettleForm(from = "", to = "", amount = 0, target = "home") {
+    function showSettleForm(from = "", to = "", amount = 0) {
       if (!settleUpBox) return;
-      mountSettleBox(target);
-      if (target !== "groups") navigateTo("balances");
+      openBalancesOverlay("settle-overlay");
       settleUpBox.style.display = "block";
-      if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
       if (from && settlePayer) settlePayer.value = from;
       if (to && settleReceiver) settleReceiver.value = to;
       if (amount && settleAmount) settleAmount.value = paiseToInput(amount);
-      settleUpBox.scrollIntoView({ behavior: "smooth", block: "center" });
       settlePayer?.focus({ preventScroll: true });
     }
 
@@ -8738,6 +8838,7 @@
 
     // --- Startup Initialization ---
     organizeNavigationPages();
+    organizeBalancesPage();
     loadSavedState();
     materializeRecurring();
     migrateDefaultGroupId();
