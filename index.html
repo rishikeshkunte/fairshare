@@ -1040,7 +1040,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v106";
+    const APP_BUILD = "v107";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7954,7 +7954,7 @@
       persistLocalState();
     }
 
-    function scheduleNormalizedGroupWrite(group) {
+    function scheduleNormalizedGroupWrite(group, options = {}) {
       if (!fx || !currentUser || !group?.id || !group.normalizedVersion) return;
       // Do not diff against an empty cache. With quota saver on, inactive
       // groups have no listeners, so their write cache is unseeded until they
@@ -7964,7 +7964,7 @@
         return;
       }
       const signature = normalizedSignature(group);
-      if (group._normalizedSig === signature) return;
+      if (!options.force && group._normalizedSig === signature) return;
       if (normalizedWriteTimers.has(group.id)) clearTimeout(normalizedWriteTimers.get(group.id));
       normalizedWriteTimers.set(group.id, window.setTimeout(() => {
         normalizedWriteTimers.delete(group.id);
@@ -8073,10 +8073,10 @@
         normalizedHydrated.add(groupId);
         persistLocalState();
         if (appState.activeGroupId === groupId) renderAll();
-        if (group._pendingNormalizedWrite) {
-          group._pendingNormalizedWrite = false;
-          scheduleNormalizedGroupWrite(group);
-        }
+        // Seed is complete: run one diff so stale documents (an old member id
+        // left inside a share, for example) are repaired when the group opens.
+        group._pendingNormalizedWrite = false;
+        scheduleNormalizedGroupWrite(group, { force: true });
       };
       const subscriptions = [
         fx.storeMod.onSnapshot(fx.storeMod.collection(groupRef, "members"), snapshot => {

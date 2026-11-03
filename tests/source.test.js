@@ -599,7 +599,7 @@ test("groups can be left locally or soft-deleted for everyone, with cloud repair
 test("phase 3 projects normalized group subcollections and dual-writes changes", () => {
   assert.match(html, /import \{ projectGroupTransactions/);
   assert.match(html, /function listenToNormalizedGroup\(groupId\)/);
-  assert.match(html, /function scheduleNormalizedGroupWrite\(group\)/);
+  assert.match(html, /function scheduleNormalizedGroupWrite\(group, options = \{\}\)/);
   assert.match(html, /group\.transactions = projected/);
   assert.match(html, /window\.runNormalizedMigration\(\{ quiet: true, forceGroupId: group\.id \}\)/);
   assert.match(html, /clearNormalizedListeners\(\)/);
@@ -834,4 +834,9 @@ test("group management is hidden until Manage is chosen", () => {
   assert.match(html, /data-call="closeGroupManagement"/);
   assert.match(html, /window\.closeGroupManagement = function\(\)/);
   assert.match(html, /data-call="openGroupManagement"/);
+});
+
+test("opening a group forces one diff to repair stale ledger documents", () => {
+  assert.ok(html.includes("scheduleNormalizedGroupWrite(group, { force: true });"));
+  assert.ok(html.includes("if (!options.force && group._normalizedSig === signature) return;"));
 });
