@@ -777,3 +777,13 @@ test("quota saver cannot be disabled by an old preference", () => {
   assert.match(html, /localStorage\.removeItem\("fairshare_quota_saver"\)/);
   assert.doesNotMatch(html, /id="toggle-quota-saver"/);
 });
+
+test("cloud listeners are subscribed once and only rebuilt on change", () => {
+  assert.match(html, /const needsSubscriptions = cloudSubscriptionsUid !== user\.uid;/);
+  assert.match(html, /if \(needsSubscriptions\) \{/);
+  assert.match(html, /if \(unsubscribeFriendsRosterListener && cloudSubscriptionsUid === user\.uid\) return;/);
+  assert.match(html, /if \(unsubscribeMembershipListener && cloudSubscriptionsUid === user\.uid\) return;/);
+  assert.match(html, /if \(unsubscribeGroupListener && activeGroupListenerId === groupId\) return;/);
+  assert.match(html, /if \(unsubscribeDirectListener && directListenerSig === nextSig\) return;/);
+  assert.match(html, /if \(pushedGroupsForUid === user\.uid\) return;/);
+});
