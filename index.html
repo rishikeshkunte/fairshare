@@ -351,7 +351,6 @@
               </div>
             </div>
             <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
-              <button type="button" id="btn-upi" class="btn btn-secondary" style="padding:8px 14px;">UPI link and QR</button>
               <button type="button" id="btn-cancel-settle" class="btn btn-secondary" style="padding:8px 14px;">Cancel</button>
               <button type="submit" class="btn btn-settle" style="padding:8px 16px;">Save settlement</button>
             </div>
@@ -1037,7 +1036,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v102";
+    const APP_BUILD = "v103";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -4989,37 +4988,6 @@
       });
     }
 
-    const btnUpi = document.getElementById("btn-upi");
-    if (btnUpi) {
-      btnUpi.addEventListener("click", async () => {
-        const pa = await askPrompt({ title: "Pay with UPI", message: "UPI ID of the person being paid", placeholder: "name@okbank" });
-        if (!pa || !pa.includes("@")) return toast("Enter a UPI ID such as name@okbank.");
-        const amount = document.getElementById("settle-amount")?.value || "0.00";
-        const href = `upi://pay?${new URLSearchParams({ pa: pa.trim(), pn: "WhatsMyShare", am: amount, cu: "INR", tn: "What's My Share? settlement" })}`;
-        const qrMod = await import("./js/vendor/qrcode.js");
-        const qrcode = qrMod.default;
-        qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
-        const qr = qrcode(0, "M");
-        qr.addData(href);
-        qr.make();
-        let modal = document.getElementById("upi-modal");
-        if (!modal) {
-          modal = document.createElement("div");
-          modal.id = "upi-modal";
-          modal.className = "modal-backdrop";
-          modal.innerHTML = `<div class="modal-content" style="max-width:420px;text-align:center;"><h3>Pay with UPI</h3><p id="upi-summary"></p><img id="upi-qr" alt="UPI payment QR code" width="220" height="220"><p><a id="upi-link" class="btn btn-secondary">Open in a UPI app</a></p><button type="button" class="btn btn-primary" id="upi-close">Close</button></div>`;
-          document.body.appendChild(modal);
-          modal.querySelector("#upi-close").addEventListener("click", () => { modal.classList.remove("active"); modal.hidden = true; });
-        }
-        modal.querySelector("#upi-summary").textContent = `${amount} INR to ${pa.trim()}`;
-        modal.querySelector("#upi-qr").src = qr.createDataURL(5, 2);
-        const link = modal.querySelector("#upi-link");
-        link.href = href;
-        modal.hidden = false;
-        modal.classList.add("active");
-      });
-    }
-
     if (settleForm) {
       settleForm.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -5690,10 +5658,15 @@
       if (!item) return;
       if (item.kind === "group") {
         balancesScope = `group:${item.groupId}`;
-        if (item.groupId && item.groupId !== appState.activeGroupId) {
-          switchActiveGroup(item.groupId);
-        } else {
-          renderAll();
+        // Rebuild best-effort; the settle form must open even if a render fails.
+        try {
+          if (item.groupId && item.groupId !== appState.activeGroupId) {
+            switchActiveGroup(item.groupId);
+          } else {
+            renderAll();
+          }
+        } catch (err) {
+          console.warn("Settle selection note:", err);
         }
         quickSettlePrompt(item.from, item.to, item.amount);
         return;
@@ -5895,6 +5868,18 @@
       if (modal) modal.classList.remove("active");
     };
 
+    function showSettleForm(from = "", to = "", amount = 0) {
+      if (!settleUpBox) return;
+      navigateTo("balances");
+      settleUpBox.style.display = "block";
+      if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
+      if (from && settlePayer) settlePayer.value = from;
+      if (to && settleReceiver) settleReceiver.value = to;
+      if (amount && settleAmount) settleAmount.value = paiseToInput(amount);
+      settleUpBox.scrollIntoView({ behavior: "smooth", block: "center" });
+      settlePayer?.focus({ preventScroll: true });
+    }
+
     window.openSettleUp = function() {
       if (Object.keys(appState.groups).length === 0) {
         toast("Create a group before recording a group payment.");
@@ -5905,13 +5890,10 @@
       const active = getGroup();
       if (active.id) {
         balancesScope = `group:${active.id}`;
-        renderAll();
+        // A render failure must not stop the settle form from opening.
+        try { renderAll(); } catch (err) { console.warn("Settle render note:", err); }
       }
-      navigateTo("balances");
-      settleUpBox.style.display = "block";
-      if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
-      settleUpBox.scrollIntoView({ behavior: "smooth", block: "center" });
-      settlePayer?.focus({ preventScroll: true });
+      showSettleForm();
     };
 
     window.openGroupSettleUp = function() {
@@ -5934,12 +5916,7 @@
     };
 
     window.quickSettlePrompt = function(from, to, amount) {
-      if (settleUpBox) settleUpBox.style.display = "block";
-      if (settlePayer) settlePayer.value = from;
-      if (settleReceiver) settleReceiver.value = to;
-      if (settleAmount) settleAmount.value = paiseToInput(amount);
-      if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
-      settleUpBox?.scrollIntoView({ behavior: "smooth", block: "center" });
+      showSettleForm(from, to, amount);
     };
 
     // --- Spending analytics ---

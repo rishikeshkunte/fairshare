@@ -12,6 +12,7 @@ const css = readFileSync(join(root, "fairshare.css"), "utf8");
 const rules = readFileSync(join(root, "firestore.rules"), "utf8");
 const sync = readFileSync(join(root, "js", "sync.js"), "utf8");
 const firebase = readFileSync(join(root, "js", "firebase.js"), "utf8");
+const sw = readFileSync(join(root, "sw.js"), "utf8");
 
 test("inline application module parses as valid JavaScript", () => {
   const match = html.match(/<script\s+type="module">([\s\S]*?)<\/script>/i);
@@ -329,7 +330,8 @@ test("groups page shows its own expense totals and balances", () => {
   assert.match(html, /data-call="openGroupExpensesHistory"/);
   assert.match(html, /data-call="openGroupSettleUp"/);
   assert.match(html, /window\.openGroupSettleUp = function\(\)/);
-  assert.match(html, /window\.openSettleUp = function\(\)[\s\S]*?navigateTo\("balances"\)/);
+  assert.match(html, /window\.openSettleUp = function\(\)[\s\S]*?showSettleForm\(\);/);
+  assert.match(html, /function showSettleForm\([\s\S]*?navigateTo\("balances"\)/);
   const render = html.slice(html.indexOf("function renderGroupExpenseSummary()"), html.indexOf("window.openGroupExpenseForm"));
   assert.match(render, /totalExpense/);
   assert.match(render, /netBalances\(g\)/);
@@ -786,4 +788,21 @@ test("cloud listeners are subscribed once and only rebuilt on change", () => {
   assert.match(html, /if \(unsubscribeGroupListener && activeGroupListenerId === groupId\) return;/);
   assert.match(html, /if \(unsubscribeDirectListener && directListenerSig === nextSig\) return;/);
   assert.match(html, /if \(pushedGroupsForUid === user\.uid\) return;/);
+});
+
+test("both settle entry points open the same visible form", () => {
+  assert.match(html, /function showSettleForm\(/);
+  assert.match(html, /navigateTo\("balances"\);/);
+  assert.match(html, /settleUpBox\.style\.display = "block";/);
+  assert.match(html, /showSettleForm\(\);/);
+  assert.match(html, /showSettleForm\(from, to, amount\)/);
+  assert.match(html, /render failure must not stop the settle form from opening/);
+});
+
+test("the UPI payment UI is removed", () => {
+  assert.doesNotMatch(html, /btn-upi/);
+  assert.doesNotMatch(html, /upi:\/\//);
+  assert.doesNotMatch(html, /Pay with UPI/);
+  assert.doesNotMatch(html, /qrcode/);
+  assert.doesNotMatch(sw, /qrcode\.js/);
 });
