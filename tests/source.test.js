@@ -812,3 +812,17 @@ test("normalized ledger documents replace instead of merging stale share keys", 
   assert.ok(html.includes("if (op.merge) batch.set(op.ref, op.data, { merge: true }); else batch.set(op.ref, op.data);"));
   assert.ok(html.includes("signature, merge: true"));
 });
+
+test("groups page uses a picker with an in-tab manage panel", () => {
+  assert.match(html, /id="group-settle-slot"/);
+  assert.match(html, /data-call="openGroupManagement"/);
+  assert.match(html, /picker\.id = "groups-page-picker"/);
+  assert.match(html, /window\.openGroupManagement = function\(\)/);
+  assert.match(html, /managedGroupId = id;/);
+});
+
+test("settle up opens inside the groups tab", () => {
+  assert.match(html, /showSettleForm\(debts\[0\]\.from, debts\[0\]\.to, debts\[0\]\.amount, "groups"\)/);
+  assert.match(html, /function mountSettleBox\(target = "home"\)/);
+  assert.match(html, /if \(target !== "groups"\) navigateTo\("balances"\)/);
+});

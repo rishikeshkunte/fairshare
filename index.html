@@ -535,6 +535,7 @@
               <span id="group-expenses-meta" class="section-hint">0 members • 0 expenses</span>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary" data-call="openGroupManagement">Manage</button>
               <button type="button" class="btn btn-secondary" data-call="openGroupExpensesHistory">View activity</button>
               <button type="button" class="btn btn-settle" data-call="openGroupSettleUp">Settle up</button>
               <button type="button" class="btn btn-secondary" data-call="createGroupInvite">Invite link</button>
@@ -570,6 +571,8 @@
             </div>
           </div>
         </div>
+
+        <div id="group-settle-slot" class="group-settle-slot"></div>
 
         <div id="group-management-slot"></div>
       </section>
@@ -643,14 +646,14 @@
             </div>
           </div>
 
-          <div class="form-group" style="margin-bottom:12px;">
+          <div class="form-group" style="margin-bottom:12px;" hidden>
             <label for="manage-group-select">Group to manage</label>
             <select id="manage-group-select">
               <option value="">Choose a group...</option>
             </select>
           </div>
 
-          <p id="group-management-hint" class="group-hint">Choose a group above to manage it.</p>
+          <p id="group-management-hint" class="group-hint">Pick a group and choose Manage to edit its members, currency, and settings.</p>
 
           <div id="group-management-body" hidden>
             <div class="group-bar" style="margin-bottom:14px;">
@@ -1036,7 +1039,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v104";
+    const APP_BUILD = "v105";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2213,6 +2216,11 @@
     // Settle Up
     const btnToggleSettleForm = document.getElementById("btn-toggle-settle-form");
     const settleUpBox = document.getElementById("settle-up-box");
+    const groupSettleSlot = document.getElementById("group-settle-slot");
+    // The settle form is a single element that can be mounted in Home or in
+    // the Groups tab, so both entry points stay in their own section.
+    const settleHomeParent = settleUpBox ? settleUpBox.parentElement : null;
+    const settleHomeAnchor = settleUpBox ? settleUpBox.nextSibling : null;
     const settleForm = document.getElementById("settle-form");
     const settlePayer = document.getElementById("settle-payer");
     const settleReceiver = document.getElementById("settle-receiver");
@@ -3415,17 +3423,23 @@
         groupTabs.appendChild(empty);
         return;
       }
+      // One picker replaces the old tab strip: choosing a group makes it the
+      // selected group everywhere, and Manage works on that selection.
+      const picker = document.createElement("select");
+      picker.id = "groups-page-picker";
+      picker.className = "groups-page-picker";
+      picker.setAttribute("aria-label", "Select a group");
       groups.forEach(group => {
-        const tab = document.createElement("button");
-        tab.type = "button";
-        tab.className = `group-tab${group.id === appState.activeGroupId ? " active" : ""}`;
-        tab.setAttribute("role", "tab");
-        tab.setAttribute("aria-selected", group.id === appState.activeGroupId ? "true" : "false");
-        tab.title = group.name;
-        tab.textContent = group.name;
-        tab.onclick = () => switchActiveGroup(group.id);
-        groupTabs.appendChild(tab);
+        const option = document.createElement("option");
+        option.value = group.id;
+        option.textContent = `${group.name} (${group.currency || ""})`.trim();
+        option.selected = group.id === appState.activeGroupId;
+        picker.appendChild(option);
       });
+      picker.addEventListener("change", (event) => {
+        if (event.target.value) switchActiveGroup(event.target.value);
+      });
+      groupTabs.appendChild(picker);
     }
 
     function renderManageGroupSelector() {
@@ -4976,6 +4990,7 @@
       btnToggleSettleForm.addEventListener("click", () => {
         if (!settleUpBox) return;
         const isHidden = getComputedStyle(settleUpBox).display === "none";
+        if (isHidden) mountSettleBox("home");
         settleUpBox.style.display = isHidden ? "block" : "none";
         btnToggleSettleForm.textContent = isHidden ? "Hide settle up" : "+ Custom settlement";
       });
@@ -5868,9 +5883,23 @@
       if (modal) modal.classList.remove("active");
     };
 
-    function showSettleForm(from = "", to = "", amount = 0) {
+    function mountSettleBox(target = "home") {
       if (!settleUpBox) return;
-      navigateTo("balances");
+      const container = target === "groups" && groupSettleSlot ? groupSettleSlot : settleHomeParent;
+      if (!container) return;
+      if (settleUpBox.parentElement === container) return;
+      if (target === "groups") {
+        container.insertBefore(settleUpBox, container.firstChild);
+      } else {
+        const anchor = settleHomeAnchor && settleHomeAnchor.parentElement === container ? settleHomeAnchor : null;
+        container.insertBefore(settleUpBox, anchor);
+      }
+    }
+
+    function showSettleForm(from = "", to = "", amount = 0, target = "home") {
+      if (!settleUpBox) return;
+      mountSettleBox(target);
+      if (target !== "groups") navigateTo("balances");
       settleUpBox.style.display = "block";
       if (btnToggleSettleForm) btnToggleSettleForm.textContent = "Hide settle up";
       if (from && settlePayer) settlePayer.value = from;
@@ -5879,6 +5908,17 @@
       settleUpBox.scrollIntoView({ behavior: "smooth", block: "center" });
       settlePayer?.focus({ preventScroll: true });
     }
+
+    window.openGroupManagement = function() {
+      const id = appState.activeGroupId;
+      if (!id || !appState.groups[id]) {
+        toast("Select a group first.");
+        return;
+      }
+      managedGroupId = id;
+      renderManageGroupSelector();
+      document.getElementById("group-management-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
 
     window.openSettleUp = function() {
       if (Object.keys(appState.groups).length === 0) {
@@ -5905,12 +5945,10 @@
       }
       const balances = netBalances(g);
       const debts = g.simplifyDebts !== false ? simplifiedDebts(balances) : pairwiseDebts(g);
-      window.openSettleUp();
       if (debts.length) {
-        if (settlePayer) settlePayer.value = debts[0].from;
-        if (settleReceiver) settleReceiver.value = debts[0].to;
-        if (settleAmount) settleAmount.value = paiseToInput(debts[0].amount);
+        showSettleForm(debts[0].from, debts[0].to, debts[0].amount, "groups");
       } else {
+        showSettleForm("", "", 0, "groups");
         toast("Everyone is settled up in this group. Use the form to record any custom payment.");
       }
     };

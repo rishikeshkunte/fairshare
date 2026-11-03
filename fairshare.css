@@ -206,6 +206,13 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
 .section-hint { display:block; color:var(--muted); font-size:.82rem; margin-top:3px; }
 .subsection-title { margin: 0 0 10px; font-size:1.1rem; }
 .group-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.groups-page-picker {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--surface-solid); color: var(--text); font-size: .92rem; font-weight: 600;
+}
+.group-settle-slot { margin: 0; }
+.group-settle-slot:empty { display: none; }
+.group-settle-slot #settle-up-box { margin: 0 0 12px; }
 .group-tab, .group-tab-add {
   width:auto; min-width:120px; max-width:240px; display:block; padding:9px 14px; border:1px solid var(--line);
   border-radius:11px; background:var(--surface-solid); color:var(--muted); text-align:left;
