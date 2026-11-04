@@ -1053,7 +1053,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v112";
+    const APP_BUILD = "v113";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3111,6 +3111,37 @@
       return { byCurrency, groups };
     }
 
+    function settleFriendGroupBalance(friend, groupId) {
+      const group = appState.groups[String(groupId)];
+      if (!friend || !group) {
+        toast("That group is not available on this device.");
+        return;
+      }
+      const member = findGroupMemberForFriend(group, friend);
+      const myName = getMyGroupMemberName(group);
+      if (!member || !myName || member === myName) {
+        toast(`No shared balance with ${friend.name} in that group.`);
+        return;
+      }
+      let net = 0;
+      pairwiseDebts(group).forEach(edge => {
+        if (edge.from === member && edge.to === myName) net += Number(edge.amount) || 0;
+        else if (edge.from === myName && edge.to === member) net -= Number(edge.amount) || 0;
+      });
+      if (Math.abs(net) < 1) {
+        toast(`You and ${friend.name} are already settled in ${group.name || "that group"}.`);
+        return;
+      }
+      const from = net > 0 ? member : myName;
+      const to = net > 0 ? myName : member;
+      if (String(groupId) !== String(appState.activeGroupId)) {
+        switchActiveGroup(groupId);
+      } else {
+        try { renderAll(); } catch (err) { console.warn("Settle render note:", err); }
+      }
+      showSettleForm(from, to, Math.abs(net), "groups");
+    }
+
     function renderFriendsRoster() {
       const visibleFriends = getVisibleFriends();
       if (globalFriendsCount) globalFriendsCount.textContent = visibleFriends.length;
@@ -3246,6 +3277,7 @@
       const total = expenses.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
       const myShare = expenses.reduce((sum, tx) => sum + (Number(tx.shares?.You) || 0), 0);
       const balance = directBalanceForFriend(friend.name);
+      const groupInfo = getFriendGroupBalances(friend);
       const totalEl = document.getElementById("friend-detail-total");
       if (totalEl) totalEl.textContent = formatMoney(total, cur);
       const shareEl = document.getElementById("friend-detail-share");
@@ -3258,11 +3290,10 @@
           : (balance < -0.009 ? "var(--negative)" : "var(--text)");
       }
       const settleBtn = document.getElementById("btn-friend-detail-settle");
-      if (settleBtn) settleBtn.disabled = Math.abs(balance) < 1;
+      if (settleBtn) settleBtn.disabled = Math.abs(balance) < 1 && !groupInfo.groups.length;
 
       const groupsEl = document.getElementById("friend-detail-groups");
       if (groupsEl) {
-        const groupInfo = getFriendGroupBalances(friend);
         groupsEl.innerHTML = "";
         if (!groupInfo.groups.length) {
           groupsEl.innerHTML = `<div style="color:var(--muted); padding:8px 0; font-size:0.85rem;">No outstanding group balance with ${escapeHtml(friend.name)}.</div>`;
@@ -3279,6 +3310,7 @@
               <div style="display:flex; align-items:center; gap:8px;">
                 <span class="settle-badge">${formatMoney(Math.abs(item.net), item.currency)}</span>
                 <button type="button" class="btn btn-secondary" data-call="openFriendGroup" data-arg="${escapeHtml(item.id)}" data-arg2="${escapeHtml(item.name)}" style="padding:4px 8px; font-size:0.75rem;">View</button>
+                <button type="button" class="btn btn-settle" data-call="settleFriendGroup" data-arg="${escapeHtml(item.id)}" style="padding:4px 8px; font-size:0.75rem;">Settle</button>
               </div>
             `;
             groupsEl.appendChild(row);
@@ -3342,11 +3374,23 @@
       const friend = appState.friends.find(f => String(f.id) === String(selectedFriendDetailId));
       if (!friend) return;
       const balance = directBalanceForFriend(friend.name);
-      if (Math.abs(balance) < 1) {
+      if (Math.abs(balance) >= 1) {
+        window.quickStartDirectSettle(friend.id, balance);
+        return;
+      }
+      const groupInfo = getFriendGroupBalances(friend);
+      if (!groupInfo.groups.length) {
         toast("This friend is already settled up.");
         return;
       }
-      window.quickStartDirectSettle(friend.id, balance);
+      const target = groupInfo.groups.slice().sort((a, b) => Math.abs(b.net) - Math.abs(a.net))[0];
+      settleFriendGroupBalance(friend, target.id);
+    };
+
+    window.settleFriendGroup = function(groupId) {
+      const friend = appState.friends.find(f => String(f.id) === String(selectedFriendDetailId));
+      if (!friend) return;
+      settleFriendGroupBalance(friend, groupId);
     };
 
     window.openFriendGroup = function(groupId, groupName) {
@@ -3531,6 +3575,12 @@
       }
       if (backBar) backBar.remove();
       if (settleBody && settle) settleBody.appendChild(settle);
+      const settleOverlay = document.getElementById("settle-overlay");
+      // The overlay must live outside the pages so it can open from Home,
+      // Groups, and Friends no matter which page is active.
+      if (settleOverlay && settleOverlay.parentElement !== document.body) {
+        document.body.appendChild(settleOverlay);
+      }
       if (layout && memberCard) layout.insertBefore(memberCard, layout.firstChild);
       if (side && summary) {
         const strip = document.createElement("div");
@@ -6015,6 +6065,10 @@
     function showSettleForm(from = "", to = "", amount = 0) {
       if (!settleUpBox) return;
       openBalancesOverlay("settle-overlay");
+      const overlayBody = document.getElementById("settle-overlay-body");
+      if (overlayBody && settleUpBox.parentElement !== overlayBody) {
+        overlayBody.appendChild(settleUpBox);
+      }
       settleUpBox.style.display = "block";
       if (from && settlePayer) settlePayer.value = from;
       if (to && settleReceiver) settleReceiver.value = to;

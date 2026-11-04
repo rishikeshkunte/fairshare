@@ -827,6 +827,18 @@ test("settle up opens inside the groups tab", () => {
   assert.match(html, /openBalancesOverlay\("settle-overlay"\)/);
 });
 
+test("settle overlay opens from every tab and friend group balances are actionable", () => {
+  assert.match(html, /document\.body\.appendChild\(settleOverlay\)/);
+  assert.match(html, /settleUpBox\.parentElement !== overlayBody/);
+  assert.match(html, /function settleFriendGroupBalance\(friend, groupId\)/);
+  assert.match(html, /data-call="settleFriendGroup"/);
+  assert.match(html, /settleBtn\.disabled = Math\.abs\(balance\) < 1 && !groupInfo\.groups\.length/);
+  const settle = html.slice(html.indexOf("window.friendDetailSettle = function()"), html.indexOf("window.openFriendGroup"));
+  assert.match(settle, /getFriendGroupBalances\(friend\)/);
+  assert.match(settle, /settleFriendGroupBalance\(friend, target\.id\)/);
+});
+
+
 test("group management is hidden until Manage is chosen", () => {
   assert.match(html, /id="group-management-card" hidden/);
   assert.match(html, /if \(card\) card\.hidden = !hasManaged;/);
