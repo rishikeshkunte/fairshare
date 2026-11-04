@@ -198,6 +198,18 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
   assert.match(html, /Old invite links are no longer supported/);
 });
 
+test("redundant controls and legacy invite handlers are removed", () => {
+  assert.doesNotMatch(html, /View all/);
+  assert.doesNotMatch(html, /checkIncomingRequestsManual|Check now/);
+  assert.doesNotMatch(html, /btn-toggle-settle-form|mountSettleBox/);
+  assert.doesNotMatch(html, /appendSettlementRow/);
+  assert.doesNotMatch(html, /acceptGroupInvite|declineGroupInvite|shareGroupInvite|copyInviteLink|activeGroupInviteUrl|checkGroupInviteInURL/);
+  assert.doesNotMatch(html, /Back to Home/);
+  assert.match(html, /id="btn-friend-share"/);
+  assert.match(html, /id="friend-share-menu"/);
+  assert.match(html, /friendShareToken \|\| await createInvite\("friend"\)/);
+});
+
 test("CSV export is removed", () => {
   assert.doesNotMatch(html, /btn-export-csv|Export CSV/);
 });
@@ -814,7 +826,6 @@ test("normalized ledger documents replace instead of merging stale share keys", 
 });
 
 test("groups page uses a picker with an in-tab manage panel", () => {
-  assert.match(html, /id="group-settle-slot"/);
   assert.match(html, /data-call="openGroupManagement"/);
   assert.match(html, /picker\.id = "groups-page-picker"/);
   assert.match(html, /window\.openGroupManagement = function\(\)/);

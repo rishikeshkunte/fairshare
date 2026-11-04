@@ -303,7 +303,6 @@
   <!-- ================= PAGE 3: BALANCES & SETTLE ================= -->
   <section id="page-balances" class="app-page">
     <div class="page-back-bar">
-      <button type="button" class="btn-back-home" data-call="navigateTo" data-arg="home">← Back to Home</button>
       <button type="button" class="btn btn-settle" style="padding:6px 12px; font-size:0.82rem;" data-call="openSettleUp">Record a payment</button>
     </div>
 
@@ -577,15 +576,12 @@
             <div>
               <div class="group-expense-recent-head">
                 <h3 class="group-expense-subtitle">Recent group records</h3>
-                <button type="button" class="btn btn-secondary" id="btn-group-expenses-history" data-call="openGroupExpensesHistory" style="padding:5px 9px; font-size:0.75rem;">View all</button>
               </div>
               <div id="group-expenses-recent" class="transaction-list"></div>
               <div id="group-expenses-empty" class="empty-state" style="padding:12px 0;" hidden>No records yet.</div>
             </div>
           </div>
         </div>
-
-        <div id="group-settle-slot" class="group-settle-slot"></div>
 
         <div id="group-management-slot"></div>
       </section>
@@ -621,10 +617,6 @@
       <button type="button" class="people-tab active" role="tab" aria-selected="true" data-call="navigateTo" data-arg="friends">Friends &amp; contacts</button>
     </div>
     <div class="section-header"><div><h1>Friends &amp; contacts</h1><p>Manage your connections, requests, and 1-on-1 expense partners.</p></div></div>
-    <div class="page-back-bar">
-      <button type="button" class="btn-back-home" data-call="navigateTo" data-arg="home">← Back to Home</button>
-      <span></span>
-    </div>
 
     <div class="friends-workspace">
       <!-- Left Column: Groups -->
@@ -736,9 +728,6 @@
               <h2>Incoming friend requests <span id="incoming-badge-count" class="badge-count" style="display:none;">0</span></h2>
               <span style="font-size:0.8rem; color:var(--muted);">Approve or decline requests sent to your Gmail address</span>
             </div>
-            <button type="button" class="btn btn-secondary" id="btn-check-requests" data-call="checkIncomingRequestsManual" data-needs-auth disabled style="padding:6px 12px; font-size:0.8rem;">
-              <span aria-hidden="true">🔄</span> Check now <span class="auth-pill">Needs sign-in</span>
-            </button>
           </div>
           <div id="incoming-requests-container" style="margin-top:10px;">
             <div style="text-align:center; color:var(--muted); padding:16px; background:var(--box-bg); border-radius:10px; font-size:0.85rem;">
@@ -765,9 +754,14 @@
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <span style="font-size:0.75rem; color:var(--muted); font-weight:600;">Invite link:</span>
-              <button type="button" class="btn btn-primary" data-call="createFriendInvite">Copy friend invite link</button>
-              <button type="button" class="btn btn-secondary" data-call="openInviteInGmail">Open in Gmail</button>
-              <button type="button" class="btn btn-secondary" data-call="shareViaWhatsApp">Share via WhatsApp</button>
+              <button type="button" class="btn btn-primary" data-call="createFriendInvite">Copy invite link</button>
+              <div class="share-menu-wrap">
+                <button type="button" class="btn btn-secondary" id="btn-friend-share" aria-haspopup="true" aria-expanded="false" aria-controls="friend-share-menu">Share</button>
+                <div id="friend-share-menu" class="expense-fab-menu share-menu" hidden>
+                  <button type="button" data-call="openInviteInGmail">Share via Gmail</button>
+                  <button type="button" data-call="shareViaWhatsApp">Share via WhatsApp</button>
+                </div>
+              </div>
             </div>
             <p id="invite-link-note" style="font-size:0.75rem; color:var(--muted); margin:8px 0 0; line-height:1.4;">
               Friend invite links expire in 24 hours and can be used by multiple people.
@@ -1053,7 +1047,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v113";
+    const APP_BUILD = "v114";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2228,13 +2222,7 @@
     const btnSubmitExpense = document.getElementById("btn-submit-expense");
 
     // Settle Up
-    const btnToggleSettleForm = document.getElementById("btn-toggle-settle-form");
     const settleUpBox = document.getElementById("settle-up-box");
-    const groupSettleSlot = document.getElementById("group-settle-slot");
-    // The settle form is a single element that can be mounted in Home or in
-    // the Groups tab, so both entry points stay in their own section.
-    const settleHomeParent = settleUpBox ? settleUpBox.parentElement : null;
-    const settleHomeAnchor = settleUpBox ? settleUpBox.nextSibling : null;
     const settleForm = document.getElementById("settle-form");
     const settlePayer = document.getElementById("settle-payer");
     const settleReceiver = document.getElementById("settle-receiver");
@@ -2663,40 +2651,6 @@
     function normalizeEmail(email) {
       return canonEmail(email);
     }
-
-    window.checkIncomingRequestsManual = async function() {
-      if (!fx || !currentUser) {
-        toast("Please sign in with Gmail first.");
-        return;
-      }
-      const myEmail = (currentUser.email || "").toLowerCase().trim();
-      const myEmailNorm = normalizeEmail(myEmail);
-      
-      try {
-        const snap = await fx.storeMod.getDocs(fx.storeMod.query(requestsCol(), fx.storeMod.where("toEmail", "==", myEmail)));
-        const matching = [];
-        snap.forEach(doc => {
-          const d = doc.data();
-          d.id = doc.id;
-          const targetNorm = normalizeEmail(d.toEmail || d.toTarget || "");
-          const targetRaw = (d.toEmail || d.toTarget || "").toLowerCase().trim();
-          if ((targetNorm === myEmailNorm || targetRaw === myEmail) && d.status === "pending") {
-            matching.push(d);
-          }
-        });
-        localIncomingRequests = matching;
-        renderFriendRequestsUI();
-
-        if (matching.length > 0) {
-          toast(`Found ${matching.length} pending friend request(s)!`);
-        } else {
-          toast(`0 pending requests found for ${currentUser.email}.`);
-        }
-      } catch (err) {
-        console.error("Manual check error:", err);
-        toast("Cloud check error: " + err.message);
-      }
-    };
 
     window.sendFriendRequest = async function() {
       const inputEl = document.getElementById("input-friend-email");
@@ -4760,14 +4714,6 @@
     }
 
     // Outbound Sharing Helpers
-    function activeGroupInviteUrl() {
-      const g = getGroup();
-      if (!g.id) return "";
-      const myName = myInviteName();
-      const myEmail = currentUser ? currentUser.email : "";
-      return `${window.location.origin}${window.location.pathname}?joinGroup=${encodeURIComponent(g.id)}&groupName=${encodeURIComponent(g.name)}&by=${encodeURIComponent(myName)}&byEmail=${encodeURIComponent(myEmail)}#friends`;
-    }
-
     function requireGroupForInvite() {
       const g = getGroup();
       if (g.id) return g;
@@ -4775,40 +4721,6 @@
       window.openNewGroupPrompt();
       return null;
     }
-
-    window.copyInviteLink = async function() {
-      const g = requireGroupForInvite();
-      if (!g) return;
-      const inviteUrl = activeGroupInviteUrl();
-      try {
-        await navigator.clipboard.writeText(inviteUrl);
-        toast(`Invite link for "${g.name}" copied. It is reusable and does not expire.`);
-      } catch {
-        await askPrompt({ message: `Invite link for "${g.name}":`, defaultValue: inviteUrl });
-      }
-    };
-
-    window.openInviteInGmail = function() {
-      const g = requireGroupForInvite();
-      if (!g) return;
-      const inputEl = document.getElementById("input-friend-email");
-      const toEmail = (inputEl ? inputEl.value : "").trim();
-      const myName = myInviteName();
-      const inviteUrl = activeGroupInviteUrl();
-
-      const subject = encodeURIComponent(`Split expenses on What's My Share? with ${myName}`);
-      const body = encodeURIComponent(`Hey! I am using What's My Share? to track and split our expenses.\n\nOpen this link to join "${g.name}":\n${inviteUrl}\n\nSign in with Gmail after opening the link if you want the expenses to sync live.\n\nCheers`);
-
-      window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`, '_blank');
-    };
-
-    window.shareViaWhatsApp = function() {
-      const g = requireGroupForInvite();
-      if (!g) return;
-      const inviteUrl = activeGroupInviteUrl();
-      const text = encodeURIComponent(`Hey! Join me on What's My Share? to track and split our expenses: ${inviteUrl}`);
-      window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
-    };
 
     const receiptDropzone = document.getElementById("receipt-dropzone");
     if (receiptDropzone && receiptFileInput) {
@@ -5155,16 +5067,6 @@
     };
 
     // Settle Form
-    if (btnToggleSettleForm) {
-      btnToggleSettleForm.addEventListener("click", () => {
-        if (!settleUpBox) return;
-        const isHidden = getComputedStyle(settleUpBox).display === "none";
-        if (isHidden) mountSettleBox("home");
-        settleUpBox.style.display = isHidden ? "block" : "none";
-        btnToggleSettleForm.textContent = isHidden ? "Hide settle up" : "+ Custom settlement";
-      });
-    }
-
     if (btnCancelSettle) {
       btnCancelSettle.addEventListener("click", () => {
         closeBalancesOverlays();
@@ -5974,33 +5876,6 @@
       </div>`).join("");
     }
 
-    function appendSettlementRow(d, cur) {
-      const card = document.createElement("div");
-      card.className = "settlement-card";
-      const info = document.createElement("div");
-      const group = getGroup();
-      info.innerHTML = `<strong>${escapeHtml(displayGroupMember(group, d.from))}</strong> owes <strong>${escapeHtml(displayGroupMember(group, d.to))}</strong><span style="font-size:0.8rem; color:var(--muted); display:block;">Suggested settlement</span>`;
-      const actions = document.createElement("div");
-      actions.style.display = "flex";
-      actions.style.alignItems = "center";
-      actions.style.gap = "8px";
-      const badge = document.createElement("span");
-      badge.className = "settle-badge";
-      badge.textContent = formatMoney(d.amount, cur);
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "btn btn-secondary";
-      button.style.padding = "6px 10px";
-      button.style.fontSize = "0.8rem";
-      button.textContent = "Settle";
-      button.addEventListener("click", () => quickSettlePrompt(d.from, d.to, d.amount));
-      actions.appendChild(badge);
-      actions.appendChild(button);
-      card.appendChild(info);
-      card.appendChild(actions);
-      settlementListEl.appendChild(card);
-    }
-
     window.openMemberModalFromSelect = function(name) {
       if (!name) return;
       openMemberStatement(name);
@@ -6048,19 +5923,6 @@
       const modal = document.getElementById("member-modal");
       if (modal) modal.classList.remove("active");
     };
-
-    function mountSettleBox(target = "home") {
-      if (!settleUpBox) return;
-      const container = target === "groups" && groupSettleSlot ? groupSettleSlot : settleHomeParent;
-      if (!container) return;
-      if (settleUpBox.parentElement === container) return;
-      if (target === "groups") {
-        container.insertBefore(settleUpBox, container.firstChild);
-      } else {
-        const anchor = settleHomeAnchor && settleHomeAnchor.parentElement === container ? settleHomeAnchor : null;
-        container.insertBefore(settleUpBox, anchor);
-      }
-    }
 
     function showSettleForm(from = "", to = "", amount = 0) {
       if (!settleUpBox) return;
@@ -8580,98 +8442,6 @@
       }, { label: "direct-pair-tx" });
     }
 
-    // URL Group Invites
-    let pendingGroupInviteData = null;
-
-    function checkGroupInviteInURL() {
-      const params = new URLSearchParams(window.location.search);
-      const joinGroup = params.get("joinGroup");
-      const groupName = params.get("groupName") || "Shared Group";
-      const byName = params.get("by") || "A friend";
-      const byEmail = params.get("byEmail") || "";
-
-      if (joinGroup) {
-        pendingGroupInviteData = { id: joinGroup, name: groupName, by: byName, byEmail: byEmail };
-        const modal = document.getElementById("group-invite-modal");
-        const title = document.getElementById("invite-modal-title");
-        const desc = document.getElementById("invite-modal-desc");
-        if (title) title.textContent = `Join "${groupName}"`;
-        if (desc) desc.textContent = `${byName}${byEmail ? " (" + byEmail + ")" : ""} invited you to join "${groupName}". Sign in with Gmail if you want expenses to sync live.`;
-        if (modal) modal.classList.add("active");
-      }
-    }
-
-    window.acceptGroupInvite = function() {
-      if (!pendingGroupInviteData) return;
-      const { id, name, by, byEmail } = pendingGroupInviteData;
-      // Deletion is account-wide and sticky. Accepting an old invite must not
-      // resurrect a group this account has already deleted on another device.
-      if ((appState.deletedGroups || []).includes(String(id))) {
-        const deletedModal = document.getElementById("group-invite-modal");
-        if (deletedModal) deletedModal.classList.remove("active");
-        window.history.replaceState({}, document.title, window.location.pathname + "#friends");
-        toast("This group is deleted for your account. It stays hidden on all your devices.");
-        return;
-      }
-      
-      if (!appState.groups[id]) {
-        appState.groups[id] = {
-          id: id,
-          name: name,
-          currency: "₹",
-          members: [by],
-          memberLinks: byEmail ? { [by]: byEmail } : {},
-          memberEmails: byEmail ? [String(byEmail).toLowerCase().trim(), normalizeEmail(byEmail)] : [],
-          simplifyDebts: true,
-          transactions: []
-        };
-      } else if (byEmail) {
-        appState.groups[id].memberLinks = { ...(appState.groups[id].memberLinks || {}), [by]: byEmail };
-      }
-
-      const myName = currentUser ? (currentUser.displayName || currentUser.email.split("@")[0]) : "You";
-      if (!appState.groups[id].members.includes(myName)) {
-        appState.groups[id].members.push(myName);
-      }
-      appState.activeGroupId = id;
-
-      if (byEmail) {
-        addApprovedFriend(byEmail, by);
-      } else if (by) {
-        addApprovedFriend("", by);
-      }
-
-      saveState();
-      renderAll();
-      listenToCloudGroup(id);
-
-      const modal = document.getElementById("group-invite-modal");
-      if (modal) modal.classList.remove("active");
-
-      window.history.replaceState({}, document.title, window.location.pathname + "#friends");
-      toast(currentUser
-        ? `Joined "${name}". Expenses sync with ${by} while you stay signed in.`
-        : `Joined "${name}" on this device. Sign in with Gmail to sync live.`);
-    };
-
-    window.declineGroupInvite = function() {
-      const modal = document.getElementById("group-invite-modal");
-      if (modal) modal.classList.remove("active");
-      window.history.replaceState({}, document.title, window.location.pathname + "#friends");
-    };
-
-    window.shareGroupInvite = async function() {
-      const g = requireGroupForInvite();
-      if (!g) return;
-      const inviteUrl = activeGroupInviteUrl();
-      try {
-        await navigator.clipboard.writeText(inviteUrl);
-        toast(`Group invite link copied. Send it to anyone you want in "${g.name}".`);
-      } catch {
-        await askPrompt({ message: "Copy group invite link:", defaultValue: inviteUrl });
-      }
-    };
-
     // --- Secure token invites (multi-use, 24-hour expiry) ---
     let pendingInviteToken = "";
     let pendingInviteData = null;
@@ -8739,9 +8509,37 @@
       }
     }
 
+    let friendShareToken = "";
+    const friendShareBtn = document.getElementById("btn-friend-share");
+    const friendShareMenu = document.getElementById("friend-share-menu");
+
+    function closeFriendShareMenu() {
+      if (!friendShareMenu) return;
+      friendShareMenu.hidden = true;
+      friendShareBtn?.setAttribute("aria-expanded", "false");
+      friendShareToken = "";
+    }
+
+    if (friendShareBtn && friendShareMenu) {
+      friendShareBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const willOpen = friendShareMenu.hidden;
+        if (willOpen) friendShareToken = "";
+        friendShareMenu.hidden = !willOpen;
+        friendShareBtn.setAttribute("aria-expanded", String(willOpen));
+      });
+      document.addEventListener("click", (event) => {
+        if (!friendShareMenu.hidden && !event.target.closest(".share-menu-wrap")) closeFriendShareMenu();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !friendShareMenu.hidden) closeFriendShareMenu();
+      });
+    }
+
     window.createFriendInvite = async function() {
       const token = await createInvite("friend");
       if (token) await copyInviteToken(token, "Friend invite link");
+      closeFriendShareMenu();
     };
 
     window.createGroupInvite = async function() {
@@ -8752,21 +8550,25 @@
     };
 
     window.openInviteInGmail = async function() {
-      const token = await createInvite("friend");
+      const token = friendShareToken || await createInvite("friend");
       if (!token) return;
+      friendShareToken = token;
       const inputEl = document.getElementById("input-friend-email");
       const toEmail = (inputEl ? inputEl.value : "").trim();
       const myName = myInviteName();
       const subject = encodeURIComponent(`Connect with ${myName} on What's My Share?`);
       const body = encodeURIComponent(`Hey! I am using What's My Share? to track and split expenses. Connect with me using this link:\n${inviteUrlFor(token)}\n\nThe link expires in 24 hours. Sign in with Gmail to sync.\n\nCheers`);
       window.open(`mailto:${toEmail}?subject=${subject}&body=${body}`, "_blank");
+      closeFriendShareMenu();
     };
 
     window.shareViaWhatsApp = async function() {
-      const token = await createInvite("friend");
+      const token = friendShareToken || await createInvite("friend");
       if (!token) return;
+      friendShareToken = token;
       const text = encodeURIComponent(`Hey! Connect with me on What's My Share? to track and split expenses: ${inviteUrlFor(token)} (expires in 24 hours)`);
       window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+      closeFriendShareMenu();
     };
 
     function clearPendingInvite() {

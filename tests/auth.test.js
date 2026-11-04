@@ -124,9 +124,9 @@ test("group deletions sync across devices of the same account", () => {
 });
 
 test("an old invite cannot resurrect a group deleted on another device", () => {
-  const invite = between(html, "window.acceptGroupInvite = function()", "window.declineGroupInvite");
+  const invite = between(html, "window.acceptInvite = async function()", "window.declineInvite");
   assert.match(invite, /deletedGroups \|\| \[\]\)\.includes/);
-  assert.match(invite, /stays hidden on all your devices/);
+  assert.match(invite, /group-deleted/);
   assert.doesNotMatch(invite, /deletedGroups = \(appState\.deletedGroups/);
 });
 
@@ -138,6 +138,6 @@ test("phone contact entry is removed and sign-in copy says Gmail", () => {
 });
 
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v113"/);
+  assert.match(sw, /const CACHE = "fairshare-v114"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });
