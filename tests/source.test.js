@@ -198,6 +198,14 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
   assert.match(html, /Old invite links are no longer supported/);
 });
 
+test("normalized hydration pushes local-only records instead of stalling", () => {
+  assert.doesNotMatch(html, /Normalized ledger is behind local:/);
+  assert.match(html, /const localOnly = localAfterDeletes\.filter/);
+  assert.match(html, /Normalized ledger is ahead locally; pushing local records:/);
+  assert.match(html, /group\.transactions = preserveLocalReceipts\(merged\.concat\(localOnly\), localTransactions\)/);
+  assert.match(html, /console\.warn\("Normalized ledger skipped:", group\.name, plan\.errors, planErrors\)/);
+});
+
 test("redundant controls and legacy invite handlers are removed", () => {
   assert.doesNotMatch(html, /View all/);
   assert.doesNotMatch(html, /checkIncomingRequestsManual|Check now/);
@@ -612,7 +620,7 @@ test("phase 3 projects normalized group subcollections and dual-writes changes",
   assert.match(html, /import \{ projectGroupTransactions/);
   assert.match(html, /function listenToNormalizedGroup\(groupId\)/);
   assert.match(html, /function scheduleNormalizedGroupWrite\(group, options = \{\}\)/);
-  assert.match(html, /group\.transactions = projected/);
+  assert.match(html, /group\.transactions = preserveLocalReceipts\(merged\.concat\(localOnly\), localTransactions\)/);
   assert.match(html, /window\.runNormalizedMigration\(\{ quiet: true, forceGroupId: group\.id \}\)/);
   assert.match(html, /clearNormalizedListeners\(\)/);
 });

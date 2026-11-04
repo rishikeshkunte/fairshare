@@ -1047,7 +1047,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v114";
+    const APP_BUILD = "v115";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7894,11 +7894,26 @@
 
     async function syncNormalizedGroupChanges(group) {
       if (!fx || !currentUser || !group?.id || !group.normalizedVersion) return;
-      const plan = normalizeLegacyGroup(group, {
+      let plan = normalizeLegacyGroup(group, {
         ownerUid: group.ownerUid || "",
         ownerEmail: group.ownerEmail || ""
       });
-      if (!plan.ok || validateNormalizedGroup(plan).length) return;
+      let planErrors = validateNormalizedGroup(plan);
+      if (!plan.ok || planErrors.length) {
+        const repaired = migrateGroupSelfName(group) || repairGroupIdentity(group) || repairGroupMoney(group);
+        if (repaired) {
+          persistLocalState();
+          plan = normalizeLegacyGroup(group, {
+            ownerUid: group.ownerUid || "",
+            ownerEmail: group.ownerEmail || ""
+          });
+          planErrors = validateNormalizedGroup(plan);
+        }
+        if (!plan.ok || planErrors.length) {
+          console.warn("Normalized ledger skipped:", group.name, plan.errors, planErrors);
+          return;
+        }
+      }
       const written = normalizedWrittenByGroup.get(group.id) || new Map();
       const groupRef = fx.storeMod.doc(fx.db, "groups", group.id);
       const ops = [];
@@ -8080,12 +8095,28 @@
           group.memberLinks = { ...(group.memberLinks || {}), ...memberLinksFromDocs(memberDocs) };
         }
         const projected = projectGroupTransactions({ memberDocs, expenseDocs, settlementDocs });
-        const localCount = (group.transactions || []).length;
-        if (projected.length < localCount && localCount > 0) {
-          console.warn("Normalized ledger is behind local:", group.name, projected.length, localCount);
-          return;
+        const localTransactions = Array.isArray(group.transactions) ? group.transactions : [];
+        const deletedIds = new Set();
+        [...expenseDocs, ...settlementDocs].forEach(doc => {
+          if (!doc || !doc.deletedAt) return;
+          const id = String(doc.id || "").replace(/^expense_/, "").replace(/^settlement_/, "");
+          if (id) deletedIds.add(id);
+        });
+        const localAfterDeletes = localTransactions.filter(tx => !deletedIds.has(String(tx?.id)));
+        const localById = new Map(localAfterDeletes.map(tx => [String(tx?.id), tx]));
+        const merged = projected.map(tx => {
+          const local = localById.get(String(tx.id));
+          if (!local) return tx;
+          const localStamp = Number(local.updatedAt || local.timestamp || 0);
+          const cloudStamp = Number(tx.updatedAt || tx.timestamp || 0);
+          return localStamp > cloudStamp ? local : tx;
+        });
+        const mergedIds = new Set(merged.map(tx => String(tx.id)));
+        const localOnly = localAfterDeletes.filter(tx => !mergedIds.has(String(tx?.id)));
+        if (localOnly.length) {
+          console.warn("Normalized ledger is ahead locally; pushing local records:", group.name, localOnly.length);
         }
-        group.transactions = projected;
+        group.transactions = preserveLocalReceipts(merged.concat(localOnly), localTransactions);
         group.normalizedVersion = 1;
         group._normalizedSig = normalizedSignature(group);
         const written = new Map();

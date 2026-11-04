@@ -57,6 +57,28 @@ test("excludes soft-deleted normalized records", () => {
   assert.equal(transactions.length, 1);
 });
 
+test("retired member documents still resolve old settlement member ids", () => {
+  const plan = normalizeLegacyGroup(legacy, { ownerUid: "uid_rishi", ownerEmail: "rishikeshkunte@gmail.com" });
+  const retired = {
+    id: "name_aman_shrivas_2",
+    displayName: "Aman Shrivas",
+    emailCanonical: "",
+    uid: null,
+    role: "member",
+    status: "removed"
+  };
+  const settlementDoc = { ...plan.settlements[0], fromMemberId: retired.id };
+  const transactions = projectGroupTransactions({
+    memberDocs: [...plan.members, retired],
+    expenseDocs: [],
+    settlementDocs: [settlementDoc]
+  });
+  assert.equal(transactions[0].payer, "Aman Shrivas");
+  const reprojected = normalizeLegacyGroup({ ...legacy, transactions }, { ownerUid: "uid_rishi", ownerEmail: "rishikeshkunte@gmail.com" });
+  assert.equal(reprojected.ok, true);
+  assert.equal(reprojected.settlements[0].fromMemberId, plan.settlements[0].fromMemberId);
+});
+
 test("stable signatures ignore object key order so snapshots never look changed", () => {
   const plan = normalizeLegacyGroup(legacy, { ownerUid: "uid_rishi", ownerEmail: "rishikeshkunte@gmail.com" });
   const doc = plan.expenses[0];

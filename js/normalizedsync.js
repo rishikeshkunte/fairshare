@@ -39,7 +39,9 @@ export function projectGroupTransactions({ memberDocs = [], expenseDocs = [], se
   const nameById = new Map();
   (memberDocs || []).forEach(member => {
     if (!member || !member.id) return;
-    if (member.status && member.status !== "active") return;
+    // Retired documents keep their display name so an older settlement or
+    // share id can still resolve back to the member name after an email link
+    // changes that member's document id.
     nameById.set(member.id, member.displayName || member.id);
   });
 
