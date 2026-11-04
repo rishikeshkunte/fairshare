@@ -266,6 +266,10 @@ test("group sync can be repaired from cloud", () => {
   assert.match(html, /data-call="reloadGroupFromCloud"/);
   assert.match(html, /window\.reloadGroupFromCloud = async function\(\)/);
   assert.match(html, /Local-only changes in this group will be lost/);
+  assert.match(html, /if \(normalizedVersion\) \{/);
+  assert.match(html, /getDocs\(fx\.storeMod\.collection\(groupRef, "members"\)\)/);
+  assert.match(html, /getDocs\(fx\.storeMod\.collection\(groupRef, "settlements"\)\)/);
+  assert.match(html, /Reloaded "\$\{g\.name\}" from the shared ledger/);
   assert.match(html, /preserveLocalReceipts\(/);
 });
 

@@ -1047,7 +1047,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v116";
+    const APP_BUILD = "v117";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7405,12 +7405,52 @@
         confirmLabel: "Reload"
       }))) return;
       try {
-        const snapshot = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "groups", g.id));
+        const groupRef = fx.storeMod.doc(fx.db, "groups", g.id);
+        const snapshot = await fx.storeMod.getDoc(groupRef);
         if (!snapshot.exists()) {
           toast("This group is not in the cloud.");
           return;
         }
         const data = snapshot.data() || {};
+        const normalizedVersion = Number(data.normalizedVersion) || Number(g.normalizedVersion) || 0;
+        if (normalizedVersion) {
+          const [memberSnap, expenseSnap, settlementSnap] = await Promise.all([
+            fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "members")),
+            fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "expenses")),
+            fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "settlements"))
+          ]);
+          const memberDocs = memberSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+          const expenseDocs = expenseSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+          const settlementDocs = settlementSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+          const members = projectGroupMembers(memberDocs);
+          g.name = data.name || g.name;
+          g.currency = data.currency || g.currency;
+          if (members.length) g.members = members.map(member => member.name);
+          g.memberLinks = memberLinksFromDocs(memberDocs);
+          g.memberEmails = Array.isArray(data.memberEmails) ? data.memberEmails : [];
+          g.transactions = preserveLocalReceipts(
+            projectGroupTransactions({ memberDocs, expenseDocs, settlementDocs }),
+            g.transactions || []
+          );
+          g.deletedTransactions = [];
+          g.simplifyDebts = data.simplifyDebts !== false;
+          if (data.ownerUid) g.ownerUid = data.ownerUid;
+          if (data.ownerEmail) g.ownerEmail = data.ownerEmail;
+          g.normalizedVersion = normalizedVersion;
+          g._normalizedSig = normalizedSignature(g);
+          g._pendingNormalizedWrite = false;
+          const written = new Map();
+          memberDocs.forEach(doc => written.set(normalizedWriteKey("members", doc.id), stableStringify(signatureDoc(doc))));
+          expenseDocs.forEach(doc => written.set(normalizedWriteKey("expenses", doc.id), stableStringify(signatureDoc(doc))));
+          settlementDocs.forEach(doc => written.set(normalizedWriteKey("settlements", doc.id), stableStringify(signatureDoc(doc))));
+          normalizedWrittenByGroup.set(g.id, written);
+          normalizedHydrated.add(g.id);
+          persistLocalState();
+          listenToNormalizedGroup(g.id);
+          renderAll();
+          toast(`Reloaded "${g.name}" from the shared ledger.`);
+          return;
+        }
         g.name = data.name || g.name;
         g.currency = data.currency || g.currency;
         g.members = Array.isArray(data.members) ? data.members : g.members;
