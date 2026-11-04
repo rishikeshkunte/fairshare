@@ -93,6 +93,31 @@ export function projectGroupTransactions({ memberDocs = [], expenseDocs = [], se
   return transactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 }
 
+export function mergeNormalizedTransactions({ projected = [], localTransactions = [], deletedDocs = [] } = {}) {
+  const deletedIds = new Set();
+  (deletedDocs || []).forEach(doc => {
+    if (!doc || !doc.deletedAt) return;
+    const id = String(doc.id || "").replace(/^expense_/, "").replace(/^settlement_/, "");
+    if (id) deletedIds.add(id);
+  });
+  const localAfterDeletes = (localTransactions || []).filter(tx => !deletedIds.has(String(tx?.id)));
+  const localById = new Map(localAfterDeletes.map(tx => [String(tx?.id), tx]));
+  const merged = (projected || []).map(tx => {
+    const local = localById.get(String(tx.id));
+    if (!local) return tx;
+    const localStamp = Number(local.updatedAt || local.timestamp || 0);
+    const cloudStamp = Number(tx.updatedAt || tx.timestamp || 0);
+    return localStamp > cloudStamp ? local : tx;
+  });
+  const mergedIds = new Set(merged.map(tx => String(tx.id)));
+  const localOnly = localAfterDeletes.filter(tx => !mergedIds.has(String(tx?.id)));
+  return {
+    transactions: merged.concat(localOnly),
+    localOnlyCount: localOnly.length,
+    deletedCount: deletedIds.size
+  };
+}
+
 export function projectGroupMembers(memberDocs = []) {
   return (memberDocs || [])
     .filter(member => member && (!member.status || member.status === "active"))

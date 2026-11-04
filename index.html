@@ -1010,7 +1010,7 @@
     import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, mergePairLedger, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
     import { repairGroupNames } from "./js/groupnames.js";
     import { normalizeLegacyGroup, validateNormalizedGroup } from "./js/groupschema.js";
-    import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, stableStringify } from "./js/normalizedsync.js";
+    import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, mergeNormalizedTransactions, stableStringify } from "./js/normalizedsync.js";
     import { diffFriendsMap, friendsFromCloud, diffDeletedGroupsMap, deletedGroupsFromCloud } from "./js/profileschema.js";
 
     document.body.addEventListener("click", (event) => {
@@ -1047,7 +1047,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v115";
+    const APP_BUILD = "v116";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7745,8 +7745,6 @@
       if (!fx || !user) return;
       if (pushedGroupsForUid === user.uid) return;
       pushedGroupsForUid = user.uid;
-      const myEmail = (user.email || "").toLowerCase().trim();
-      const myEmailNorm = normalizeEmail(myEmail);
       for (const group of Object.values(appState.groups || {})) {
         if (!group || !group.id) continue;
         if ((appState.deletedGroups || []).includes(group.id)) continue;
@@ -7755,112 +7753,6 @@
           continue;
         }
         scheduleNormalizedGroupWrite(group);
-        continue;
-        const groupRepaired = (() => {
-          let repaired = false;
-          if (migrateGroupSelfName(group)) repaired = true;
-          if (repairGroupIdentity(group)) repaired = true;
-          if (repairGroupMoney(group)) repaired = true;
-          return repaired;
-        })();
-        try {
-          const groupRef = fx.storeMod.doc(fx.db, "groups", group.id);
-          const created = await fx.storeMod.runTransaction(fx.db, async (transaction) => {
-            const snapshot = await transaction.get(groupRef);
-            if (snapshot.exists()) {
-              // Reconcile both directions. Cloud transactions missing locally are
-              // added, and local edits/tombstones are pushed to the shared ledger.
-              const cloudData = snapshot.data() || {};
-              if (cloudData.deletedAt) return "deleted";
-              const localTransactions = group.transactions || [];
-              const merged = mergePairLedger({
-                localTransactions: stripReceiptBytes(localTransactions),
-                remoteTransactions: cloudData.transactions || [],
-                localDeleted: group.deletedTransactions || [],
-                remoteDeleted: cloudData.deletedTransactions || []
-              });
-              const cloudTransactions = cloudData.transactions || [];
-              const cloudDeleted = cloudData.deletedTransactions || [];
-              const cloudMembers = Array.isArray(cloudData.members) ? cloudData.members : [];
-              // Push a repaired member list even when the ledger itself matches.
-              // Never push a placeholder over a clean cloud list.
-              const membersNeedRepair = cloudMembers.length > 0
-                && !group.members.includes("You")
-                && stableStringify(group.members) !== stableStringify(cloudMembers);
-              const changed = groupRepaired
-                || membersNeedRepair
-                || stableStringify(merged.transactions) !== stableStringify(cloudTransactions)
-                || stableStringify(merged.deletedTransactions) !== stableStringify(cloudDeleted);
-              group.transactions = preserveLocalReceipts(merged.transactions, localTransactions);
-              group.deletedTransactions = merged.deletedTransactions;
-              if (!changed) return false;
-              const write = {
-                transactions: stripReceiptBytes(merged.transactions),
-                deletedTransactions: merged.deletedTransactions,
-                updatedAt: serverTimestamp(fx),
-                updatedBy: myEmail
-              };
-              if (groupRepaired || membersNeedRepair) {
-                const memberLinks = { ...(cloudData.memberLinks || {}), ...(group.memberLinks || {}) };
-                delete memberLinks.You;
-                write.members = group.members;
-                write.memberLinks = memberLinks;
-                group.memberLinks = memberLinks;
-              }
-              transaction.set(groupRef, write, { merge: true });
-              return true;
-            }
-            const memberLinks = { ...(group.memberLinks || {}) };
-            memberLinks[getMyGroupMemberName(group)] = myEmail;
-            const emails = new Set([myEmail, myEmailNorm]);
-            (Array.isArray(group.memberEmails) ? group.memberEmails : []).forEach(email => {
-              if (typeof email === "string" && email) emails.add(email);
-            });
-            Object.values(memberLinks).forEach(email => {
-              const value = String(email || "").toLowerCase().trim();
-              if (!value) return;
-              emails.add(value);
-              emails.add(normalizeEmail(value));
-            });
-            (appState.friends || []).forEach(friend => {
-              if (!friend.email || !(group.members || []).includes(friend.name)) return;
-              const email = String(friend.email).toLowerCase().trim();
-              if (!email) return;
-              emails.add(email);
-              emails.add(normalizeEmail(email));
-              memberLinks[friend.name] = email;
-            });
-            const finalEmails = Array.from(emails).filter(Boolean);
-            group.memberLinks = memberLinks;
-            group.memberEmails = finalEmails;
-            transaction.set(groupRef, {
-              id: group.id,
-              schemaVersion: 9,
-              name: group.name || "Shared group",
-              currency: group.currency || "₹",
-              members: Array.isArray(group.members) && group.members.length ? group.members : ["You"],
-              simplifyDebts: group.simplifyDebts !== false,
-              memberLinks,
-              memberEmails: finalEmails,
-              transactions: stripReceiptBytes(group.transactions || []),
-              deletedTransactions: Array.isArray(group.deletedTransactions) ? group.deletedTransactions : [],
-              updatedAt: serverTimestamp(fx),
-              updatedBy: myEmail
-            }, { merge: true });
-            return true;
-          });
-          if (created === "deleted") {
-            removeGroupLocally(group.id);
-            continue;
-          }
-          if (created) {
-            persistLocalState();
-            renderAll();
-          }
-        } catch (err) {
-          // A group the signed-in account cannot read/update is left untouched.
-          console.warn("Local group upload note:", err?.code || err?.message || err);
-        }
       }
     }
 
@@ -8096,27 +7988,15 @@
         }
         const projected = projectGroupTransactions({ memberDocs, expenseDocs, settlementDocs });
         const localTransactions = Array.isArray(group.transactions) ? group.transactions : [];
-        const deletedIds = new Set();
-        [...expenseDocs, ...settlementDocs].forEach(doc => {
-          if (!doc || !doc.deletedAt) return;
-          const id = String(doc.id || "").replace(/^expense_/, "").replace(/^settlement_/, "");
-          if (id) deletedIds.add(id);
+        const reconciled = mergeNormalizedTransactions({
+          projected,
+          localTransactions,
+          deletedDocs: [...expenseDocs, ...settlementDocs]
         });
-        const localAfterDeletes = localTransactions.filter(tx => !deletedIds.has(String(tx?.id)));
-        const localById = new Map(localAfterDeletes.map(tx => [String(tx?.id), tx]));
-        const merged = projected.map(tx => {
-          const local = localById.get(String(tx.id));
-          if (!local) return tx;
-          const localStamp = Number(local.updatedAt || local.timestamp || 0);
-          const cloudStamp = Number(tx.updatedAt || tx.timestamp || 0);
-          return localStamp > cloudStamp ? local : tx;
-        });
-        const mergedIds = new Set(merged.map(tx => String(tx.id)));
-        const localOnly = localAfterDeletes.filter(tx => !mergedIds.has(String(tx?.id)));
-        if (localOnly.length) {
-          console.warn("Normalized ledger is ahead locally; pushing local records:", group.name, localOnly.length);
+        if (reconciled.localOnlyCount) {
+          console.warn("Normalized ledger is ahead locally; pushing local records:", group.name, reconciled.localOnlyCount);
         }
-        group.transactions = preserveLocalReceipts(merged.concat(localOnly), localTransactions);
+        group.transactions = preserveLocalReceipts(reconciled.transactions, localTransactions);
         group.normalizedVersion = 1;
         group._normalizedSig = normalizedSignature(group);
         const written = new Map();

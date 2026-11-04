@@ -200,9 +200,9 @@ test("secure invite links can be created, copied, accepted, and revoked", () => 
 
 test("normalized hydration pushes local-only records instead of stalling", () => {
   assert.doesNotMatch(html, /Normalized ledger is behind local:/);
-  assert.match(html, /const localOnly = localAfterDeletes\.filter/);
   assert.match(html, /Normalized ledger is ahead locally; pushing local records:/);
-  assert.match(html, /group\.transactions = preserveLocalReceipts\(merged\.concat\(localOnly\), localTransactions\)/);
+  assert.match(html, /mergeNormalizedTransactions\(\{/);
+  assert.match(html, /group\.transactions = preserveLocalReceipts\(reconciled\.transactions, localTransactions\)/);
   assert.match(html, /console\.warn\("Normalized ledger skipped:", group\.name, plan\.errors, planErrors\)/);
 });
 
@@ -262,12 +262,11 @@ test("group members can repair cloud sync with a linked Gmail or new invite", ()
   assert.match(html, /Cloud group sync was denied/);
 });
 
-test("group sync can be repaired from cloud and pushes local edits", () => {
+test("group sync can be repaired from cloud", () => {
   assert.match(html, /data-call="reloadGroupFromCloud"/);
   assert.match(html, /window\.reloadGroupFromCloud = async function\(\)/);
-  assert.match(html, /Reconcile both directions/);
-  assert.match(html, /cloudTransactions/);
   assert.match(html, /Local-only changes in this group will be lost/);
+  assert.match(html, /preserveLocalReceipts\(/);
 });
 
 test("maintenance controls are not exposed to users", () => {
@@ -620,7 +619,8 @@ test("phase 3 projects normalized group subcollections and dual-writes changes",
   assert.match(html, /import \{ projectGroupTransactions/);
   assert.match(html, /function listenToNormalizedGroup\(groupId\)/);
   assert.match(html, /function scheduleNormalizedGroupWrite\(group, options = \{\}\)/);
-  assert.match(html, /group\.transactions = preserveLocalReceipts\(merged\.concat\(localOnly\), localTransactions\)/);
+  assert.match(html, /mergeNormalizedTransactions\(\{/);
+  assert.match(html, /group\.transactions = preserveLocalReceipts\(reconciled\.transactions, localTransactions\)/);
   assert.match(html, /window\.runNormalizedMigration\(\{ quiet: true, forceGroupId: group\.id \}\)/);
   assert.match(html, /clearNormalizedListeners\(\)/);
 });
@@ -667,7 +667,6 @@ test("normalized write signatures ignore Firestore key order", () => {
 test("roster and legacy membership comparisons ignore Firestore key order", () => {
   assert.match(html, /const localChanged = stableStringify\(mergedFriends\) !== stableStringify\(appState\.friends \|\| \[\]\)/);
   assert.match(html, /const signature = stableStringify\(\{ friendDelta, deletedDelta \}\);\s*if \(signature === friendsRosterLastSig\) return;/);
-  assert.match(html, /stableStringify\(group\.members\) !== stableStringify\(cloudMembers\)/);
   assert.match(html, /stableStringify\(localGroup\.memberLinks \|\| \{\}\) !== stableStringify\(cloudData\.memberLinks\)/);
 });
 

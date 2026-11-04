@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeLegacyGroup } from "../js/groupschema.js";
-import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, stableStringify } from "../js/normalizedsync.js";
+import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, mergeNormalizedTransactions, stableStringify } from "../js/normalizedsync.js";
 
 const legacy = {
   id: "g1",
@@ -77,6 +77,39 @@ test("retired member documents still resolve old settlement member ids", () => {
   const reprojected = normalizeLegacyGroup({ ...legacy, transactions }, { ownerUid: "uid_rishi", ownerEmail: "rishikeshkunte@gmail.com" });
   assert.equal(reprojected.ok, true);
   assert.equal(reprojected.settlements[0].fromMemberId, plan.settlements[0].fromMemberId);
+});
+
+test("normalized merge keeps local-only records and cloud tombstones", () => {
+  const projected = [
+    { id: "e1", type: "expense", amount: 1000, updatedAt: 10 },
+    { id: "s1", type: "settlement", amount: 500, updatedAt: 20 }
+  ];
+  const local = [
+    { id: "e1", type: "expense", amount: 1000, updatedAt: 15 },
+    { id: "s1", type: "settlement", amount: 500, updatedAt: 5 },
+    { id: "s2", type: "settlement", amount: 250, updatedAt: 30 }
+  ];
+  const result = mergeNormalizedTransactions({
+    projected,
+    localTransactions: local,
+    deletedDocs: [{ id: "expense_del", deletedAt: 1 }, { id: "settlement_dead", deletedAt: 1 }]
+  });
+  assert.equal(result.transactions.length, 3);
+  assert.equal(result.transactions.find(tx => tx.id === "e1").updatedAt, 15);
+  assert.equal(result.transactions.find(tx => tx.id === "s1").updatedAt, 20);
+  assert.ok(result.transactions.find(tx => tx.id === "s2"));
+  assert.equal(result.localOnlyCount, 1);
+  assert.equal(result.deletedCount, 2);
+});
+
+test("normalized merge drops a local record cloud has tombstoned", () => {
+  const result = mergeNormalizedTransactions({
+    projected: [],
+    localTransactions: [{ id: "s9", type: "settlement", amount: 100, updatedAt: 1 }],
+    deletedDocs: [{ id: "settlement_s9", deletedAt: 2 }]
+  });
+  assert.equal(result.transactions.length, 0);
+  assert.equal(result.localOnlyCount, 0);
 });
 
 test("stable signatures ignore object key order so snapshots never look changed", () => {
