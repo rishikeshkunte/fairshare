@@ -291,6 +291,38 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     })));
   });
 
+  await t.test("group access accepts memberUids when the email list is absent", async () => {
+    await env.clearFirestore();
+    await seed(["groups", "guid"], {
+      id: "guid",
+      name: "UID group",
+      currency: "INR",
+      members: ["Bob"],
+      memberUids: ["bob"],
+      transactions: [],
+      deletedTransactions: []
+    });
+    await assertSucceeds(getDoc(doc(bobDb, "groups", "guid")));
+    await assertFails(getDoc(doc(aliceDb, "groups", "guid")));
+    const listed = await assertSucceeds(getDocs(query(
+      collection(bobDb, "groups"),
+      where("memberUids", "array-contains", "bob")
+    )));
+    assert.equal(listed.size, 1);
+    await assertSucceeds(updateDoc(doc(bobDb, "groups", "guid"), stamped({ name: "Renamed by Bob" })));
+    await assertFails(updateDoc(doc(aliceDb, "groups", "guid"), stamped({ name: "Nope" })));
+    await assertSucceeds(setDoc(doc(bobDb, "groups", "guid", "expenses", "expense_u1"), stamped({
+      amountPaise: 500,
+      payerMemberId: "email_bob_outlook_com",
+      shares: { email_bob_outlook_com: 500 },
+      category: "Other",
+      description: "UID access",
+      dateISO: "2026-11-05",
+      createdBy: BOB_RAW
+    })));
+    await assertFails(getDocs(collection(aliceDb, "groups", "guid", "expenses")));
+  });
+
   await t.test("stale clients without a fresh write stamp are rejected", async () => {
     await env.clearFirestore();
     const unstamped = {

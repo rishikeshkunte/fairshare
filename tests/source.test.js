@@ -10,6 +10,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
 const css = readFileSync(join(root, "fairshare.css"), "utf8");
 const rules = readFileSync(join(root, "firestore.rules"), "utf8");
+const storage = readFileSync(join(root, "storage.rules"), "utf8");
 const sync = readFileSync(join(root, "js", "sync.js"), "utf8");
 const firebase = readFileSync(join(root, "js", "firebase.js"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
@@ -82,10 +83,16 @@ test("signed-out summaries, details, and trash exclude cached 1-on-1 data", () =
 });
 
 test("group discovery rules restrict reads to signed-in group members", () => {
-  assert.match(rules, /allow list:\s*if signedIn\(\) && email\(\) in resource\.data\.memberEmails;/);
+  assert.match(rules, /allow list:\s*if signedIn\(\)[\s\S]*?email\(\) in resource\.data\.memberEmails[\s\S]*?request\.auth\.uid in resource\.data\.memberUids/);
   assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
+  assert.match(rules, /function isMemberUid\(data\)[\s\S]*?request\.auth\.uid in data\.memberUids/);
   assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?groups\/\$\(groupId\)[\s\S]*?isMember\(resource\.data\)/);
   assert.match(rules, /direct_pairs[\s\S]*?allow get:\s*if signedIn\(\)[\s\S]*?direct_pairs\/\$\(pairId\)[\s\S]*?pairMember\(resource\.data\)/);
+});
+
+test("storage receipts accept UID membership with the email fallback", () => {
+  assert.match(storage, /request\.auth\.uid in groupData\(\)\.memberUids/);
+  assert.match(storage, /request\.auth\.token\.email\.lower\(\) in groupData\(\)\.memberEmails/);
 });
 
 test("shared expense sync uses transactional merges and stable participant identities", () => {

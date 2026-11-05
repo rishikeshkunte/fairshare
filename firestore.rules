@@ -39,9 +39,19 @@ service cloud.firestore {
         && data.memberEmails is list
         && email() in data.memberEmails;
     }
+    // UID membership (v120+). Kept alongside the email list until the email
+    // fallback is removed in a later release.
+    function isMemberUid(data) {
+      return signedIn()
+        && data.memberUids is list
+        && request.auth.uid in data.memberUids;
+    }
+    function groupData(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)).data;
+    }
     function groupMember(groupId) {
       return signedIn()
-        && email() in get(/databases/$(database)/documents/groups/$(groupId)).data.memberEmails;
+        && (isMemberUid(groupData(groupId)) || email() in groupData(groupId).memberEmails);
     }
     function inviteRef(token) {
       return /databases/$(database)/documents/invites/$(token);
@@ -86,16 +96,20 @@ service cloud.firestore {
       // A transaction may check whether a new group document exists before creating it.
       // Existing documents remain readable only by listed members.
       allow get: if signedIn()
-        && (!exists(/databases/$(database)/documents/groups/$(groupId)) || isMember(resource.data));
-      // Group discovery queries must constrain memberEmails to the signed-in email.
+        && (!exists(/databases/$(database)/documents/groups/$(groupId)) || isMember(resource.data) || isMemberUid(resource.data));
+      // Group discovery queries must constrain memberEmails to the signed-in email,
+      // or memberUids to the signed-in UID.
       // List rules evaluate membership directly because queried resource fields do
       // not reliably satisfy `is list` checks in the collection rule evaluation.
-      allow list: if signedIn() && email() in resource.data.memberEmails;
+      allow list: if signedIn()
+        && (email() in resource.data.memberEmails || request.auth.uid in resource.data.memberUids);
       allow create: if signedIn()
-        && request.resource.data.memberEmails is list
-        && email() in request.resource.data.memberEmails
+        && (
+          (request.resource.data.memberEmails is list && email() in request.resource.data.memberEmails)
+          || (request.resource.data.memberUids is list && request.auth.uid in request.resource.data.memberUids)
+        )
         && freshClientWrite();
-      allow update: if isMember(resource.data) && freshClientUpdate();
+      allow update: if (isMember(resource.data) || isMemberUid(resource.data)) && freshClientUpdate();
       // A signed-in recipient of a valid, unexpired, unrevoked group invite may
       // add themselves. They cannot change the group's name, currency, ledger,
       // or remove existing members in this write.
