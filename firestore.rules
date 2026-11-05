@@ -113,14 +113,14 @@ service cloud.firestore {
         && request.resource.data.members.hasAll(resource.data.members)
         && request.resource.data.members.size() <= resource.data.members.size() + 1
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'memberEmails', 'members', 'lastJoinToken', 'lastJoinAt', 'updatedAt', 'updatedBy',
+             'memberEmails', 'memberUids', 'members', 'lastJoinToken', 'lastJoinAt', 'updatedAt', 'updatedBy',
              'clientBuild', 'clientWriteId'
            ]);
       allow delete: if false;
 
       // Normalized group subcollections (migration phase). Membership still uses
-      // the legacy memberEmails list until phase 3 switches the client to member
-      // documents.
+      // the legacy memberEmails list; clients dual-write memberUids, but rules
+      // switch to it only in a later release.
       match /members/{memberId} {
         allow read: if groupMember(groupId);
         allow delete: if false;

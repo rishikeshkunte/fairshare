@@ -42,6 +42,7 @@ function stamped(data = {}) {
 test("Firestore emulator rules", { skip: skipReason }, async (t) => {
   const { initializeTestEnvironment, assertFails, assertSucceeds } = await import("@firebase/rules-unit-testing");
   const {
+    Timestamp,
     collection,
     collectionGroup,
     deleteDoc,
@@ -258,6 +259,36 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     )));
     assert.equal(found.size, 1);
     await assertFails(getDoc(doc(bobDb, "groups", "g1", "members", "email_alice_gmail_com")));
+  });
+
+  await t.test("invite acceptance may add memberUids alongside memberEmails", async () => {
+    const token = "invite-token-0123456789";
+    await env.clearFirestore();
+    await seed(["groups", "g1"], {
+      id: "g1",
+      name: "Test group",
+      currency: "INR",
+      members: ["Alice"],
+      memberEmails: [ALICE_RAW],
+      memberUids: ["alice"],
+      transactions: [],
+      deletedTransactions: []
+    });
+    await seed(["invites", token], {
+      type: "group",
+      groupId: "g1",
+      revoked: false,
+      expiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000)
+    });
+    await assertSucceeds(updateDoc(doc(bobDb, "groups", "g1"), stamped({
+      memberEmails: [ALICE_RAW, BOB_RAW],
+      memberUids: ["alice", "bob"],
+      members: ["Alice", "Bob"],
+      lastJoinToken: token,
+      lastJoinAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      updatedBy: BOB_RAW
+    })));
   });
 
   await t.test("stale clients without a fresh write stamp are rejected", async () => {
