@@ -6,7 +6,9 @@
     "test": "node --test",
     "test:rules": "firebase emulators:exec --only firestore --project demo-fairshare \"node --test tests/rules.test.js\"",
     "repair:dry": "node ops/repair.mjs --project fairshare-app-ba160",
-    "repair:apply": "node ops/repair.mjs --project fairshare-app-ba160 --apply"
+    "repair:apply": "node ops/repair.mjs --project fairshare-app-ba160 --apply",
+    "migrate:profiles:dry": "node ops/migrate-profiles.mjs --project fairshare-app-ba160",
+    "migrate:profiles:apply": "node ops/migrate-profiles.mjs --project fairshare-app-ba160 --apply"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^6.0.0",

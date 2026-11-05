@@ -6,8 +6,9 @@
  * list. Map keys are deterministic and contain no "." or "/" so they are safe
  * as Firestore field names.
  *
- * The legacy `friends[]` and `deletedGroups[]` arrays are still read during the
- * transition window; they are never written once the maps are in use.
+ * The legacy `friends[]` and `deletedGroups[]` arrays are no longer read. A
+ * one-time `ops/migrate-profiles.mjs` run copied every legacy record into the
+ * maps before the fallback was removed.
  */
 
 import { stableStringify } from "./normalizedsync.js";
@@ -101,20 +102,11 @@ export function diffFriendsMap(friends = [], cloudMap = {}, now = Date.now()) {
   return entries;
 }
 
-/** Cloud map unioned with the legacy array; the map wins on key collision. */
-export function friendsFromCloud(cloudMap = {}, legacyArray = []) {
+/** Cloud map projected into roster records; tombstones are skipped. */
+export function friendsFromCloud(cloudMap = {}) {
   const merged = new Map();
-  (legacyArray || []).forEach(friend => {
-    if (!friend || !friend.name) return;
-    const key = friendProfileKey(friend);
-    merged.set(key, { ...friend, profileKey: key });
-  });
   Object.entries(cloudMap || {}).forEach(([key, record]) => {
-    if (!record) return;
-    if (isTombstone(record)) {
-      merged.delete(key);
-      return;
-    }
+    if (!record || isTombstone(record)) return;
     merged.set(key, {
       id: record.key || key,
       profileKey: key,
@@ -129,9 +121,8 @@ export function friendsFromCloud(cloudMap = {}, legacyArray = []) {
   return Array.from(merged.values()).filter(friend => friend && friend.name);
 }
 
-export function deletedGroupsFromCloud(cloudMap = {}, legacyArray = []) {
+export function deletedGroupsFromCloud(cloudMap = {}) {
   const ids = new Set();
-  (legacyArray || []).forEach(id => { if (id) ids.add(String(id)); });
   Object.entries(cloudMap || {}).forEach(([key, value]) => {
     if (value) ids.add(String(key));
   });

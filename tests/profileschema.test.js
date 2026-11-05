@@ -67,24 +67,20 @@ test("a bulk save batches every changed key into one object", () => {
   assert.equal(Object.keys(entries).length, 12);
 });
 
-test("cloud reads union the map with the legacy array, map wins, tombstones hide", () => {
+test("cloud reads project the map and skip tombstones", () => {
   const key = friendProfileKey({ name: "A", email: "a@example.com" });
   const merged = friendsFromCloud({
     [key]: { key, name: "A renamed", email: "a@example.com", hidden: true },
     [friendProfileKey({ name: "Gone", email: "gone@example.com" })]: { deletedAt: 5 }
-  }, [
-    { name: "A", email: "a@example.com" },
-    { name: "Gone", email: "gone@example.com" },
-    { name: "Legacy", email: "legacy@example.com" }
-  ]);
+  });
   const names = merged.map(friend => friend.name).sort();
-  assert.deepEqual(names, ["A renamed", "Legacy"]);
+  assert.deepEqual(names, ["A renamed"]);
   assert.equal(merged.find(friend => friend.name === "A renamed").hidden, true);
 });
 
-test("deleted-group map writes only missing ids and reads the union", () => {
+test("deleted-group map writes only missing ids and reads map keys", () => {
   const cloud = { g1: true };
   assert.deepEqual(diffDeletedGroupsMap(["g1"], cloud), {});
   assert.deepEqual(diffDeletedGroupsMap(["g1", "g2"], cloud), { g2: true });
-  assert.deepEqual(deletedGroupsFromCloud(cloud, ["g0"]).sort(), ["g0", "g1"]);
+  assert.deepEqual(deletedGroupsFromCloud(cloud), ["g1"]);
 });
