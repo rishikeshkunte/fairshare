@@ -82,12 +82,11 @@ test("dialogs render above the privacy gate", () => {
   assert.ok(dialog > gate, "dialog must be above the gate");
 });
 
-test("normalized group writes keep the discovery email list", () => {
+test("normalized group writes keep the UID membership list", () => {
   const sync = between(html, "async function syncNormalizedGroupChanges(", "\n    function scheduleNormalizedGroupWrite");
-  assert.match(sync, /Array\.isArray\(group\.memberEmails\)/);
-  assert.match(sync, /plan\.members\.map\(member => member\.emailCanonical\)/);
-  assert.match(sync, /memberEmails: normalizedEmails/);
-  assert.doesNotMatch(sync, /cloudData\.transactions/);
+  assert.match(sync, /const memberUids = collectMemberUids\(group, plan\)/);
+  assert.match(sync, /memberUids/);
+  assert.doesNotMatch(sync, /memberEmails/);
 });
 
 test("group membership dual-writes memberUids for the bridge removal", () => {
@@ -148,6 +147,6 @@ test("phone contact entry is removed and sign-in copy says Gmail", () => {
 });
 
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v120"/);
+  assert.match(sw, /const CACHE = "fairshare-v121"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });

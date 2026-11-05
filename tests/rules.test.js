@@ -181,7 +181,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       name: "Test group",
       currency: "INR",
       members: ["Alice", "Bob"],
-      memberEmails: [ALICE_RAW],
+      memberUids: ["alice"],
       transactions: [],
       deletedTransactions: []
     };
@@ -197,7 +197,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
 
     const listed = await assertSucceeds(getDocs(query(
       collection(aliceDb, "groups"),
-      where("memberEmails", "array-contains", ALICE_RAW)
+      where("memberUids", "array-contains", "alice")
     )));
     assert.equal(listed.size, 1);
 
@@ -210,7 +210,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       ...group,
       id: "g3",
       name: "Not allowed",
-      memberEmails: [BOB_RAW]
+      memberUids: ["bob"]
     }));
     await assertFails(deleteDoc(doc(aliceDb, "groups", "g2")));
   });
@@ -221,7 +221,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       name: "Test group",
       currency: "INR",
       members: ["Alice"],
-      memberEmails: [ALICE_RAW],
+      memberUids: ["alice"],
       transactions: [],
       deletedTransactions: []
     };
@@ -261,7 +261,7 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     await assertFails(getDoc(doc(bobDb, "groups", "g1", "members", "email_alice_gmail_com")));
   });
 
-  await t.test("invite acceptance may add memberUids alongside memberEmails", async () => {
+  await t.test("invite acceptance adds the recipient UID", async () => {
     const token = "invite-token-0123456789";
     await env.clearFirestore();
     await seed(["groups", "g1"], {
@@ -269,7 +269,6 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       name: "Test group",
       currency: "INR",
       members: ["Alice"],
-      memberEmails: [ALICE_RAW],
       memberUids: ["alice"],
       transactions: [],
       deletedTransactions: []
@@ -281,7 +280,6 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       expiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000)
     });
     await assertSucceeds(updateDoc(doc(bobDb, "groups", "g1"), stamped({
-      memberEmails: [ALICE_RAW, BOB_RAW],
       memberUids: ["alice", "bob"],
       members: ["Alice", "Bob"],
       lastJoinToken: token,
@@ -289,6 +287,40 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
       updatedAt: Timestamp.now(),
       updatedBy: BOB_RAW
     })));
+  });
+
+  await t.test("a member added by email can claim their own UID", async () => {
+    const memberId = "email_bob_outlook_com";
+    await env.clearFirestore();
+    await seed(["groups", "gclaim"], {
+      id: "gclaim",
+      name: "Claim group",
+      currency: "INR",
+      members: ["Alice", "Bob"],
+      memberUids: ["alice"],
+      transactions: [],
+      deletedTransactions: []
+    });
+    await seed(["groups", "gclaim", "members", memberId], {
+      displayName: "Bob",
+      emailCanonical: BOB_KEY,
+      role: "member",
+      status: "active"
+    });
+    await assertFails(updateDoc(doc(bobDb, "groups", "gclaim"), stamped({
+      memberUids: ["alice", "bob"],
+      lastClaimMemberId: "email_alice_gmail_com",
+      updatedAt: Timestamp.now(),
+      updatedBy: BOB_RAW
+    })));
+    await assertSucceeds(updateDoc(doc(bobDb, "groups", "gclaim"), stamped({
+      memberUids: ["alice", "bob"],
+      lastClaimMemberId: memberId,
+      updatedAt: Timestamp.now(),
+      updatedBy: BOB_RAW
+    })));
+    await assertSucceeds(getDoc(doc(bobDb, "groups", "gclaim")));
+    await assertSucceeds(setDoc(doc(bobDb, "groups", "gclaim", "members", memberId), stamped({ uid: "bob" })));
   });
 
   await t.test("group access accepts memberUids when the email list is absent", async () => {

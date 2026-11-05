@@ -1041,13 +1041,15 @@
     const normalizedUnsubs = new Map();
     const normalizedWriteTimers = new Map();
     const membershipHydrated = new Set();
+    const pendingMembershipClaims = new Map();
+    let membershipClaimInFlight = false;
     const normalizedWrittenByGroup = new Map();
     const normalizedHydrated = new Set();
     const quotaSaver = true;
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v120";
+    const APP_BUILD = "v121";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2442,7 +2444,8 @@
         if (!(await askConfirm({ message: `Remove "${name}" from this group?` }))) return;
       }
       const removedEmail = g.memberLinks?.[name];
-      const removedUid = removedEmail ? rosterUidForEmail(removedEmail) : "";
+      const removedUid = (removedEmail ? rosterUidForEmail(removedEmail) : "")
+        || await memberUidFromDocs(g.id, name, removedEmail);
       g.members = g.members.filter(m => m !== name);
       if (g.memberLinks) delete g.memberLinks[name];
       if (g.memberUids && removedUid) {
@@ -2568,11 +2571,8 @@
       return canonEmail(email);
     }
 
-    // Stage 1 of the membership migration: groups carry both the legacy
-    // `memberEmails` list and a UID list. Rules still read the email list, so
-    // this stage changes no access; `memberUids` becomes authoritative only
-    // after a separate rules release. A UID is only known for accounts already
-    // in the roster.
+    // UID membership is authoritative. `memberEmails` is no longer written;
+    // a UID is known for accounts already in the roster.
     function rosterUidForEmail(email) {
       const key = normalizeEmail(email);
       if (!key) return "";
@@ -2580,6 +2580,25 @@
         item?.email && normalizeEmail(item.email) === key
       );
       return friend?.uid ? String(friend.uid) : "";
+    }
+
+    async function memberUidFromDocs(groupId, name, email) {
+      if (!fx || !groupId) return "";
+      try {
+        const snap = await fx.storeMod.getDocs(
+          fx.storeMod.collection(fx.storeMod.doc(fx.db, "groups", groupId), "members")
+        );
+        const wantedEmail = email ? normalizeEmail(email) : "";
+        const match = snap.docs.find(docSnap => {
+          const data = docSnap.data() || {};
+          if (wantedEmail && data.emailCanonical
+            && normalizeEmail(data.emailCanonical) === wantedEmail) return true;
+          return String(data.displayName || "") === String(name || "");
+        });
+        return match?.data()?.uid ? String(match.data().uid) : "";
+      } catch {
+        return "";
+      }
     }
 
     function collectMemberUids(group, plan = null) {
@@ -4048,7 +4067,6 @@
           ownerEmail: currentUser?.email || null,
           members: [],
           memberLinks: {},
-          memberEmails: [],
           memberUids: [],
           simplifyDebts: true,
           transactions: [],
@@ -4089,17 +4107,6 @@
         if (friend?.email) memberLinks[mapped] = friend.email;
       });
       target.memberLinks = memberLinks;
-      const memberEmails = new Set(target.memberEmails || []);
-      if (currentUser?.email) {
-        memberEmails.add(currentUser.email);
-        memberEmails.add(normalizeEmail(currentUser.email));
-      }
-      Object.values(memberLinks).forEach(email => {
-        if (!email) return;
-        memberEmails.add(email);
-        memberEmails.add(normalizeEmail(email));
-      });
-      target.memberEmails = Array.from(memberEmails).filter(Boolean);
       const memberUids = new Set(target.memberUids || []);
       if (currentUser?.uid) memberUids.add(String(currentUser.uid));
       Object.values(memberLinks).forEach(email => {
@@ -4194,12 +4201,9 @@
         const newId = "group_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
         const members = Array.from(new Set([myGroupSelfName(), ...selectedFriends]));
         const memberLinks = {};
-        const memberEmails = new Set();
         const memberUids = new Set();
         if (currentUser?.email) {
           memberLinks[myGroupSelfName()] = currentUser.email;
-          memberEmails.add(currentUser.email);
-          memberEmails.add(normalizeEmail(currentUser.email));
         }
         if (currentUser?.uid) memberUids.add(String(currentUser.uid));
         members.forEach(memberName => {
@@ -4207,8 +4211,6 @@
           const friend = (appState.friends || []).find(item => item?.name === memberName);
           if (!friend?.email) return;
           memberLinks[memberName] = friend.email;
-          memberEmails.add(friend.email);
-          memberEmails.add(normalizeEmail(friend.email));
           if (friend.uid) memberUids.add(String(friend.uid));
         });
 
@@ -4220,7 +4222,6 @@
           ownerEmail: currentUser?.email || null,
           members,
           memberLinks,
-          memberEmails: Array.from(memberEmails).filter(Boolean),
           memberUids: Array.from(memberUids).filter(Boolean),
           simplifyDebts: true,
           transactions: []
@@ -7149,6 +7150,7 @@
       // request/discovery listeners are created once per signed-in account.
       const needsSubscriptions = cloudSubscriptionsUid !== user.uid;
       const myEmail = (user.email || "").toLowerCase().trim();
+      const myUid = user.uid;
 
       if (myDisplayAccount) {
         myDisplayAccount.textContent = user.displayName ? `${user.displayName} (${user.email})` : user.email;
@@ -7161,6 +7163,7 @@
       listenToFriendsRoster(user);
       listenToMemberships(user);
       processPendingInvite();
+      claimPendingMemberships().catch(err => console.warn("Membership claim note:", err?.code || err));
 
       // 1. Listen for incoming friend requests
       if (needsSubscriptions) {
@@ -7206,7 +7209,7 @@
 
       // 3. Discover and live-sync every group this Gmail account belongs to.
       if (unsubscribeUserGroupsListener) unsubscribeUserGroupsListener();
-      unsubscribeUserGroupsListener = watchQuery(fx, "groups", "memberEmails", "array-contains", myEmail, (snapshot) => {
+      unsubscribeUserGroupsListener = watchQuery(fx, "groups", "memberUids", "array-contains", myUid, (snapshot) => {
         let changed = false;
         snapshot.forEach(docSnap => {
           const groupId = docSnap.id;
@@ -7585,10 +7588,6 @@
             continue;
           }
           try {
-            const normalizedEmails = Array.from(new Set([
-              ...plan.members.map(member => member.emailCanonical).filter(Boolean),
-              normalizeEmail(currentUser.email || "")
-            ].filter(Boolean)));
             const memberUids = collectMemberUids(group, plan);
             await fx.storeMod.setDoc(groupRef, {
               name: group.name,
@@ -7596,7 +7595,6 @@
               ownerUid: group.ownerUid || null,
               ownerEmail: group.ownerEmail || null,
               simplifyDebts: group.simplifyDebts !== false,
-              memberEmails: normalizedEmails,
               memberUids,
               updatedAt: serverTimestamp(fx),
               updatedBy: (currentUser.email || "").toLowerCase().trim()
@@ -7629,10 +7627,8 @@
               normalizedVersion: 1,
               normalizedAt: serverTimestamp(fx),
               normalizedBy: (currentUser.email || "").toLowerCase().trim(),
-              memberEmails: normalizedEmails,
               memberUids
             }, { merge: true });
-            group.memberEmails = normalizedEmails;
             group.memberUids = memberUids;
 
             let checkOk = true;
@@ -7886,20 +7882,9 @@
           chunk.forEach(op => written.set(op.key, op.signature));
         }
       }
-      // Keep the discovery list until the rules stop reading it. Existing
-      // entries may include the raw token email (Gmail dots preserved), which
-      // Firestore Rules match; member documents only carry the canonical form.
-      const myRawEmail = (currentUser.email || "").toLowerCase().trim();
-      const normalizedEmails = Array.from(new Set([
-        ...(Array.isArray(group.memberEmails) ? group.memberEmails : []),
-        ...plan.members.map(member => member.emailCanonical).filter(Boolean),
-        myRawEmail,
-        normalizeEmail(myRawEmail)
-      ].filter(Boolean)));
-      const emailsChanged = JSON.stringify(normalizedEmails) !== JSON.stringify(group.memberEmails || []);
       const memberUids = collectMemberUids(group, plan);
       const uidsChanged = JSON.stringify(memberUids) !== JSON.stringify(group.memberUids || []);
-      if (!ops.length && !emailsChanged && !uidsChanged) {
+      if (!ops.length && !uidsChanged) {
         group._normalizedSig = normalizedSignature(group);
         normalizedWrittenByGroup.set(group.id, written);
         return;
@@ -7908,10 +7893,8 @@
         normalizedVersion: 1,
         normalizedAt: serverTimestamp(fx),
         normalizedBy: (currentUser.email || "").toLowerCase().trim(),
-        memberEmails: normalizedEmails,
         memberUids
       }, { merge: true }, { label: "normalized-metadata" });
-      group.memberEmails = normalizedEmails;
       group.memberUids = memberUids;
       group._normalizedSig = normalizedSignature(group);
       normalizedWrittenByGroup.set(group.id, written);
@@ -7995,6 +7978,15 @@
             };
             changed = true;
           }
+          const localEntry = appState.groups[groupId];
+          const claimed = Boolean(localEntry && Array.isArray(localEntry.memberUids)
+            && localEntry.memberUids.includes(currentUser.uid));
+          if (!claimed) {
+            // The member document proves membership, but the group document
+            // still needs this account's UID before UID-only rules allow reads.
+            pendingMembershipClaims.set(groupId, docSnap.id);
+            return;
+          }
           listenToNormalizedGroup(groupId);
           hydrateNormalizedGroupMetadata(groupId);
         });
@@ -8003,6 +7995,76 @@
           renderAll();
         }
       }, err => console.warn("Membership discovery note:", err?.code || err));
+    }
+
+    // Adds the signed-in UID to groups whose member documents already carry
+    // this account's email. Runs on sign-in/online/visibility, never from a
+    // snapshot callback, so the read-only listener rule is preserved.
+    async function claimPendingMemberships() {
+      if (!fx || !currentUser || membershipClaimInFlight) return;
+      const uid = currentUser.uid;
+      const myEmail = normalizeEmail(currentUser.email || "");
+      if (!uid || !myEmail) return;
+      membershipClaimInFlight = true;
+      try {
+        const snap = await fx.storeMod.getDocs(fx.storeMod.query(
+          fx.storeMod.collectionGroup(fx.db, "members"),
+          fx.storeMod.where("emailCanonical", "==", myEmail)
+        ));
+        snap.forEach(docSnap => {
+          const groupId = docSnap.ref.parent?.parent?.id;
+          if (groupId) pendingMembershipClaims.set(groupId, docSnap.id);
+        });
+        for (const [groupId, memberDocId] of Array.from(pendingMembershipClaims.entries())) {
+          if ((appState.deletedGroups || []).includes(groupId)) {
+            pendingMembershipClaims.delete(groupId);
+            continue;
+          }
+          const group = appState.groups[groupId];
+          if (Array.isArray(group?.memberUids) && group.memberUids.includes(uid)) {
+            pendingMembershipClaims.delete(groupId);
+            listenToNormalizedGroup(groupId);
+            hydrateNormalizedGroupMetadata(groupId);
+            continue;
+          }
+          try {
+            const groupRef = fx.storeMod.doc(fx.db, "groups", groupId);
+            await fx.storeMod.updateDoc(groupRef, {
+              memberUids: fx.storeMod.arrayUnion(uid),
+              lastClaimMemberId: memberDocId,
+              updatedAt: serverTimestamp(fx),
+              updatedBy: (currentUser.email || "").toLowerCase().trim()
+            }, { label: "member-claim" });
+            // Record the UID on the member document so removing the member can
+            // prune the UID without another lookup source.
+            try {
+              await fx.storeMod.setDoc(
+                fx.storeMod.doc(groupRef, "members", memberDocId),
+                { uid },
+                { merge: true },
+                { label: "member-claim-doc" }
+              );
+            } catch (err) {
+              console.warn("Member claim doc note:", err?.code || err);
+            }
+            pendingMembershipClaims.delete(groupId);
+            const local = appState.groups[groupId];
+            if (local) {
+              local.memberUids = Array.from(new Set([...(local.memberUids || []), uid]));
+              persistLocalState();
+            }
+            membershipHydrated.delete(groupId);
+            hydrateNormalizedGroupMetadata(groupId);
+            listenToNormalizedGroup(groupId);
+          } catch (err) {
+            console.warn("Member claim note:", err?.code || err);
+          }
+        }
+      } catch (err) {
+        console.warn("Membership claim query note:", err?.code || err);
+      } finally {
+        membershipClaimInFlight = false;
+      }
     }
 
     function listenToNormalizedGroup(groupId) {
@@ -8609,7 +8671,6 @@
       if (!invite || inviteAccepting || !fx || !currentUser) return;
       inviteAccepting = true;
       const myEmail = (currentUser.email || "").toLowerCase().trim();
-      const myEmailNorm = normalizeEmail(myEmail);
       const myName = currentUser.displayName || myEmail.split("@")[0];
       const token = invite.token;
       try {
@@ -8620,7 +8681,6 @@
             throw new Error("group-deleted");
           }
           batch.update(fx.storeMod.doc(fx.db, "groups", invite.groupId), {
-            memberEmails: fx.storeMod.arrayUnion(myEmail, myEmailNorm),
             memberUids: fx.storeMod.arrayUnion(currentUser.uid),
             members: fx.storeMod.arrayUnion(myName),
             lastJoinToken: token,

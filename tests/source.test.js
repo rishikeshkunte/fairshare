@@ -83,10 +83,10 @@ test("signed-out summaries, details, and trash exclude cached 1-on-1 data", () =
 });
 
 test("group discovery rules restrict reads to signed-in group members", () => {
-  assert.match(rules, /allow list:\s*if signedIn\(\)[\s\S]*?email\(\) in resource\.data\.memberEmails[\s\S]*?request\.auth\.uid in resource\.data\.memberUids/);
-  assert.match(rules, /function isMember\(data\)[\s\S]*?email\(\) in data\.memberEmails/);
+  assert.match(rules, /allow list:\s*if signedIn\(\)[\s\S]*?request\.auth\.uid in resource\.data\.memberUids/);
   assert.match(rules, /function isMemberUid\(data\)[\s\S]*?request\.auth\.uid in data\.memberUids/);
-  assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?groups\/\$\(groupId\)[\s\S]*?isMember\(resource\.data\)/);
+  assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?groups\/\$\(groupId\)[\s\S]*?isMemberUid\(resource\.data\)/);
+  assert.match(rules, /memberDoc\(groupId, request\.resource\.data\.lastClaimMemberId\)/);
   assert.match(rules, /direct_pairs[\s\S]*?allow get:\s*if signedIn\(\)[\s\S]*?direct_pairs\/\$\(pairId\)[\s\S]*?pairMember\(resource\.data\)/);
 });
 
@@ -103,7 +103,7 @@ test("shared expense sync uses transactional merges and stable participant ident
   assert.match(sync, /export function canonicalizePairTransaction/);
   assert.match(sync, /payerEmail/);
   assert.match(sync, /sharesByEmail/);
-  assert.match(html, /watchQuery\(fx, "groups", "memberEmails", "array-contains", myEmail/);
+  assert.match(html, /watchQuery\(fx, "groups", "memberUids", "array-contains", myUid/);
 });
 
 
@@ -641,7 +641,8 @@ test("phase 4 stops legacy ledger writes for normalized groups", () => {
   assert.doesNotMatch(html, /memberLinks\[getMyGroupMemberName\(g\)\] = myEmail/);
   assert.match(html, /if \(!g\.normalizedVersion\) \{/);
   assert.match(html, /scheduleNormalizedGroupWrite\(g\);/);
-  assert.match(html, /memberEmails: normalizedEmails/);
+  assert.match(html, /const memberUids = collectMemberUids\(group, plan\)/);
+  assert.doesNotMatch(html, /memberEmails: normalizedEmails/);
   assert.match(html, /if \(activeGroupForRepair && !activeGroupForRepair\.normalizedVersion\)/);
 });
 
