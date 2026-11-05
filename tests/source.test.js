@@ -515,7 +515,7 @@ test("scan bill is removed without breaking manual receipt attachment", () => {
 test("receipt reconciliation preserves local receipt fields", () => {
   assert.match(html, /import\s*\{[^}]*\bpreserveLocalReceipts\b[^}]*\}\s*from "\.\/js\/sync\.js"/);
   assert.match(sync, /export function preserveLocalReceipts/);
-  assert.match(html, /preserveLocalReceipts\(reconciled\.transactions, localGroupTransactions\)/);
+  assert.match(html, /preserveLocalReceipts\(reconciled\.transactions, localTransactions\)/);
   assert.match(html, /preserveLocalReceipts\(merged\.transactions, localGroupTransactions\)/);
   assert.match(html, /preserveLocalReceipts\(next\.directTransactions, localDirectTransactions\)/);
 });
@@ -630,9 +630,10 @@ test("phase 3 projects normalized group subcollections and dual-writes changes",
 });
 
 test("phase 4 stops legacy ledger writes for normalized groups", () => {
-  assert.match(html, /if \(g\.normalizedVersion\) \{/);
+  assert.doesNotMatch(html, /if \(g\.normalizedVersion\) \{/);
+  assert.doesNotMatch(html, /memberLinks\[getMyGroupMemberName\(g\)\] = myEmail/);
+  assert.match(html, /if \(!g\.normalizedVersion\) \{/);
   assert.match(html, /scheduleNormalizedGroupWrite\(g\);/);
-  assert.match(html, /if \(!group\.normalizedVersion\) \{[\s\S]*?runNormalizedMigration\([\s\S]*?continue;[\s\S]*?scheduleNormalizedGroupWrite\(group\);[\s\S]*?continue;/);
   assert.match(html, /memberEmails: normalizedEmails/);
   assert.match(html, /if \(activeGroupForRepair && !activeGroupForRepair\.normalizedVersion\)/);
 });

@@ -1047,7 +1047,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v118";
+    const APP_BUILD = "v119";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -1892,124 +1892,34 @@
       const g = activeGroup;
       if (!(fx && currentUser && g)) return;
       const myEmail = (currentUser.email || "").toLowerCase().trim();
-      const myEmailNorm = normalizeEmail(myEmail);
       if (!g.normalizedVersion) {
         window.runNormalizedMigration({ quiet: true, forceGroupId: g.id }).catch(err => {
           console.warn("Normalized migration on save note:", err?.code || err);
         });
         return;
       }
-      if (g.normalizedVersion) {
-        const metaSig = JSON.stringify({
+      // Un-migrated groups returned above. A normalized group writes metadata
+      // only; its ledger is diffed into the normalized subcollections.
+      const metaSig = JSON.stringify({
+        name: g.name,
+        currency: g.currency,
+        simplifyDebts: g.simplifyDebts !== false,
+        ownerUid: g.ownerUid || null,
+        ownerEmail: g.ownerEmail || null
+      });
+      if (g._normalizedMetaSig !== metaSig) {
+        g._normalizedMetaSig = metaSig;
+        fx.storeMod.setDoc(fx.storeMod.doc(fx.db, "groups", g.id), {
           name: g.name,
           currency: g.currency,
           simplifyDebts: g.simplifyDebts !== false,
           ownerUid: g.ownerUid || null,
-          ownerEmail: g.ownerEmail || null
-        });
-        if (g._normalizedMetaSig !== metaSig) {
-          g._normalizedMetaSig = metaSig;
-          fx.storeMod.setDoc(fx.storeMod.doc(fx.db, "groups", g.id), {
-            name: g.name,
-            currency: g.currency,
-            simplifyDebts: g.simplifyDebts !== false,
-            ownerUid: g.ownerUid || null,
-            ownerEmail: g.ownerEmail || null,
-            updatedAt: serverTimestamp(fx),
-            updatedBy: myEmail
-          }, { merge: true }).catch(err => console.warn("Normalized metadata note:", err?.code || err));
-        }
-        scheduleNormalizedGroupWrite(g);
-        return;
-      }
-      const memberLinks = { ...(g.memberLinks || {}) };
-      memberLinks[getMyGroupMemberName(g)] = myEmail;
-      // Retain linked members discovered from the shared group even if they are
-      // not in this browser's local friend roster.
-      const memberEmails = new Set([
-        ...(Array.isArray(g.memberEmails) ? g.memberEmails : []),
-        myEmail,
-        myEmailNorm,
-        ...Object.values(memberLinks).flatMap(email => [
-          String(email || "").toLowerCase().trim(),
-          normalizeEmail(email)
-        ])
-      ]);
-      (appState.friends || []).forEach(friend => {
-        if (!friend.email || !g.members.includes(friend.name)) return;
-        const friendEmail = (friend.email || "").toLowerCase().trim();
-        memberEmails.add(friendEmail);
-        memberEmails.add(normalizeEmail(friendEmail));
-        memberLinks[friend.name] = friendEmail;
-      });
-      g.memberLinks = memberLinks;
-
-      const groupRef = fx.storeMod.doc(fx.db, "groups", g.id);
-      let groupDeleted = false;
-      fx.storeMod.runTransaction(fx.db, async transaction => {
-        const snapshot = await transaction.get(groupRef);
-        const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
-        if (cloudData.deletedAt) {
-          groupDeleted = true;
-          return null;
-        }
-        // Never drop a member's discovery email. A save from one device used to
-        // replace memberEmails with only that device's addresses, which made the
-        // group disappear from other members' group lists.
-        (Array.isArray(cloudData.memberEmails) ? cloudData.memberEmails : []).forEach(email => {
-          if (typeof email === "string" && email) memberEmails.add(email);
-        });
-        const merged = mergePairLedger({
-          localTransactions: stripReceiptBytes(g.transactions),
-          remoteTransactions: cloudData.transactions || [],
-          localDeleted: g.deletedTransactions || [],
-          remoteDeleted: cloudData.deletedTransactions || []
-        });
-        const finalMemberEmails = Array.from(memberEmails).filter(Boolean);
-        g.memberEmails = finalMemberEmails;
-        // Never regress a clean cloud member list back to a "You" placeholder.
-        // If this device could not resolve the placeholder, keep the cloud names.
-        const cloudMembers = Array.isArray(cloudData.members) ? cloudData.members : [];
-        let membersToWrite = g.members;
-        if (membersToWrite.includes("You") && cloudMembers.length && !cloudMembers.includes("You")) {
-          membersToWrite = cloudMembers;
-          g.members = cloudMembers;
-        }
-        transaction.set(groupRef, {
-          id: g.id,
-          schemaVersion: 9,
-          name: g.name,
-          currency: g.currency,
-          members: membersToWrite,
-          simplifyDebts: g.simplifyDebts !== false,
-          memberLinks,
-          memberEmails: finalMemberEmails,
-          transactions: merged.transactions,
-          deletedTransactions: merged.deletedTransactions,
+          ownerEmail: g.ownerEmail || null,
           updatedAt: serverTimestamp(fx),
           updatedBy: myEmail
-        }, { merge: true });
-        return merged;
-      }).then(merged => {
-        if (groupDeleted) {
-          removeGroupLocally(g.id);
-          return;
-        }
-        // Reconcile the cloud result with the original local objects so local receipt
-        // data URLs remain available on this device while cloud copies stay lightweight.
-        const localGroupTransactions = g.transactions || [];
-        const reconciled = mergePairLedger({
-          localTransactions: localGroupTransactions,
-          remoteTransactions: merged.transactions || [],
-          localDeleted: g.deletedTransactions || [],
-          remoteDeleted: merged.deletedTransactions || []
-        });
-        g.transactions = preserveLocalReceipts(reconciled.transactions, localGroupTransactions);
-        g.deletedTransactions = reconciled.deletedTransactions;
-        persistLocalState();
-        scheduleNormalizedGroupWrite(g);
-        if (appState.activeGroupId === g.id) renderAll();
-      }).catch(err => console.warn("Cloud sync note:", err));
+        }, { merge: true }).catch(err => console.warn("Normalized metadata note:", err?.code || err));
+      }
+      scheduleNormalizedGroupWrite(g);
     }
 
     let unsubscribeFriendsRosterListener = null;
@@ -7899,9 +7809,15 @@
           chunk.forEach(op => written.set(op.key, op.signature));
         }
       }
+      // Keep the discovery list until the rules stop reading it. Existing
+      // entries may include the raw token email (Gmail dots preserved), which
+      // Firestore Rules match; member documents only carry the canonical form.
+      const myRawEmail = (currentUser.email || "").toLowerCase().trim();
       const normalizedEmails = Array.from(new Set([
+        ...(Array.isArray(group.memberEmails) ? group.memberEmails : []),
         ...plan.members.map(member => member.emailCanonical).filter(Boolean),
-        normalizeEmail(currentUser.email || "")
+        myRawEmail,
+        normalizeEmail(myRawEmail)
       ].filter(Boolean)));
       const emailsChanged = JSON.stringify(normalizedEmails) !== JSON.stringify(group.memberEmails || []);
       if (!ops.length && !emailsChanged) {
