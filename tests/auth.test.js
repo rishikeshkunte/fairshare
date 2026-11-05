@@ -90,6 +90,15 @@ test("normalized group writes keep the discovery email list", () => {
   assert.doesNotMatch(sync, /cloudData\.transactions/);
 });
 
+test("group membership dual-writes memberUids for the bridge removal", () => {
+  assert.match(html, /function rosterUidForEmail\(email\)/);
+  assert.match(html, /function collectMemberUids\(group, plan = null\)/);
+  assert.match(html, /const memberUids = collectMemberUids\(group, plan\)/);
+  assert.match(html, /memberUids: fx\.storeMod\.arrayUnion\(currentUser\.uid\)/);
+  assert.match(html, /memberUids: Array\.from\(memberUids\)\.filter\(Boolean\)/);
+  assert.match(html, /if \(Array\.isArray\(cloudData\.memberUids\)\) group\.memberUids = cloudData\.memberUids/);
+});
+
 test("local-only groups are migrated or scheduled on sign-in", () => {
   const push = between(html, "async function pushLocalGroupsToCloud(user)", "\n    function normalizedSignature");
   assert.match(push, /runNormalizedMigration\(\{ quiet: true, forceGroupId: group\.id \}\)/);
@@ -139,6 +148,6 @@ test("phone contact entry is removed and sign-in copy says Gmail", () => {
 });
 
 test("service worker cache is bumped for the auth fix", () => {
-  assert.match(sw, /const CACHE = "fairshare-v119"/);
+  assert.match(sw, /const CACHE = "fairshare-v120"/);
   assert.match(sw, /url\.pathname\.startsWith\("\/__\/auth\/"\)/);
 });

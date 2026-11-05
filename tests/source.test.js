@@ -248,7 +248,7 @@ test("group membership never creates friends and self names are display-mapped",
   assert.doesNotMatch(roster, /addApprovedFriend/);
   assert.match(roster, /if \(existing && !normalizeEmail/);
   assert.match(html, /function migrateGroupSelfName\(group\)/);
-  assert.match(html, /const members = \[myGroupSelfName\(\), \.\.\.selectedFriends\]/);
+  assert.match(html, /const members = Array\.from\(new Set\(\[myGroupSelfName\(\), \.\.\.selectedFriends\]\)\)/);
   assert.match(html, /displayGroupMember\(group, debt\.from\)/);
   assert.match(html, /displayGroupMember\(group, member\)/);
   assert.match(html, /transactionDisplayName\(tx, tx\.payer\)/);

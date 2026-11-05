@@ -1047,7 +1047,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v119";
+    const APP_BUILD = "v120";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -1776,6 +1776,8 @@
           memberLinks: group.memberLinks && typeof group.memberLinks === "object" ? group.memberLinks : {},
           memberEmails: (Array.isArray(group.memberEmails) ? group.memberEmails : [])
             .filter(email => typeof email === "string" && email),
+          memberUids: (Array.isArray(group.memberUids) ? group.memberUids : [])
+            .filter(uid => typeof uid === "string" && uid),
           transactions: (Array.isArray(group.transactions) ? group.transactions : [])
             .filter(tx => tx && typeof tx === "object"),
           deletedTransactions: (Array.isArray(group.deletedTransactions) ? group.deletedTransactions : [])
@@ -2439,8 +2441,13 @@
       } else {
         if (!(await askConfirm({ message: `Remove "${name}" from this group?` }))) return;
       }
+      const removedEmail = g.memberLinks?.[name];
+      const removedUid = removedEmail ? rosterUidForEmail(removedEmail) : "";
       g.members = g.members.filter(m => m !== name);
       if (g.memberLinks) delete g.memberLinks[name];
+      if (g.memberUids && removedUid) {
+        g.memberUids = g.memberUids.filter(uid => String(uid) !== removedUid);
+      }
       saveState();
       renderAll();
     };
@@ -2464,6 +2471,8 @@
         return;
       }
       g.memberLinks = { ...(g.memberLinks || {}), [name]: normalized };
+      const linkedUid = rosterUidForEmail(normalized);
+      if (linkedUid) g.memberUids = Array.from(new Set([...(g.memberUids || []), linkedUid]));
       saveState();
       renderAll();
       toast(`Linked ${name} to ${normalized}. They can now see this group after signing in.`);
@@ -2557,6 +2566,30 @@
 
     function normalizeEmail(email) {
       return canonEmail(email);
+    }
+
+    // Stage 1 of the membership migration: groups carry both the legacy
+    // `memberEmails` list and a UID list. Rules still read the email list, so
+    // this stage changes no access; `memberUids` becomes authoritative only
+    // after a separate rules release. A UID is only known for accounts already
+    // in the roster.
+    function rosterUidForEmail(email) {
+      const key = normalizeEmail(email);
+      if (!key) return "";
+      const friend = (appState.friends || []).find(item =>
+        item?.email && normalizeEmail(item.email) === key
+      );
+      return friend?.uid ? String(friend.uid) : "";
+    }
+
+    function collectMemberUids(group, plan = null) {
+      const uids = new Set((Array.isArray(group?.memberUids) ? group.memberUids : []).map(String).filter(Boolean));
+      if (group?.ownerUid) uids.add(String(group.ownerUid));
+      if (currentUser?.uid) uids.add(String(currentUser.uid));
+      (plan?.members || []).forEach(member => {
+        if (member?.uid) uids.add(String(member.uid));
+      });
+      return Array.from(uids);
     }
 
     window.sendFriendRequest = async function() {
@@ -4016,6 +4049,7 @@
           members: [],
           memberLinks: {},
           memberEmails: [],
+          memberUids: [],
           simplifyDebts: true,
           transactions: [],
           deletedTransactions: []
@@ -4066,6 +4100,13 @@
         memberEmails.add(normalizeEmail(email));
       });
       target.memberEmails = Array.from(memberEmails).filter(Boolean);
+      const memberUids = new Set(target.memberUids || []);
+      if (currentUser?.uid) memberUids.add(String(currentUser.uid));
+      Object.values(memberLinks).forEach(email => {
+        const uid = rosterUidForEmail(email);
+        if (uid) memberUids.add(uid);
+      });
+      target.memberUids = Array.from(memberUids).filter(Boolean);
 
       const existingKeys = new Set((target.transactions || []).map(tx => tx.importKey).filter(Boolean));
       let imported = 0;
@@ -4151,7 +4192,25 @@
         const selectedFriends = Array.from(document.querySelectorAll(".modal-friend-check:checked")).map(cb => cb.value);
 
         const newId = "group_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-        const members = [myGroupSelfName(), ...selectedFriends];
+        const members = Array.from(new Set([myGroupSelfName(), ...selectedFriends]));
+        const memberLinks = {};
+        const memberEmails = new Set();
+        const memberUids = new Set();
+        if (currentUser?.email) {
+          memberLinks[myGroupSelfName()] = currentUser.email;
+          memberEmails.add(currentUser.email);
+          memberEmails.add(normalizeEmail(currentUser.email));
+        }
+        if (currentUser?.uid) memberUids.add(String(currentUser.uid));
+        members.forEach(memberName => {
+          if (memberName === myGroupSelfName()) return;
+          const friend = (appState.friends || []).find(item => item?.name === memberName);
+          if (!friend?.email) return;
+          memberLinks[memberName] = friend.email;
+          memberEmails.add(friend.email);
+          memberEmails.add(normalizeEmail(friend.email));
+          if (friend.uid) memberUids.add(String(friend.uid));
+        });
 
         appState.groups[newId] = {
           id: newId,
@@ -4159,7 +4218,10 @@
           currency: cur,
           ownerUid: currentUser?.uid || null,
           ownerEmail: currentUser?.email || null,
-          members: Array.from(new Set(members)),
+          members,
+          memberLinks,
+          memberEmails: Array.from(memberEmails).filter(Boolean),
+          memberUids: Array.from(memberUids).filter(Boolean),
           simplifyDebts: true,
           transactions: []
         };
@@ -7178,6 +7240,7 @@
               members: Array.isArray(cloudData.members) ? cloudData.members : ["You"],
               memberLinks: cloudData.memberLinks || {},
               memberEmails: Array.isArray(cloudData.memberEmails) ? cloudData.memberEmails : [],
+              memberUids: Array.isArray(cloudData.memberUids) ? cloudData.memberUids : [],
               ownerUid: cloudData.ownerUid || null,
               ownerEmail: cloudData.ownerEmail || null,
               normalizedVersion: cloudData.normalizedVersion || 0,
@@ -7203,6 +7266,10 @@
               }
               if (Array.isArray(cloudData.memberEmails) && JSON.stringify(localGroup.memberEmails || []) !== JSON.stringify(cloudData.memberEmails)) {
                 localGroup.memberEmails = cloudData.memberEmails;
+                changed = true;
+              }
+              if (Array.isArray(cloudData.memberUids) && JSON.stringify(localGroup.memberUids || []) !== JSON.stringify(cloudData.memberUids)) {
+                localGroup.memberUids = cloudData.memberUids;
                 changed = true;
               }
               if (typeof cloudData.simplifyDebts === "boolean" && localGroup.simplifyDebts !== cloudData.simplifyDebts) {
@@ -7246,6 +7313,10 @@
             }
             if (Array.isArray(cloudData.memberEmails) && JSON.stringify(localGroup.memberEmails || []) !== JSON.stringify(cloudData.memberEmails)) {
               localGroup.memberEmails = cloudData.memberEmails;
+              changed = true;
+            }
+            if (Array.isArray(cloudData.memberUids) && JSON.stringify(localGroup.memberUids || []) !== JSON.stringify(cloudData.memberUids)) {
+              localGroup.memberUids = cloudData.memberUids;
               changed = true;
             }
             if (cloudData.ownerUid && localGroup.ownerUid !== cloudData.ownerUid) { localGroup.ownerUid = cloudData.ownerUid; changed = true; }
@@ -7335,6 +7406,7 @@
           if (members.length) g.members = members.map(member => member.name);
           g.memberLinks = memberLinksFromDocs(memberDocs);
           g.memberEmails = Array.isArray(data.memberEmails) ? data.memberEmails : [];
+          g.memberUids = Array.isArray(data.memberUids) ? data.memberUids : [];
           g.transactions = preserveLocalReceipts(
             projectGroupTransactions({ memberDocs, expenseDocs, settlementDocs }),
             g.transactions || []
@@ -7363,6 +7435,7 @@
         g.members = Array.isArray(data.members) ? data.members : g.members;
         g.memberLinks = data.memberLinks || {};
         g.memberEmails = Array.isArray(data.memberEmails) ? data.memberEmails : [];
+        g.memberUids = Array.isArray(data.memberUids) ? data.memberUids : [];
         g.transactions = preserveLocalReceipts(
           Array.isArray(data.transactions) ? data.transactions : [],
           g.transactions || []
@@ -7516,6 +7589,7 @@
               ...plan.members.map(member => member.emailCanonical).filter(Boolean),
               normalizeEmail(currentUser.email || "")
             ].filter(Boolean)));
+            const memberUids = collectMemberUids(group, plan);
             await fx.storeMod.setDoc(groupRef, {
               name: group.name,
               currency: group.currency,
@@ -7523,6 +7597,7 @@
               ownerEmail: group.ownerEmail || null,
               simplifyDebts: group.simplifyDebts !== false,
               memberEmails: normalizedEmails,
+              memberUids,
               updatedAt: serverTimestamp(fx),
               updatedBy: (currentUser.email || "").toLowerCase().trim()
             }, { merge: true });
@@ -7554,9 +7629,11 @@
               normalizedVersion: 1,
               normalizedAt: serverTimestamp(fx),
               normalizedBy: (currentUser.email || "").toLowerCase().trim(),
-              memberEmails: normalizedEmails
+              memberEmails: normalizedEmails,
+              memberUids
             }, { merge: true });
             group.memberEmails = normalizedEmails;
+            group.memberUids = memberUids;
 
             let checkOk = true;
             if (options?.compare === true) {
@@ -7820,7 +7897,9 @@
         normalizeEmail(myRawEmail)
       ].filter(Boolean)));
       const emailsChanged = JSON.stringify(normalizedEmails) !== JSON.stringify(group.memberEmails || []);
-      if (!ops.length && !emailsChanged) {
+      const memberUids = collectMemberUids(group, plan);
+      const uidsChanged = JSON.stringify(memberUids) !== JSON.stringify(group.memberUids || []);
+      if (!ops.length && !emailsChanged && !uidsChanged) {
         group._normalizedSig = normalizedSignature(group);
         normalizedWrittenByGroup.set(group.id, written);
         return;
@@ -7829,9 +7908,11 @@
         normalizedVersion: 1,
         normalizedAt: serverTimestamp(fx),
         normalizedBy: (currentUser.email || "").toLowerCase().trim(),
-        memberEmails: normalizedEmails
+        memberEmails: normalizedEmails,
+        memberUids
       }, { merge: true }, { label: "normalized-metadata" });
       group.memberEmails = normalizedEmails;
+      group.memberUids = memberUids;
       group._normalizedSig = normalizedSignature(group);
       normalizedWrittenByGroup.set(group.id, written);
       persistLocalState();
@@ -7869,6 +7950,7 @@
         if (data.ownerUid) group.ownerUid = data.ownerUid;
         if (data.ownerEmail) group.ownerEmail = data.ownerEmail;
         if (Array.isArray(data.memberEmails)) group.memberEmails = data.memberEmails;
+        if (Array.isArray(data.memberUids)) group.memberUids = data.memberUids;
         if (typeof data.simplifyDebts === "boolean") group.simplifyDebts = data.simplifyDebts;
         group.normalizedVersion = data.normalizedVersion || 1;
         persistLocalState();
@@ -7903,6 +7985,7 @@
               members: [],
               memberLinks: {},
               memberEmails: [],
+              memberUids: [],
               ownerUid: null,
               ownerEmail: null,
               normalizedVersion: 1,
@@ -8024,7 +8107,8 @@
             if (cloudData.currency) group.currency = cloudData.currency;
             if (cloudData.ownerUid) group.ownerUid = cloudData.ownerUid;
             if (cloudData.ownerEmail) group.ownerEmail = cloudData.ownerEmail;
-            if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
+      if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
+      if (Array.isArray(cloudData.memberUids)) group.memberUids = cloudData.memberUids;
             if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
             listenToNormalizedGroup(groupId);
             persistLocalState();
@@ -8046,6 +8130,7 @@
           if (!group.normalizedVersion && Array.isArray(cloudData.members)) group.members = cloudData.members;
           if (cloudData.memberLinks) group.memberLinks = cloudData.memberLinks;
           if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
+          if (Array.isArray(cloudData.memberUids)) group.memberUids = cloudData.memberUids;
           if (cloudData.currency) group.currency = cloudData.currency;
           if (cloudData.name) group.name = cloudData.name;
           if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
@@ -8483,8 +8568,11 @@
           // Only treat this as already-joined when the local copy has confirmed
           // cloud membership. A stale local-only copy must be allowed to accept a
           // new secure invite so its membership can be repaired.
-          const alreadyMember = Boolean(existing && Array.isArray(existing.memberEmails)
-            && existing.memberEmails.some(email => normalizeEmail(email) === normalizeEmail(myEmail)));
+          const alreadyMember = Boolean(existing && (
+            (Array.isArray(existing.memberUids) && existing.memberUids.includes(currentUser.uid))
+            || (Array.isArray(existing.memberEmails)
+              && existing.memberEmails.some(email => normalizeEmail(email) === normalizeEmail(myEmail)))
+          ));
           if (alreadyMember || normalizeEmail(inviterEmail) === normalizeEmail(myEmail)) {
             rejectPendingInvite("You're already in this group.");
             return;
@@ -8533,6 +8621,7 @@
           }
           batch.update(fx.storeMod.doc(fx.db, "groups", invite.groupId), {
             memberEmails: fx.storeMod.arrayUnion(myEmail, myEmailNorm),
+            memberUids: fx.storeMod.arrayUnion(currentUser.uid),
             members: fx.storeMod.arrayUnion(myName),
             lastJoinToken: token,
             lastJoinAt: serverTimestamp(fx),
