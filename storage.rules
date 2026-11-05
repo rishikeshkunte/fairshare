@@ -7,14 +7,8 @@ service firebase.storage {
       }
       function isMember() {
         return request.auth != null
-          && (
-            (groupData().memberUids is list && request.auth.uid in groupData().memberUids)
-            || (
-              request.auth.token.email != null
-              && groupData().memberEmails is list
-              && request.auth.token.email.lower() in groupData().memberEmails
-            )
-          );
+          && groupData().memberUids is list
+          && request.auth.uid in groupData().memberUids;
       }
       allow read: if isMember();
       allow write: if isMember()

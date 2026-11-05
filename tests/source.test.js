@@ -83,16 +83,17 @@ test("signed-out summaries, details, and trash exclude cached 1-on-1 data", () =
 });
 
 test("group discovery rules restrict reads to signed-in group members", () => {
-  assert.match(rules, /allow list:\s*if signedIn\(\)[\s\S]*?request\.auth\.uid in resource\.data\.memberUids/);
+  assert.match(rules, /allow list:\s*if signedIn\(\) && request\.auth\.uid in resource\.data\.memberUids/);
+  assert.doesNotMatch(rules, /resource\.data\.memberEmails/);
   assert.match(rules, /function isMemberUid\(data\)[\s\S]*?request\.auth\.uid in data\.memberUids/);
   assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?groups\/\$\(groupId\)[\s\S]*?isMemberUid\(resource\.data\)/);
   assert.match(rules, /memberDoc\(groupId, request\.resource\.data\.lastClaimMemberId\)/);
   assert.match(rules, /direct_pairs[\s\S]*?allow get:\s*if signedIn\(\)[\s\S]*?direct_pairs\/\$\(pairId\)[\s\S]*?pairMember\(resource\.data\)/);
 });
 
-test("storage receipts accept UID membership with the email fallback", () => {
+test("storage receipts require UID membership", () => {
   assert.match(storage, /request\.auth\.uid in groupData\(\)\.memberUids/);
-  assert.match(storage, /request\.auth\.token\.email\.lower\(\) in groupData\(\)\.memberEmails/);
+  assert.doesNotMatch(storage, /memberEmails/);
 });
 
 test("shared expense sync uses transactional merges and stable participant identities", () => {
