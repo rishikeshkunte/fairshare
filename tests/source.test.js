@@ -524,12 +524,12 @@ test("receipt reconciliation preserves local receipt fields", () => {
   assert.match(html, /import\s*\{[^}]*\bpreserveLocalReceipts\b[^}]*\}\s*from "\.\/js\/sync\.js"/);
   assert.match(sync, /export function preserveLocalReceipts/);
   assert.match(html, /preserveLocalReceipts\(reconciled\.transactions, localTransactions\)/);
-  assert.match(html, /preserveLocalReceipts\(merged\.transactions, localGroupTransactions\)/);
+  assert.match(html, /preserveLocalReceipts\(merged\.transactions, group\.transactions \|\| \[\]\)/);
   assert.match(html, /preserveLocalReceipts\(next\.directTransactions, localDirectTransactions\)/);
 });
 
-test("group reconciliation keeps merged tombstones instead of cloud-only tombstones", () => {
-  assert.match(html, /localGroup\.deletedTransactions = merged\.deletedTransactions;/);
+test("group reconciliation merges normalized tombstones instead of cloud-only tombstones", () => {
+  assert.match(html, /mergeNormalizedTransactions\(\{/);
   assert.doesNotMatch(html, /\bdeletedTransactions\s*=\s*cloudData\.deletedTransactions\b/);
 });
 
@@ -588,7 +588,7 @@ test("ledger identity and money repairs run automatically on load, snapshots, an
   assert.match(html, /function repairGroupMoney\(group\)/);
   assert.match(html, /function repairDirectMoney\(\)/);
   assert.match(html, /if \(repairGroupIdentity\(group\)\) migratedSelfName = true/);
-  assert.match(html, /if \(repairGroupMoney\(group\)\) repairedNames = true/);
+  assert.match(html, /if \(repairGroupMoney\(group\)\) migratedSelfName = true/);
   assert.match(html, /if \(repairDirectMoney\(\)\) persistLocalState\(\);/);
   assert.doesNotMatch(html, /setInterval\(\(\) => \{[\s\S]*?syncUserCloud\(currentUser\)/);
   assert.match(html, /flushPendingLocalMutations\(\);\s*syncUserCloud\(currentUser\)/);
@@ -686,7 +686,7 @@ test("roster and legacy membership comparisons ignore Firestore key order", () =
 
 test("snapshot listeners never write to the cloud", () => {
   assert.match(html, /Snapshot listeners are read-only/);
-  assert.match(html, /Repairs stay local/);
+  assert.match(html, /read-only listener rule is preserved/);
   assert.match(html, /A missing cloud document must never be recreated from a listener/);
   const roster = html.slice(html.indexOf("function listenToFriendsRoster"), html.indexOf("// --- DOM Elements"));
   assert.doesNotMatch(roster, /saveFriendsRosterToCloud\(\)|saveDeletedGroupsToCloud\(\)/);

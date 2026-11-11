@@ -1049,7 +1049,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v121";
+    const APP_BUILD = "v122";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -1501,24 +1501,6 @@
       (group.transactions || []).forEach(renameTx);
       (group.deletedTransactions || []).forEach(item => renameTx(item?.transaction));
 
-      const allMembersLinked = group.members.every(member => links[member]);
-      if (allMembersLinked) {
-        const allowed = new Set(Object.values(links).filter(Boolean).map(email => normalizeEmail(email)));
-        if (myEmail) allowed.add(myEmail);
-        const currentEmails = Array.isArray(group.memberEmails) ? group.memberEmails : [];
-        const nextEmails = currentEmails.filter(email => allowed.has(normalizeEmail(email)));
-        Object.values(links).forEach(email => {
-          if (email && !nextEmails.some(item => normalizeEmail(item) === normalizeEmail(email))) nextEmails.push(email);
-        });
-        if (myEmail && currentUser?.email && !nextEmails.some(item => normalizeEmail(item) === myEmail)) {
-          nextEmails.push(currentUser.email);
-        }
-        if (JSON.stringify(nextEmails) !== JSON.stringify(currentEmails)) {
-          group.memberEmails = nextEmails;
-          changed = true;
-        }
-      }
-
       return changed;
     }
 
@@ -1776,8 +1758,6 @@
           id: group.id || id,
           members: members.length ? members : ["You"],
           memberLinks: group.memberLinks && typeof group.memberLinks === "object" ? group.memberLinks : {},
-          memberEmails: (Array.isArray(group.memberEmails) ? group.memberEmails : [])
-            .filter(email => typeof email === "string" && email),
           memberUids: (Array.isArray(group.memberUids) ? group.memberUids : [])
             .filter(uid => typeof uid === "string" && uid),
           transactions: (Array.isArray(group.transactions) ? group.transactions : [])
@@ -2571,7 +2551,7 @@
       return canonEmail(email);
     }
 
-    // UID membership is authoritative. `memberEmails` is no longer written;
+    // UID membership is authoritative; the email list has been retired.
     // a UID is known for accounts already in the roster.
     function rosterUidForEmail(email) {
       const key = normalizeEmail(email);
@@ -2829,9 +2809,6 @@
       const groupEmails = new Set();
       Object.values(appState.groups || {}).forEach(group => {
         Object.values(group.memberLinks || {}).forEach(email => {
-          if (email) groupEmails.add(normalizeEmail(email));
-        });
-        (group.memberEmails || []).forEach(email => {
           if (email) groupEmails.add(normalizeEmail(email));
         });
       });
@@ -7231,9 +7208,6 @@
             }
             return;
           }
-          const migrated = cloudData.schemaVersion === 9
-            ? cloudData
-            : migrateMoney({ schemaVersion: 0, groups: { [groupId]: { ...cloudData, id: groupId } }, directTransactions: [] }).groups[groupId];
           const localGroup = appState.groups[groupId];
           if (!localGroup) {
             appState.groups[groupId] = {
@@ -7242,7 +7216,6 @@
               currency: cloudData.currency || "₹",
               members: Array.isArray(cloudData.members) ? cloudData.members : ["You"],
               memberLinks: cloudData.memberLinks || {},
-              memberEmails: Array.isArray(cloudData.memberEmails) ? cloudData.memberEmails : [],
               memberUids: Array.isArray(cloudData.memberUids) ? cloudData.memberUids : [],
               ownerUid: cloudData.ownerUid || null,
               ownerEmail: cloudData.ownerEmail || null,
@@ -7267,10 +7240,6 @@
                 localGroup.normalizedVersion = cloudData.normalizedVersion;
                 changed = true;
               }
-              if (Array.isArray(cloudData.memberEmails) && JSON.stringify(localGroup.memberEmails || []) !== JSON.stringify(cloudData.memberEmails)) {
-                localGroup.memberEmails = cloudData.memberEmails;
-                changed = true;
-              }
               if (Array.isArray(cloudData.memberUids) && JSON.stringify(localGroup.memberUids || []) !== JSON.stringify(cloudData.memberUids)) {
                 localGroup.memberUids = cloudData.memberUids;
                 changed = true;
@@ -7288,22 +7257,6 @@
               listenToNormalizedGroup(groupId);
               return;
             }
-            const localGroupTransactions = localGroup.transactions || [];
-            const merged = mergePairLedger({
-              localTransactions: localGroupTransactions,
-              remoteTransactions: migrated.transactions || [],
-              localDeleted: localGroup.deletedTransactions || [],
-              remoteDeleted: cloudData.deletedTransactions || []
-            });
-            const mergedTransactions = preserveLocalReceipts(merged.transactions, localGroupTransactions);
-            if (JSON.stringify(mergedTransactions) !== JSON.stringify(localGroupTransactions)) {
-              localGroup.transactions = mergedTransactions;
-              changed = true;
-            }
-            if (JSON.stringify(merged.deletedTransactions) !== JSON.stringify(localGroup.deletedTransactions || [])) {
-              localGroup.deletedTransactions = merged.deletedTransactions;
-              changed = true;
-            }
             if (cloudData.name && localGroup.name !== cloudData.name) { localGroup.name = cloudData.name; changed = true; }
             if (cloudData.currency && localGroup.currency !== cloudData.currency) { localGroup.currency = cloudData.currency; changed = true; }
             if (Array.isArray(cloudData.members) && stableStringify(localGroup.members) !== stableStringify(cloudData.members)) {
@@ -7312,10 +7265,6 @@
             }
             if (cloudData.memberLinks && stableStringify(localGroup.memberLinks || {}) !== stableStringify(cloudData.memberLinks)) {
               localGroup.memberLinks = cloudData.memberLinks;
-              changed = true;
-            }
-            if (Array.isArray(cloudData.memberEmails) && JSON.stringify(localGroup.memberEmails || []) !== JSON.stringify(cloudData.memberEmails)) {
-              localGroup.memberEmails = cloudData.memberEmails;
               changed = true;
             }
             if (Array.isArray(cloudData.memberUids) && JSON.stringify(localGroup.memberUids || []) !== JSON.stringify(cloudData.memberUids)) {
@@ -7408,7 +7357,6 @@
           g.currency = data.currency || g.currency;
           if (members.length) g.members = members.map(member => member.name);
           g.memberLinks = memberLinksFromDocs(memberDocs);
-          g.memberEmails = Array.isArray(data.memberEmails) ? data.memberEmails : [];
           g.memberUids = Array.isArray(data.memberUids) ? data.memberUids : [];
           g.transactions = preserveLocalReceipts(
             projectGroupTransactions({ memberDocs, expenseDocs, settlementDocs }),
@@ -7433,22 +7381,10 @@
           toast(`Reloaded "${g.name}" from the shared ledger.`);
           return;
         }
-        g.name = data.name || g.name;
-        g.currency = data.currency || g.currency;
-        g.members = Array.isArray(data.members) ? data.members : g.members;
-        g.memberLinks = data.memberLinks || {};
-        g.memberEmails = Array.isArray(data.memberEmails) ? data.memberEmails : [];
-        g.memberUids = Array.isArray(data.memberUids) ? data.memberUids : [];
-        g.transactions = preserveLocalReceipts(
-          Array.isArray(data.transactions) ? data.transactions : [],
-          g.transactions || []
-        );
-        g.deletedTransactions = Array.isArray(data.deletedTransactions) ? data.deletedTransactions : [];
-        g.simplifyDebts = data.simplifyDebts !== false;
-        persistLocalState();
-        listenToCloudGroup(g.id);
-        renderAll();
-        toast(`Reloaded "${g.name}" from the cloud.`);
+        // Every active group is normalized; a legacy cloud document has no
+        // ledger path in this build.
+        toast("This group hasn't been upgraded yet. Reload the app and try again.");
+        return;
       } catch (err) {
         console.error("Group reload note:", err?.code || err);
         toast("Could not reload this group. It may not be shared with this Gmail.");
@@ -7527,18 +7463,8 @@
       if (!snapshot.exists()) return true;
       const cloudData = snapshot.data() || {};
       if (cloudData.deletedAt) { removeGroupLocally(group.id); return false; }
-      const localTransactions = group.transactions || [];
-      const merged = mergePairLedger({
-        localTransactions,
-        remoteTransactions: cloudData.transactions || [],
-        localDeleted: group.deletedTransactions || [],
-        remoteDeleted: cloudData.deletedTransactions || []
-      });
-      group.transactions = preserveLocalReceipts(merged.transactions, localTransactions);
-      group.deletedTransactions = merged.deletedTransactions;
       if (Array.isArray(cloudData.members) && cloudData.members.length) group.members = cloudData.members;
       if (cloudData.memberLinks) group.memberLinks = { ...(cloudData.memberLinks || {}), ...(group.memberLinks || {}) };
-      if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
       if (cloudData.currency) group.currency = cloudData.currency;
       if (cloudData.name) group.name = cloudData.name;
       if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
@@ -7932,7 +7858,6 @@
         if (data.currency) group.currency = data.currency;
         if (data.ownerUid) group.ownerUid = data.ownerUid;
         if (data.ownerEmail) group.ownerEmail = data.ownerEmail;
-        if (Array.isArray(data.memberEmails)) group.memberEmails = data.memberEmails;
         if (Array.isArray(data.memberUids)) group.memberUids = data.memberUids;
         if (typeof data.simplifyDebts === "boolean") group.simplifyDebts = data.simplifyDebts;
         group.normalizedVersion = data.normalizedVersion || 1;
@@ -7967,7 +7892,6 @@
               currency: "₹",
               members: [],
               memberLinks: {},
-              memberEmails: [],
               memberUids: [],
               ownerUid: null,
               ownerEmail: null,
@@ -8169,48 +8093,17 @@
             if (cloudData.currency) group.currency = cloudData.currency;
             if (cloudData.ownerUid) group.ownerUid = cloudData.ownerUid;
             if (cloudData.ownerEmail) group.ownerEmail = cloudData.ownerEmail;
-      if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
-      if (Array.isArray(cloudData.memberUids)) group.memberUids = cloudData.memberUids;
+            if (Array.isArray(cloudData.memberUids)) group.memberUids = cloudData.memberUids;
             if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
             listenToNormalizedGroup(groupId);
             persistLocalState();
             if (appState.activeGroupId === groupId) renderAll();
             return;
           }
-          const remote = cloudData.schemaVersion === 9
-            ? cloudData
-            : migrateMoney({ schemaVersion: 0, groups: { [groupId]: { ...cloudData, id: groupId } }, directTransactions: [] }).groups[groupId];
-          const localGroupTransactions = group.transactions || [];
-          const merged = mergePairLedger({
-            localTransactions: localGroupTransactions,
-            remoteTransactions: remote.transactions || cloudData.transactions || [],
-            localDeleted: group.deletedTransactions || [],
-            remoteDeleted: cloudData.deletedTransactions || []
-          });
-          group.transactions = preserveLocalReceipts(merged.transactions, localGroupTransactions);
-          group.deletedTransactions = merged.deletedTransactions;
-          if (!group.normalizedVersion && Array.isArray(cloudData.members)) group.members = cloudData.members;
-          if (cloudData.memberLinks) group.memberLinks = cloudData.memberLinks;
-          if (Array.isArray(cloudData.memberEmails)) group.memberEmails = cloudData.memberEmails;
-          if (Array.isArray(cloudData.memberUids)) group.memberUids = cloudData.memberUids;
-          if (cloudData.currency) group.currency = cloudData.currency;
-          if (cloudData.name) group.name = cloudData.name;
-          if (typeof cloudData.simplifyDebts === "boolean") group.simplifyDebts = cloudData.simplifyDebts;
-          if (cloudData.ownerUid) group.ownerUid = cloudData.ownerUid;
-          if (cloudData.ownerEmail) group.ownerEmail = cloudData.ownerEmail;
-          if (cloudData.normalizedVersion) group.normalizedVersion = cloudData.normalizedVersion;
-          // A stale cloud member list must not leave payer/share keys orphaned.
-          let repairedNames = false;
-          if (migrateGroupSelfName(group)) repairedNames = true;
-          if (repairGroupIdentity(group)) repairedNames = true;
-          if (repairGroupMoney(group)) repairedNames = true;
-          addGroupMembersToRoster(group);
+          // Every active group is normalized. An outdated document without
+          // normalizedVersion is ignored until the migration driver upgrades it.
           persistLocalState();
-          if (group.normalizedVersion) listenToNormalizedGroup(groupId);
           if (appState.activeGroupId === groupId) renderAll();
-          // Repairs stay local. Uploading them here made a group snapshot write
-          // to the profile/ledger, which is how write loops started; the next
-          // explicit user action in this group pushes the repaired state.
         } else if (appState.activeGroupId === groupId) {
           // A missing cloud document must never be recreated from a listener.
           persistLocalState();
@@ -8630,11 +8523,8 @@
           // Only treat this as already-joined when the local copy has confirmed
           // cloud membership. A stale local-only copy must be allowed to accept a
           // new secure invite so its membership can be repaired.
-          const alreadyMember = Boolean(existing && (
-            (Array.isArray(existing.memberUids) && existing.memberUids.includes(currentUser.uid))
-            || (Array.isArray(existing.memberEmails)
-              && existing.memberEmails.some(email => normalizeEmail(email) === normalizeEmail(myEmail)))
-          ));
+          const alreadyMember = Boolean(existing && Array.isArray(existing.memberUids)
+            && existing.memberUids.includes(currentUser.uid));
           if (alreadyMember || normalizeEmail(inviterEmail) === normalizeEmail(myEmail)) {
             rejectPendingInvite("You're already in this group.");
             return;
