@@ -10,7 +10,6 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const html = readFileSync(join(root, "index.html"), "utf8");
 const css = readFileSync(join(root, "fairshare.css"), "utf8");
 const rules = readFileSync(join(root, "firestore.rules"), "utf8");
-const storage = readFileSync(join(root, "storage.rules"), "utf8");
 const sync = readFileSync(join(root, "js", "sync.js"), "utf8");
 const firebase = readFileSync(join(root, "js", "firebase.js"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
@@ -89,11 +88,6 @@ test("group discovery rules restrict reads to signed-in group members", () => {
   assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?groups\/\$\(groupId\)[\s\S]*?isMemberUid\(resource\.data\)/);
   assert.match(rules, /memberDoc\(groupId, request\.resource\.data\.lastClaimMemberId\)/);
   assert.match(rules, /direct_pairs[\s\S]*?allow get:\s*if signedIn\(\)[\s\S]*?direct_pairs\/\$\(pairId\)[\s\S]*?pairMember\(resource\.data\)/);
-});
-
-test("storage receipts require UID membership", () => {
-  assert.match(storage, /request\.auth\.uid in groupData\(\)\.memberUids/);
-  assert.doesNotMatch(storage, /memberEmails/);
 });
 
 test("shared expense sync uses transactional merges and stable participant identities", () => {
@@ -508,16 +502,9 @@ test("direct-pair rules derive canonical membership from the auth token and stab
   assert.match(rules, /allow get:\s*if signedIn\(\)[\s\S]*?!exists\([\s\S]*?pairMember\(resource\.data\)/);
 });
 
-test("scan bill is removed without breaking manual receipt attachment", () => {
+test("receipt UI and the scan-bill integration are removed", () => {
   assert.doesNotMatch(html, /GOOGLE_VISION_API_KEY|vision\.googleapis\.com|scanReceiptImage|parseReceiptText|receipt-scan-status|detected-amounts-wrapper|Scan bill receipt/i);
-  assert.doesNotMatch(html, /receipt-auth-pill|receipt-auth-note/);
-  assert.match(html, /<label for="receipt-file">Receipt photo \(optional\)<\/label>/);
-  assert.match(html, /<input type="file" id="receipt-file" accept="image\/\*">/);
-  assert.match(html, /receiptFileInput\.addEventListener\("change"/);
-  assert.match(html, /activeReceiptBase64 = await compressImage\(evt\.target\.result\)/);
-  assert.match(html, /if \(receiptThumb\) receiptThumb\.src = activeReceiptBase64;/);
-  assert.match(html, /btnClearReceipt\.addEventListener\("click"/);
-  assert.match(html, /safeImageSrc\(tx\.receiptUrl \|\| tx\.receipt\)/);
+  assert.doesNotMatch(html, /receipt-file|receipt-dropzone|receipt-thumb|btn-clear-receipt|data-receipt|Receipt photo|activeReceiptBase64|uploadReceipt|safeImageSrc/i);
 });
 
 test("receipt reconciliation preserves local receipt fields", () => {

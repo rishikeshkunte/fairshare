@@ -32,7 +32,7 @@
     <div class="auth-gate-card">
       <span class="eyebrow">Private by account</span>
       <h1>What's My Share?</h1>
-      <p>Sign in to view your groups, expenses, balances, and receipts.</p>
+      <p>Sign in to view your groups, expenses, and balances.</p>
       <button type="button" class="btn btn-primary" data-call="handleAuthClick">Sign in with Gmail</button>
       <p class="auth-gate-note">What's My Share? only uses your Gmail address and display name for sign-in. It does not read your Gmail messages, Drive, or contacts.</p>
       <p class="auth-gate-note">Your data is visible only while you are signed in on this device.</p>
@@ -265,19 +265,6 @@
           <input type="text" id="expense-notes" placeholder="e.g. Skipped dessert, split cab fare" autocomplete="off">
         </div>
 
-        <div class="form-group">
-          <label for="receipt-file">Receipt photo (optional)</label>
-          <label class="dropzone" id="receipt-dropzone">
-            <input type="file" id="receipt-file" accept="image/*">
-            <span><strong>Drop bill image here</strong><br>or tap to attach or photograph a receipt.</span>
-          </label>
-          <button type="button" id="btn-clear-receipt" class="btn btn-secondary" style="display:none; margin-top:8px;">Remove receipt</button>
-
-          <div id="receipt-upload-preview" style="display:none; margin-top: 10px;">
-            <img id="receipt-thumb" src="" alt="Receipt Preview" style="max-height: 90px; border-radius: 8px; border: 1px solid var(--line); box-shadow:var(--shadow);">
-          </div>
-        </div>
-
         <!-- Split Methods -->
         <div class="form-group">
           <label>Who owes whom?</label>
@@ -438,7 +425,7 @@
       <div class="card-header-row">
         <div>
           <h2>Activity</h2>
-          <span style="font-size:0.8rem; color:var(--muted);">Open any row to inspect shares, receipts, or edit</span>
+          <span style="font-size:0.8rem; color:var(--muted);">Open any row to inspect shares or edit</span>
         </div>
         <div style="display:flex; align-items:center; gap:12px;">
           <button type="button" id="btn-show-trash" class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;">Deleted items</button>
@@ -846,7 +833,7 @@
   </section>
 
   <footer class="app-footer">
-    <p>Privacy: What's My Share? stores your ledger in this browser. Gmail sign-in is optional and is used only to sync groups you belong to, friend requests, and receipt photos. Receipts stay on this device until you are signed in. Nothing here is sold or used for ads.</p>
+    <p>Privacy: What's My Share? stores your ledger in this browser. Gmail sign-in is optional and is used only to sync groups you belong to and friend requests. Nothing here is sold or used for ads.</p>
   </footer>
   </main>
   </div>
@@ -1005,8 +992,7 @@
   <script type="module">
     import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, stripReceiptBytes, newId } from "./js/money.js";
     import { toast, askConfirm, askPrompt } from "./js/ui.js";
-    import { compressImage, safeImageSrc } from "./js/receipts.js";
-    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, uploadReceipt, cloudIntent, setCloudIntent } from "./js/firebase.js";
+    import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, cloudIntent, setCloudIntent } from "./js/firebase.js";
     import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, mergePairLedger, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
     import { repairGroupNames } from "./js/groupnames.js";
     import { normalizeLegacyGroup, validateNormalizedGroup } from "./js/groupschema.js";
@@ -1049,7 +1035,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v122";
+    const APP_BUILD = "v123";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -1070,7 +1056,6 @@
       groups: {}
     };
 
-    let activeReceiptBase64 = null;
     let currentSplitMode = "equal";
     let categoryManuallyOverridden = false;
     let currentExpenseScope = "group";
@@ -1837,14 +1822,9 @@
 
     function clearSensitiveState() {
       appState = emptyState(appState.theme);
-      activeReceiptBase64 = null;
       currentExpenseScope = "group";
       selectedDirectFriend = "";
       historyFilterType = "all";
-      if (receiptFileInput) receiptFileInput.value = "";
-      if (receiptThumb) receiptThumb.removeAttribute("src");
-      if (receiptUploadPreview) receiptUploadPreview.style.display = "none";
-      if (btnClearReceipt) btnClearReceipt.style.display = "none";
       if (modalBody) modalBody.innerHTML = "";
       document.querySelectorAll(".modal-backdrop").forEach((modal) => {
         modal.classList.remove("active");
@@ -2103,10 +2083,6 @@
     const expenseDateInput = document.getElementById("expense-date");
     const expenseNotesInput = document.getElementById("expense-notes");
     const payerSelect = document.getElementById("payer-select");
-    const receiptFileInput = document.getElementById("receipt-file");
-    const btnClearReceipt = document.getElementById("btn-clear-receipt");
-    const receiptUploadPreview = document.getElementById("receipt-upload-preview");
-    const receiptThumb = document.getElementById("receipt-thumb");
     const splitBreakdownContainer = document.getElementById("split-breakdown-container");
     const tabBtns = document.querySelectorAll(".tab-group button[data-mode]");
     const btnCancelEdit = document.getElementById("btn-cancel-edit");
@@ -4669,54 +4645,6 @@
       return null;
     }
 
-    const receiptDropzone = document.getElementById("receipt-dropzone");
-    if (receiptDropzone && receiptFileInput) {
-      ["dragenter", "dragover"].forEach((name) => {
-        receiptDropzone.addEventListener(name, (e) => {
-          e.preventDefault();
-          receiptDropzone.classList.add("is-hot");
-        });
-      });
-      ["dragleave", "drop"].forEach((name) => {
-        receiptDropzone.addEventListener(name, (e) => {
-          e.preventDefault();
-          receiptDropzone.classList.remove("is-hot");
-        });
-      });
-      receiptDropzone.addEventListener("drop", (e) => {
-        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-        if (!file) return;
-        const transfer = new DataTransfer();
-        transfer.items.add(file);
-        receiptFileInput.files = transfer.files;
-        receiptFileInput.dispatchEvent(new Event("change"));
-      });
-    }
-
-    if (receiptFileInput) {
-      receiptFileInput.addEventListener("change", (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async function(evt) {
-          activeReceiptBase64 = await compressImage(evt.target.result);
-          if (receiptThumb) receiptThumb.src = activeReceiptBase64;
-          if (receiptUploadPreview) receiptUploadPreview.style.display = "block";
-          if (btnClearReceipt) btnClearReceipt.style.display = "inline-block";
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    if (btnClearReceipt) {
-      btnClearReceipt.addEventListener("click", () => {
-        activeReceiptBase64 = null;
-        if (receiptFileInput) receiptFileInput.value = "";
-        if (receiptUploadPreview) receiptUploadPreview.style.display = "none";
-        if (btnClearReceipt) btnClearReceipt.style.display = "none";
-      });
-    }
-
     // Expense Form Submission
     if (expenseForm) {
       expenseForm.addEventListener("submit", async (e) => {
@@ -4744,18 +4672,6 @@
         const shares = computeSplitShares(amount);
         const repeat = document.getElementById("recurring-select")?.value || "";
         const editId = editingTxId.value || null;
-        const receiptId = editId || newId();
-        let receiptUrl = null;
-        let receiptPath = null;
-        if (fx && currentUser && activeReceiptBase64 && String(activeReceiptBase64).startsWith("data:") && currentExpenseScope === "group" && g.id) {
-          try {
-            const uploaded = await uploadReceipt(fx, `receipts/${g.id}/${receiptId}.jpg`, activeReceiptBase64);
-            receiptUrl = uploaded.url;
-            receiptPath = uploaded.path;
-          } catch (err) {
-            toast("The photo stays on this device. Cloud upload did not finish.");
-          }
-        }
         if (!shares) {
           showExpenseError("The split does not add up to the total. Adjust shares, then save again.");
           return;
@@ -4784,15 +4700,6 @@
               tx.ownerEmail = currentUser.email.toLowerCase().trim();
             }
             tx.updatedAt = Date.now();
-            if (activeReceiptBase64) {
-              tx.receipt = activeReceiptBase64;
-              if (receiptUrl) tx.receiptUrl = receiptUrl;
-              if (receiptPath) tx.receiptPath = receiptPath;
-            } else {
-              delete tx.receipt;
-              delete tx.receiptUrl;
-              delete tx.receiptPath;
-            }
             tx.recurring = repeat ? { freq: repeat, nextDue: Date.now() + (repeat === "weekly" ? 7 : 30) * 86400000 } : tx.recurring || null;
 
             const targetIsDirect = currentExpenseScope === "friend";
@@ -4809,7 +4716,7 @@
           cancelEditMode();
         } else {
           const newTx = {
-            id: receiptId,
+            id: newId(),
             type: "expense",
             scope: currentExpenseScope,
             friend: currentExpenseScope === "friend" ? selectedDirectFriend : null,
@@ -4825,9 +4732,6 @@
             notes: notes,
             timestamp: Date.now(),
             updatedAt: Date.now(),
-            receipt: activeReceiptBase64,
-            receiptUrl,
-            receiptPath,
             recurring: repeat ? { freq: repeat, nextDue: Date.now() + (repeat === "weekly" ? 7 : 30) * 86400000 } : null
           };
 
@@ -4937,13 +4841,6 @@
       tabBtns.forEach(b => b.classList.toggle("active", b.dataset.mode === currentSplitMode));
       renderSplitBreakdown();
       restoreSplitInputs(tx);
-
-      if (tx.receipt || tx.receiptUrl) {
-        activeReceiptBase64 = tx.receipt || tx.receiptUrl;
-        if (receiptThumb) receiptThumb.src = activeReceiptBase64;
-        if (receiptUploadPreview) receiptUploadPreview.style.display = "block";
-        if (btnClearReceipt) btnClearReceipt.style.display = "inline-block";
-      }
     };
 
     window.deleteTransaction = async function(id) {
@@ -6363,7 +6260,6 @@
               <div class="cat-badge-icon">${letter}</div>
               <div>
                 <strong>${highlight(tx.desc, searchQuery)}</strong>
-                ${tx.receipt || tx.receiptUrl ? '<span class="cat-badge">Receipt</span>' : ""}
                 <span class="transaction-meta">
                   ${escapeHtml(tx.sourceGroup || "")} • ${tx.type === "settlement" ? `${highlight(payerLabel, searchQuery)} paid ${highlight(receiverLabel, searchQuery)}` : `Paid by <strong>${highlight(payerLabel, searchQuery)}</strong>`}
                   ${tx.notes ? " • " + highlight(tx.notes, searchQuery) : ""}
@@ -6589,17 +6485,6 @@
           </div>
         `;
 
-        if (tx.receipt || tx.receiptUrl) {
-          html += `
-            <div style="margin-bottom: 16px;">
-              <h4 style="margin: 0 0 6px 0; font-size:0.9rem; color:var(--text);">Receipt photo:</h4>
-              <div class="receipt-preview-box">
-                <img data-receipt="1" alt="Bill receipt">
-              </div>
-            </div>
-          `;
-        }
-
         html += `
           <h4 style="margin:0 0 10px 0; font-size:0.95rem; color:var(--text);">Itemized share breakdown:</h4>
           <div style="border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-bottom:16px;">
@@ -6651,12 +6536,6 @@
           else closeDetailModal();
         });
       });
-      const receiptImg = modalBody.querySelector("[data-receipt]");
-      const receiptSrc = safeImageSrc(tx.receiptUrl || tx.receipt);
-      if (receiptImg && receiptSrc) {
-        receiptImg.src = receiptSrc;
-        receiptImg.addEventListener("click", () => window.open(receiptSrc, "_blank", "noopener"));
-      }
       detailModal.classList.add("active");
     };
 
@@ -8656,7 +8535,6 @@
           let guard = 0;
           while (tx.recurring.nextDue <= now && guard < 12) {
             const copy = { ...tx, id: newId(), timestamp: tx.recurring.nextDue, updatedAt: now, recurring: null };
-            delete copy.receipt;
             list.unshift(copy);
             tx.recurring.nextDue = advance(tx.recurring.nextDue, tx.recurring.freq || "monthly");
             guard += 1;

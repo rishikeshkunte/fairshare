@@ -101,18 +101,16 @@ export function createGuardedStore(raw, writeGuard, options = {}) {
 export function loadFirebase(config, options = {}) {
   if (loaded) return loaded;
   loaded = (async () => {
-    const [{ initializeApp }, authMod, storeMod, storageMod] = await Promise.all([
+    const [{ initializeApp }, authMod, storeMod] = await Promise.all([
       import(`${base}/firebase-app.js`),
       import(`${base}/firebase-auth.js`),
-      import(`${base}/firebase-firestore.js`),
-      import(`${base}/firebase-storage.js`)
+      import(`${base}/firebase-firestore.js`)
     ]);
     const app = initializeApp(config);
     const auth = authMod.getAuth(app);
     const db = storeMod.getFirestore(app);
-    const storage = storageMod.getStorage(app);
     const writeGuard = createWriteGuard();
-    return { app, auth, db, authMod, storeMod: createGuardedStore(storeMod, writeGuard, options), storageMod, storage, writeGuard };
+    return { app, auth, db, authMod, storeMod: createGuardedStore(storeMod, writeGuard, options), writeGuard };
   })().catch((err) => {
     loaded = null;
     throw err;
@@ -160,11 +158,4 @@ export function setMerge(fx, path, id, data) {
 
 export function runTransaction(fx, updateFunction) {
   return fx.storeMod.runTransaction(fx.db, updateFunction);
-}
-
-export async function uploadReceipt(fx, path, dataUrl) {
-  const ref = fx.storageMod.ref(fx.storage, path);
-  await fx.storageMod.uploadString(ref, dataUrl, "data_url");
-  const url = await fx.storageMod.getDownloadURL(ref);
-  return { url, path };
 }
