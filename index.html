@@ -354,25 +354,31 @@
 
         <!-- Custom Settlement Box -->
         <div id="settle-up-box" class="settle-up-box">
-          <h3 style="margin-top:0; margin-bottom:12px; font-size:1rem;">Record direct payment</h3>
+          <div class="settle-sheet-head">
+            <span class="eyebrow">Settle up</span>
+            <h3>Record a payment</h3>
+            <p class="settle-hint">This only records who paid whom. No money moves here.</p>
+          </div>
+          <div id="settle-preview" class="settle-preview" aria-live="polite"></div>
           <form id="settle-form">
-            <div class="form-row">
+            <div class="settle-people">
               <div class="form-group">
                 <label for="settle-payer">Who paid?</label>
                 <select id="settle-payer" required></select>
               </div>
+              <button type="button" id="btn-swap-settle" class="settle-swap" aria-label="Swap payer and receiver" title="Swap payer and receiver">⇄</button>
               <div class="form-group">
-                <label for="settle-receiver">Paid to whom?</label>
+                <label for="settle-receiver">Paid to</label>
                 <select id="settle-receiver" required></select>
               </div>
-              <div class="form-group">
-                <label for="settle-amount">Amount (<span class="currency-label">₹</span>)</label>
-                <input type="number" id="settle-amount" step="0.01" min="0.01" placeholder="0.00" required>
-              </div>
             </div>
-            <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
-              <button type="button" id="btn-cancel-settle" class="btn btn-secondary" style="padding:8px 14px;">Cancel</button>
-              <button type="submit" class="btn btn-settle" style="padding:8px 16px;">Save settlement</button>
+            <div class="form-group settle-amount-group">
+              <label for="settle-amount">Amount (<span class="currency-label">₹</span>)</label>
+              <input type="number" id="settle-amount" step="0.01" min="0.01" placeholder="0.00" required>
+            </div>
+            <div class="settle-actions">
+              <button type="button" id="btn-cancel-settle" class="btn btn-secondary">Cancel</button>
+              <button type="submit" class="btn btn-settle">Mark as paid</button>
             </div>
           </form>
         </div>
@@ -1030,7 +1036,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v133";
+    const APP_BUILD = "v134";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2089,6 +2095,45 @@
     const settleReceiver = document.getElementById("settle-receiver");
     const settleAmount = document.getElementById("settle-amount");
     const btnCancelSettle = document.getElementById("btn-cancel-settle");
+    const settlePreview = document.getElementById("settle-preview");
+    const btnSwapSettle = document.getElementById("btn-swap-settle");
+
+    function renderSettlePreview() {
+      if (!settlePreview) return;
+      const g = getGroup();
+      const payer = settlePayer ? settlePayer.value : "";
+      const receiver = settleReceiver ? settleReceiver.value : "";
+      const labelFor = (name) => ((g.members || []).includes(name) ? displayGroupMember(g, name) : name);
+      if (!payer || !receiver) {
+        settlePreview.innerHTML = `<span class="settle-preview-hint">Choose who paid and who received.</span>`;
+        return;
+      }
+      const amountPaise = settleAmount ? (rupeesToPaise(settleAmount.value) || 0) : 0;
+      const payerLabel = labelFor(payer);
+      const receiverLabel = labelFor(receiver);
+      settlePreview.innerHTML = `
+        <span class="avatar avatar-tone-${avatarTone(payerLabel)}">${escapeHtml(personInitials(payerLabel))}</span>
+        <strong>${escapeHtml(payerLabel)}</strong>
+        <span class="settle-arrow" aria-hidden="true">→</span>
+        <span class="avatar avatar-tone-${avatarTone(receiverLabel)}">${escapeHtml(personInitials(receiverLabel))}</span>
+        <strong>${escapeHtml(receiverLabel)}</strong>
+        <span class="settle-preview-amount">${formatMoney(amountPaise, g.currency || "₹")}</span>
+      `;
+    }
+
+    [settlePayer, settleReceiver].forEach((select) => {
+      if (select) select.addEventListener("change", renderSettlePreview);
+    });
+    if (settleAmount) settleAmount.addEventListener("input", renderSettlePreview);
+    if (btnSwapSettle) {
+      btnSwapSettle.addEventListener("click", () => {
+        if (!settlePayer || !settleReceiver) return;
+        const payer = settlePayer.value;
+        settlePayer.value = settleReceiver.value;
+        settleReceiver.value = payer;
+        renderSettlePreview();
+      });
+    }
 
     // Summaries
     const totalSpentEl = document.getElementById("total-spent");
@@ -5776,6 +5821,7 @@
       if (from && settlePayer) settlePayer.value = from;
       if (to && settleReceiver) settleReceiver.value = to;
       if (amount && settleAmount) settleAmount.value = paiseToInput(amount);
+      renderSettlePreview();
       settlePayer?.focus({ preventScroll: true });
     }
 
@@ -6648,6 +6694,7 @@
 
       renderSplitBreakdown();
       renderFriendPickerDropdown();
+      renderSettlePreview();
     }
 
     function safeRender(label, fn) {
