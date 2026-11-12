@@ -578,6 +578,20 @@ input:focus, select:focus, textarea:focus {
 .transaction-item:hover { background: var(--hover-item); }
 .transaction-meta { display: block; color: var(--muted); font-size: 0.78rem; }
 .transaction-amount { font-weight: 700; }
+.tx-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.tx-main .avatar { width: 34px; height: 34px; font-size: .78rem; }
+.tx-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tx-text strong { overflow-wrap: anywhere; }
+.tx-type {
+  display: inline-block; margin-right: 4px;
+  font-size: .62rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 999px;
+}
+.tx-type.is-expense { background: var(--chip-bg); color: var(--chip-text); }
+.tx-type.is-settle { background: var(--success-bg); color: var(--success-text); }
+.tx-side { flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; text-align: right; }
+.tx-date { font-size: .72rem; color: var(--muted); }
+.transaction-amount.is-settle { color: var(--positive); }
 .cat-badge-icon {
   width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center;
   background: var(--chip-bg); color: var(--primary); font-weight: 800;

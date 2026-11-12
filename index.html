@@ -1036,7 +1036,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v134";
+    const APP_BUILD = "v135";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -6235,6 +6235,34 @@
     });
 
     // Transactions List & History
+    function activityDateLabel(tx) {
+      const iso = tx.dateISO || "";
+      if (iso) {
+        const today = todayISO();
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        const yesterday = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        if (iso === today) return "Today";
+        if (iso === yesterday) return "Yesterday";
+        return formatDisplayDate(iso);
+      }
+      return tx.date || "Undated";
+    }
+
+    window.clearHistoryFilters = function () {
+      historyFilter = "all";
+      memberFilter = "all";
+      searchQuery = "";
+      historyFilterType = "all";
+      if (searchQueryInput) searchQueryInput.value = "";
+      if (filterMemberSelect) filterMemberSelect.value = "all";
+      if (historyGroupSelect) historyGroupSelect.value = "all";
+      if (filterAll) filterAll.classList.add("active");
+      if (filterExpenses) filterExpenses.classList.remove("active");
+      if (filterSettlements) filterSettlements.classList.remove("active");
+      renderTransactions();
+    };
+
     function renderTransactions() {
       const g = getGroup();
       const cur = g.currency;
@@ -6245,12 +6273,12 @@
       if (historyGroupSelect) {
         const selectedGroup = historyGroupSelect.value || "all";
         historyGroupSelect.innerHTML = `<option value="all">All groups and 1-on-1</option>` +
-          Object.values(appState.groups).map(group => `<option value="${escapeHtml(group.id)}">${escapeHtml(group.name)}</option>`).join("");
+          Object.entries(appState.groups || {}).map(([groupId, group]) => `<option value="${escapeHtml(groupId)}">${escapeHtml(group.name)}</option>`).join("");
         if ([...historyGroupSelect.options].some(option => option.value === selectedGroup)) historyGroupSelect.value = selectedGroup;
       }
 
       let allTx = [
-        ...Object.values(appState.groups).flatMap(group => (group.transactions || []).map(t => ({ ...t, sourceGroup: group.name, groupId: group.id, sourceCurrency: group.currency }))),
+        ...Object.entries(appState.groups || {}).flatMap(([groupId, group]) => (group.transactions || []).map(t => ({ ...t, sourceGroup: group.name, groupId, sourceCurrency: group.currency }))),
         ...(currentUser ? (appState.directTransactions || []).map(t => ({ ...t, sourceGroup: `1-on-1: ${t.friend}` })) : [])
       ];
       const historyPage = document.getElementById("page-history");
@@ -6278,40 +6306,57 @@
       }
 
       if (filtered.length === 0) {
-        if (emptyMsgEl) emptyMsgEl.style.display = "block";
+        const hasFilters = historyFilter !== "all" || memberFilter !== "all" || Boolean(searchQuery)
+          || (historyGroupSelect && historyGroupSelect.value !== "all")
+          || historyFilterType === "direct";
+        if (emptyMsgEl) {
+          emptyMsgEl.style.display = "block";
+          emptyMsgEl.innerHTML = hasFilters
+            ? `<p class="empty-state-title">No matching records</p><p class="empty-state-description">Try another search or clear the filters.</p><button type="button" class="btn btn-secondary" data-call="clearHistoryFilters">Clear filters</button>`
+            : `<p class="empty-state-title">Nothing here yet</p><p class="empty-state-description">Your expenses and settlements will appear here as you add them.</p>`;
+        }
       } else {
         if (emptyMsgEl) emptyMsgEl.style.display = "none";
-        let lastDate = "";
+        let lastKey = "";
         filtered.forEach(tx => {
-          if ((tx.date || "") !== lastDate) {
-            lastDate = tx.date || "";
+          const dateKey = tx.dateISO || tx.date || "";
+          if (dateKey !== lastKey) {
+            lastKey = dateKey;
             const heading = document.createElement("div");
             heading.className = "date-heading";
-            heading.textContent = lastDate || "Undated";
+            heading.textContent = activityDateLabel(tx);
             transactionListEl.appendChild(heading);
           }
           const item = document.createElement("div");
           item.className = "transaction-item";
           item.onclick = () => openDetailModal(tx.id);
 
-          const letter = tx.type === "settlement" ? "S" : (tx.category || "O").slice(0, 1).toUpperCase();
+          const isSettlement = tx.type === "settlement";
           const payerLabel = transactionDisplayName(tx, tx.payer);
           const receiverLabel = transactionDisplayName(tx, tx.receiver);
+          const avatarLabel = payerLabel || "?";
+          const metaParts = [];
+          if (tx.sourceGroup) metaParts.push(escapeHtml(tx.sourceGroup));
+          metaParts.push(isSettlement
+            ? `${highlight(payerLabel, searchQuery)} → ${highlight(receiverLabel, searchQuery)}`
+            : `Paid by <strong>${highlight(payerLabel, searchQuery)}</strong>`);
+          if (tx.category) metaParts.push(escapeHtml(tx.category));
+          if (tx.notes) metaParts.push(highlight(tx.notes, searchQuery));
 
           item.innerHTML = `
-            <div style="display:flex; align-items:center; gap:12px;">
-              <div class="cat-badge-icon">${letter}</div>
-              <div>
+            <div class="tx-main">
+              <span class="avatar avatar-tone-${avatarTone(avatarLabel)}">${escapeHtml(personInitials(avatarLabel))}</span>
+              <div class="tx-text">
                 <strong>${highlight(tx.desc, searchQuery)}</strong>
                 <span class="transaction-meta">
-                  ${escapeHtml(tx.sourceGroup || "")} • ${tx.type === "settlement" ? `${highlight(payerLabel, searchQuery)} paid ${highlight(receiverLabel, searchQuery)}` : `Paid by <strong>${highlight(payerLabel, searchQuery)}</strong>`}
-                  ${tx.notes ? " • " + highlight(tx.notes, searchQuery) : ""}
+                  <span class="tx-type ${isSettlement ? "is-settle" : "is-expense"}">${isSettlement ? "Settlement" : "Expense"}</span>
+                  ${metaParts.join(" • ")}
                 </span>
               </div>
             </div>
-            <div style="text-align:right;">
-              <span class="transaction-amount">${formatMoney(tx.amount, tx.sourceCurrency || cur)}</span>
-              <span style="font-size:0.75rem; color:var(--primary); display:block;">View details</span>
+            <div class="tx-side">
+              <span class="transaction-amount ${isSettlement ? "is-settle" : ""}">${formatMoney(tx.amount, tx.sourceCurrency || cur)}</span>
+              <span class="tx-date">${escapeHtml(tx.date || "")}</span>
             </div>
           `;
           transactionListEl.appendChild(item);
