@@ -1111,7 +1111,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v144";
+    const APP_BUILD = "v145";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3551,7 +3551,7 @@
         ? sorted
         : [activeEntry, ...sorted.filter(([groupId]) => groupId !== activeKey)].filter(Boolean).slice(0, maxChips);
       const signature = `${sorted.length}|${activeKey}|` + visible
-        .map(([groupId, group]) => `${groupId}:${group.name}:${group.currency || ""}:${(group.members || []).length}`)
+        .map(([groupId, group]) => `${groupId}:${group.name}:${group.currency || ""}:${(group.members || []).length}:${emojiForGroup(groupId, group.name)}`)
         .join("|");
       if (groupTabs.dataset.signature !== signature) {
         groupTabs.innerHTML = "";
@@ -7215,6 +7215,13 @@
       currencyLabels.forEach(el => el.textContent = g.currency);
 
       safeRender("members", () => { if (!typingInExpenseForm) renderMembers(); });
+      safeRender("settle-preview", renderSettlePreview);
+      safeRender("you-emoji", () => {
+        const avatar = document.getElementById("you-avatar");
+        if (!avatar) return;
+        const name = currentUser ? (currentUser.displayName || currentUser.email || "Y") : "You";
+        avatar.textContent = emojiForPerson(name);
+      });
       safeRender("balances", renderBalancesAndSettlements);
       safeRender("home", renderHomeSummary);
       safeRender("group-summary", renderGroupExpenseSummary);
@@ -8837,6 +8844,35 @@
         : `Last synced ${Math.round(seconds / 60)} min ago.`;
     }
 
+    async function refreshEmojiChoicesFromCloud() {
+      if (!fx || !currentUser) return;
+      try {
+        const snap = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid));
+        if (!snap.exists()) return;
+        const choices = (snap.data() || {}).emojiChoices || {};
+        const cloudPeople = choices.people && typeof choices.people === "object" ? choices.people : {};
+        const cloudGroups = choices.groups && typeof choices.groups === "object" ? choices.groups : {};
+        const localPeople = appState.emojiChoices?.people && typeof appState.emojiChoices.people === "object" ? appState.emojiChoices.people : {};
+        const localGroups = appState.emojiChoices?.groups && typeof appState.emojiChoices.groups === "object" ? appState.emojiChoices.groups : {};
+        const mergedPeople = { ...localPeople, ...cloudPeople };
+        const mergedGroups = { ...localGroups, ...cloudGroups };
+        pendingEmojiKeys.forEach(token => {
+          const key = token.slice(2);
+          if (token.startsWith("p:") && key in localPeople) mergedPeople[key] = localPeople[key];
+          else if (token.startsWith("g:") && key in localGroups) mergedGroups[key] = localGroups[key];
+        });
+        const changed = stableStringify({ people: localPeople, groups: localGroups })
+          !== stableStringify({ people: mergedPeople, groups: mergedGroups });
+        if (changed) {
+          appState.emojiChoices = { people: mergedPeople, groups: mergedGroups };
+          persistLocalState();
+          renderAll();
+        }
+      } catch (err) {
+        console.warn("Emoji refresh note:", err?.code || err);
+      }
+    }
+
     window.syncNow = async function () {
       if (!fx || !currentUser) {
         toast("Sign in with Gmail to sync.");
@@ -8844,6 +8880,7 @@
       }
       toast("Syncing with the cloud…");
       try {
+        await refreshEmojiChoicesFromCloud();
         await refreshInactiveGroupLedgers({ force: true });
         flushPendingLocalMutations();
         syncUserCloud(currentUser);
