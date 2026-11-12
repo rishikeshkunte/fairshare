@@ -344,11 +344,12 @@ test("group chips use map keys and stable identity", () => {
 });
 
 test("emoji choices sync through the profile map", () => {
-  assert.match(html, /const pendingEmojiKeys = new Set\(\)/);
+  assert.match(html, /const pendingEmojiKeys = new Map\(\)/);
   assert.match(html, /emojiChoices: \{ people: \{ \[key\]: emoji \} \}/);
   assert.match(html, /emojiChoices: \{ groups: \{ \[key\]: emoji \} \}/);
   assert.match(html, /cloudEmojiChoices/);
   assert.match(html, /flushPendingEmojiChoices\(\)/);
+  assert.match(html, /refreshEmojiChoicesFromCloud\(\{ authoritative: true \}\)/);
 });
 
 test("group management requires an explicit group selection", () => {

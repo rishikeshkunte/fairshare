@@ -1111,7 +1111,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v145";
+    const APP_BUILD = "v146";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2011,7 +2011,7 @@
 
     let cloudFriendsMap = {};
     let cloudEmojiChoices = { people: {}, groups: {} };
-    const pendingEmojiKeys = new Set();
+    const pendingEmojiKeys = new Map();
     let cloudDeletedGroupsMap = {};
     let rosterFlushQueued = false;
 
@@ -2060,7 +2060,7 @@
     function saveEmojiChoiceToCloud(type, key, emoji) {
       if (!fx || !currentUser || !currentUser.uid) return;
       const token = `${type === "group" ? "g" : "p"}:${key}`;
-      pendingEmojiKeys.add(token);
+      pendingEmojiKeys.set(token, Date.now());
       const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
       const payload = type === "group"
         ? { emojiChoices: { groups: { [key]: emoji } } }
@@ -2076,7 +2076,7 @@
 
     function flushPendingEmojiChoices() {
       if (!fx || !currentUser) return;
-      Array.from(pendingEmojiKeys).forEach(token => {
+      Array.from(pendingEmojiKeys.keys()).forEach(token => {
         const type = token.startsWith("g:") ? "group" : "person";
         const key = token.slice(2);
         const value = type === "group"
@@ -2107,11 +2107,6 @@
         const localGroups = appState.emojiChoices?.groups && typeof appState.emojiChoices.groups === "object" ? appState.emojiChoices.groups : {};
         const mergedPeople = { ...localPeople, ...cloudPeople };
         const mergedGroups = { ...localGroups, ...cloudGroups };
-        pendingEmojiKeys.forEach(token => {
-          const key = token.slice(2);
-          if (token.startsWith("p:") && key in localPeople) mergedPeople[key] = localPeople[key];
-          else if (token.startsWith("g:") && key in localGroups) mergedGroups[key] = localGroups[key];
-        });
         const emojiChanged = stableStringify({ people: localPeople, groups: localGroups })
           !== stableStringify({ people: mergedPeople, groups: mergedGroups });
         if (emojiChanged) appState.emojiChoices = { people: mergedPeople, groups: mergedGroups };
@@ -8844,8 +8839,9 @@
         : `Last synced ${Math.round(seconds / 60)} min ago.`;
     }
 
-    async function refreshEmojiChoicesFromCloud() {
+    async function refreshEmojiChoicesFromCloud(options = {}) {
       if (!fx || !currentUser) return;
+      const authoritative = Boolean(options.authoritative);
       try {
         const snap = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid));
         if (!snap.exists()) return;
@@ -8856,11 +8852,18 @@
         const localGroups = appState.emojiChoices?.groups && typeof appState.emojiChoices.groups === "object" ? appState.emojiChoices.groups : {};
         const mergedPeople = { ...localPeople, ...cloudPeople };
         const mergedGroups = { ...localGroups, ...cloudGroups };
-        pendingEmojiKeys.forEach(token => {
-          const key = token.slice(2);
-          if (token.startsWith("p:") && key in localPeople) mergedPeople[key] = localPeople[key];
-          else if (token.startsWith("g:") && key in localGroups) mergedGroups[key] = localGroups[key];
-        });
+        if (authoritative) {
+          Object.keys(cloudPeople).forEach(key => { mergedPeople[key] = cloudPeople[key]; });
+          Object.keys(cloudGroups).forEach(key => { mergedGroups[key] = cloudGroups[key]; });
+          pendingEmojiKeys.clear();
+        } else {
+          pendingEmojiKeys.forEach((pendingAt, token) => {
+            if (Date.now() - pendingAt > 30000) return;
+            const key = token.slice(2);
+            if (token.startsWith("p:") && key in localPeople) mergedPeople[key] = localPeople[key];
+            else if (token.startsWith("g:") && key in localGroups) mergedGroups[key] = localGroups[key];
+          });
+        }
         const changed = stableStringify({ people: localPeople, groups: localGroups })
           !== stableStringify({ people: mergedPeople, groups: mergedGroups });
         if (changed) {
@@ -8880,7 +8883,7 @@
       }
       toast("Syncing with the cloud…");
       try {
-        await refreshEmojiChoicesFromCloud();
+        await refreshEmojiChoicesFromCloud({ authoritative: true });
         await refreshInactiveGroupLedgers({ force: true });
         flushPendingLocalMutations();
         syncUserCloud(currentUser);
@@ -8897,6 +8900,7 @@
       saveFriendsRosterToCloud();
       saveDeletedGroupsToCloud();
       flushPendingEmojiChoices();
+      refreshEmojiChoicesFromCloud().catch(err => console.warn("Emoji refresh note:", err?.code || err));
       if (options.all) pushAllDirectPairs();
       else flushDirtyDirectPairs();
       // Lifecycle repair: diff each group against its last snapshot. Clean
