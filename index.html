@@ -624,6 +624,7 @@
       <div style="margin-top:14px;">
         <button type="button" class="btn btn-secondary" data-call="syncNow">Sync now</button>
         <p class="group-hint" id="last-synced-label" style="margin-top:8px;">Not synced yet.</p>
+        <p class="group-hint" id="emoji-sync-status">Emoji choices: 0 people · 0 groups</p>
       </div>
       <div style="margin-top:14px;">
         <button type="button" class="btn btn-secondary" data-call="promptPwaInstall" id="pwa-install-you">Install app</button>
@@ -1111,7 +1112,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v146";
+    const APP_BUILD = "v147";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -8828,15 +8829,23 @@
 
     function updateLastSyncLabel() {
       const label = document.getElementById("last-synced-label");
-      if (!label) return;
-      if (!lastCloudRefreshAt) {
-        label.textContent = "Not synced yet.";
-        return;
+      if (label) {
+        if (!lastCloudRefreshAt) {
+          label.textContent = "Not synced yet.";
+        } else {
+          const seconds = Math.max(0, Math.round((Date.now() - lastCloudRefreshAt) / 1000));
+          label.textContent = seconds < 60
+            ? "Last synced just now."
+            : `Last synced ${Math.round(seconds / 60)} min ago.`;
+        }
       }
-      const seconds = Math.max(0, Math.round((Date.now() - lastCloudRefreshAt) / 1000));
-      label.textContent = seconds < 60
-        ? "Last synced just now."
-        : `Last synced ${Math.round(seconds / 60)} min ago.`;
+      const emojiStatus = document.getElementById("emoji-sync-status");
+      if (emojiStatus) {
+        const people = Object.keys(appState.emojiChoices?.people || {}).length;
+        const groups = Object.keys(appState.emojiChoices?.groups || {}).length;
+        const account = currentUser?.uid ? ` · account …${currentUser.uid.slice(-6)}` : "";
+        emojiStatus.textContent = `Emoji choices: ${people} people · ${groups} groups${account}`;
+      }
     }
 
     async function refreshEmojiChoicesFromCloud(options = {}) {
@@ -9459,6 +9468,11 @@
     };
     updateOfflineBanner();
     syncPwaInstallUi();
+    window.setInterval(() => {
+      if (document.visibilityState === "visible" && fx && currentUser) {
+        refreshEmojiChoicesFromCloud().catch(err => console.warn("Emoji refresh note:", err?.code || err));
+      }
+    }, 60 * 1000);
     if (isIosDevice() && !isStandalonePwa()) {
       window.setTimeout(showPwaBanner, 1500);
     }
