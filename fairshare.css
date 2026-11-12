@@ -629,6 +629,8 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
 .group-bar, .group-select-wrapper { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .friends-list-container { display: flex; flex-direction: column; gap: 8px; }
 .friend-row { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:10px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+.friend-main { display:flex; align-items:flex-start; gap:10px; min-width:0; flex:1; }
+.friend-main .avatar { width:34px; height:34px; font-size:.78rem; margin-top:2px; }
 .friend-row:first-child { border-top:0; }
 .friend-row > div:last-child { display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:flex-end; }
 .friend-group-balances { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
@@ -1704,6 +1706,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 /* --- Responsive balances: two panes on desktop, one-tap sections on mobile --- */
 .balances-summary-strip { margin: 0 0 16px; }
+.balances-page-head { align-items: flex-end; }
+.balances-page-head h1 { margin: 2px 0 0; font-size: 1.8rem; letter-spacing: -0.03em; }
+.balances-page-head .section-hint { margin: 4px 0 0; }
 .balances-summary-strip .summary-grid { margin: 0; }
 .balances-collapse-btn {
   display: none; width: 100%; align-items: center; justify-content: space-between;
@@ -1728,11 +1733,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .balances-sheet-body .settle-up-box { display: block !important; margin: 0; border: 0; padding: 0; box-shadow: none; }
 
 @media (min-width: 861px) {
-  .balances-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; align-items: start; }
-  .balances-layout > .balances-members-card { grid-column: 1; margin: 0 !important; }
-  .balances-layout > .settlement-card { grid-column: 2; }
+  .balances-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+  .balances-layout > .settlement-card { grid-column: 1 / -1; }
   .balances-collapse-btn { display: none; }
-  #member-balance-body[hidden] { display: block !important; }
 }
 
 @media (max-width: 860px) {
