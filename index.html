@@ -1017,6 +1017,20 @@
     </div>
   </div>
 
+  <!-- Group Switcher Sheet -->
+  <div id="group-picker-overlay" class="balances-overlay" hidden>
+    <div class="balances-sheet group-picker-sheet" role="dialog" aria-modal="true" aria-labelledby="group-picker-title">
+      <div class="balances-sheet-head">
+        <strong id="group-picker-title">Switch group</strong>
+        <button type="button" class="btn btn-secondary" data-call="closeGroupPicker">Close</button>
+      </div>
+      <div class="balances-sheet-body">
+        <input type="search" id="group-picker-search" class="group-picker-search" placeholder="Search groups..." autocomplete="off">
+        <div id="group-picker-list" class="group-picker-list"></div>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, stripReceiptBytes, newId } from "./js/money.js";
     import { toast, askConfirm, askPrompt } from "./js/ui.js";
@@ -1063,7 +1077,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v141";
+    const APP_BUILD = "v142";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3432,12 +3446,18 @@
       const sorted = [...groupEntries]
         .filter(([, group]) => group && group.name)
         .sort(([, a], [, b]) => String(a.name || "").localeCompare(String(b.name || "")));
-      const signature = sorted
+      const activeKey = groupKeyFor(appState.activeGroupId) || sorted[0][0];
+      const activeEntry = sorted.find(([groupId]) => groupId === activeKey);
+      const maxChips = 4;
+      const visible = sorted.length <= maxChips
+        ? sorted
+        : [activeEntry, ...sorted.filter(([groupId]) => groupId !== activeKey)].filter(Boolean).slice(0, maxChips);
+      const signature = `${sorted.length}|${activeKey}|` + visible
         .map(([groupId, group]) => `${groupId}:${group.name}:${group.currency || ""}:${(group.members || []).length}`)
         .join("|");
       if (groupTabs.dataset.signature !== signature) {
         groupTabs.innerHTML = "";
-        sorted.forEach(([groupId, group]) => {
+        visible.forEach(([groupId, group]) => {
           const button = document.createElement("button");
           button.type = "button";
           button.className = "group-chip";
@@ -3454,14 +3474,74 @@
           button.addEventListener("click", () => switchActiveGroup(groupId));
           groupTabs.appendChild(button);
         });
+        if (sorted.length > maxChips) {
+          const allButton = document.createElement("button");
+          allButton.type = "button";
+          allButton.className = "group-chip group-chip-all";
+          allButton.innerHTML = `
+            <span class="group-chip-emoji" aria-hidden="true">🗂️</span>
+            <span class="group-chip-text">
+              <strong>All groups</strong>
+              <span>${sorted.length} total</span>
+            </span>
+          `;
+          allButton.addEventListener("click", () => window.openGroupPicker());
+          groupTabs.appendChild(allButton);
+        }
         groupTabs.dataset.signature = signature;
       }
-      const activeKey = groupKeyFor(appState.activeGroupId) || sorted[0][0];
-      groupTabs.querySelectorAll(".group-chip").forEach(button => {
+      groupTabs.querySelectorAll(".group-chip[data-group-id]").forEach(button => {
         const active = button.dataset.groupId === activeKey;
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
       });
+    }
+
+    function renderGroupPickerList(query = "") {
+      const list = document.getElementById("group-picker-list");
+      if (!list) return;
+      const q = String(query || "").trim().toLowerCase();
+      const entries = Object.entries(appState.groups || {})
+        .filter(([, group]) => group && group.name && (!q || String(group.name).toLowerCase().includes(q)))
+        .sort(([, a], [, b]) => String(a.name || "").localeCompare(String(b.name || "")));
+      if (!entries.length) {
+        list.innerHTML = `<div class="group-picker-empty">No groups match that search.</div>`;
+        return;
+      }
+      const activeKey = groupKeyFor(appState.activeGroupId);
+      list.innerHTML = entries.map(([groupId, group]) => {
+        const memberCount = (group.members || []).length;
+        const active = groupId === activeKey;
+        return `<button type="button" class="group-picker-row${active ? " is-active" : ""}" data-group-id="${escapeHtml(groupId)}">
+          <span class="group-picker-emoji" aria-hidden="true">${groupEmoji(group.name)}</span>
+          <span class="group-picker-text">
+            <strong>${escapeHtml(group.name)}</strong>
+            <span>${memberCount} ${memberCount === 1 ? "person" : "people"} · ${escapeHtml(group.currency || "₹")}</span>
+          </span>
+          <span class="group-picker-check" aria-hidden="true">${active ? "✓" : ""}</span>
+        </button>`;
+      }).join("");
+      list.querySelectorAll("[data-group-id]").forEach(row => {
+        row.addEventListener("click", () => {
+          switchActiveGroup(row.dataset.groupId);
+          closeBalancesOverlays();
+        });
+      });
+    }
+
+    window.openGroupPicker = function () {
+      renderGroupPickerList("");
+      const input = document.getElementById("group-picker-search");
+      if (input) input.value = "";
+      openBalancesOverlay("group-picker-overlay");
+      window.setTimeout(() => input?.focus({ preventScroll: true }), 60);
+    };
+
+    window.closeGroupPicker = closeBalancesOverlays;
+
+    const groupPickerSearch = document.getElementById("group-picker-search");
+    if (groupPickerSearch) {
+      groupPickerSearch.addEventListener("input", (event) => renderGroupPickerList(event.target.value));
     }
 
     function renderManageGroupSelector() {

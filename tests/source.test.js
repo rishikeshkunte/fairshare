@@ -845,6 +845,8 @@ test("groups page uses scannable group chips with an in-tab manage panel", () =>
   assert.match(html, /data-call="openGroupManagement"/);
   assert.match(html, /className = "group-chip"/);
   assert.match(html, /button\.addEventListener\("click", \(\) => switchActiveGroup\(groupId\)\)/);
+  assert.match(html, /id="group-picker-overlay"/);
+  assert.match(html, /window\.openGroupPicker = function\s*\(\)/);
   assert.match(html, /window\.openGroupManagement = function\(\)/);
   assert.match(html, /managedGroupId = id;/);
 });
