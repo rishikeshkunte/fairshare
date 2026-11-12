@@ -114,6 +114,16 @@
   </aside>
 
   <main class="workspace">
+  <div id="offline-banner" class="offline-banner" hidden>📴 Offline — changes are saved on this device.</div>
+  <div id="pwa-install-banner" class="pwa-banner" hidden>
+    <span class="pwa-banner-emoji" aria-hidden="true">📲</span>
+    <div class="pwa-banner-text">
+      <strong>Install What's My Share?</strong>
+      <span>One-tap access and offline use.</span>
+    </div>
+    <button type="button" class="btn btn-primary" data-call="promptPwaInstall">Install</button>
+    <button type="button" class="pwa-banner-close" data-call="dismissPwaBanner" aria-label="Dismiss install banner">&times;</button>
+  </div>
   <!-- ================= PAGE 1: HOME DASHBOARD ================= -->
   <section id="page-home" class="app-page active">
     <div class="home-balance-card home-hero">
@@ -610,6 +620,10 @@
         <button type="button" class="btn btn-secondary" data-call="exportMyData">Download my data</button>
         <p class="group-hint" style="margin-top:8px;">Saves a JSON copy of your groups, expenses, settlements and contacts.</p>
       </div>
+      <div style="margin-top:14px;">
+        <button type="button" class="btn btn-secondary" data-call="promptPwaInstall" id="pwa-install-you">Install app</button>
+        <p class="group-hint" style="margin-top:8px;" id="pwa-install-note">Add What's My Share? to your home screen for one-tap access and offline use.</p>
+      </div>
       <p id="app-build-footer" class="group-hint" style="margin-top:14px; cursor:default;">What's My Share?</p>
     </div>
   </section>
@@ -1044,7 +1058,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v137";
+    const APP_BUILD = "v138";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -8754,6 +8768,82 @@
         cloudSyncUid = currentUser.uid;
       }
     });
+    // --- PWA install + offline status ---
+    let deferredPwaPrompt = null;
+    function isStandalonePwa() {
+      return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    }
+    function isIosDevice() {
+      return /iphone|ipad|ipod/i.test(navigator.userAgent);
+    }
+    function hidePwaBanner() {
+      const banner = document.getElementById("pwa-install-banner");
+      if (banner) banner.hidden = true;
+    }
+    function showPwaBanner() {
+      if (isStandalonePwa()) return;
+      let dismissed = false;
+      try { dismissed = localStorage.getItem("fairshare_pwa_dismissed") === "1"; } catch { /* ignore */ }
+      if (dismissed) return;
+      const banner = document.getElementById("pwa-install-banner");
+      if (banner) banner.hidden = false;
+    }
+    function syncPwaInstallUi() {
+      const installed = isStandalonePwa();
+      const button = document.getElementById("pwa-install-you");
+      if (button) button.hidden = installed;
+      const note = document.getElementById("pwa-install-note");
+      if (note) {
+        note.textContent = installed
+          ? "Installed — you're using the app view."
+          : "Add What's My Share? to your home screen for one-tap access and offline use.";
+      }
+    }
+    function updateOfflineBanner() {
+      const banner = document.getElementById("offline-banner");
+      if (banner) banner.hidden = navigator.onLine;
+    }
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredPwaPrompt = event;
+      showPwaBanner();
+    });
+    window.addEventListener("appinstalled", () => {
+      deferredPwaPrompt = null;
+      hidePwaBanner();
+      syncPwaInstallUi();
+      toast("App installed.");
+    });
+    window.addEventListener("online", updateOfflineBanner);
+    window.addEventListener("offline", updateOfflineBanner);
+    window.promptPwaInstall = async function () {
+      if (deferredPwaPrompt) {
+        const prompt = deferredPwaPrompt;
+        deferredPwaPrompt = null;
+        prompt.prompt();
+        try { await prompt.userChoice; } catch { /* ignore */ }
+        hidePwaBanner();
+        return;
+      }
+      if (isStandalonePwa()) {
+        toast("You're already using the installed app.");
+        return;
+      }
+      if (isIosDevice()) {
+        toast("Tap Share → Add to Home Screen to install.");
+        return;
+      }
+      toast("Open your browser menu and choose Install app / Add to Home Screen.");
+    };
+    window.dismissPwaBanner = function () {
+      hidePwaBanner();
+      try { localStorage.setItem("fairshare_pwa_dismissed", "1"); } catch { /* ignore */ }
+    };
+    updateOfflineBanner();
+    syncPwaInstallUi();
+    if (isIosDevice() && !isStandalonePwa()) {
+      window.setTimeout(showPwaBanner, 1500);
+    }
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", async () => {
         try {

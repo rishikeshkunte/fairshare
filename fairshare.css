@@ -283,6 +283,32 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
   padding: 28px 28px 88px;
   max-width: 1280px;
 }
+.offline-banner {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 12px; padding: 9px 12px; border-radius: 12px;
+  background: var(--danger-bg); color: var(--danger-text);
+  font-size: .82rem; font-weight: 650;
+}
+.offline-banner[hidden] { display: none; }
+.pwa-banner {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 14px; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 16px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-solid));
+}
+.pwa-banner[hidden] { display: none; }
+.pwa-banner-emoji { font-size: 1.4rem; line-height: 1; }
+.pwa-banner-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.pwa-banner-text strong { font-size: .92rem; }
+.pwa-banner-text span { color: var(--muted); font-size: .78rem; }
+.pwa-banner-close {
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 1.15rem; line-height: 1; cursor: pointer; padding: 4px;
+}
+@media (max-width: 600px) {
+  .pwa-banner { flex-wrap: wrap; }
+  .pwa-banner .btn { flex: 1 1 100%; }
+}
 .friends-workspace.single-column { grid-template-columns: minmax(0, 1fr); }
 .home-balance-details { grid-column: 1 / -1; width: 100%; scroll-margin-top: 20px; }
 .home-section-heading { display:flex; justify-content:space-between; align-items:center; margin: 8px 0 12px; }
