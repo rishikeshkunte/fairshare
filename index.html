@@ -301,7 +301,7 @@
 
         <!-- Split Methods -->
         <div class="form-group">
-          <label>Who owes whom?</label>
+          <label>How should it be split?</label>
           <div class="tab-group">
             <button type="button" class="tab-btn active" data-mode="equal">Equally (=)</button>
             <button type="button" class="tab-btn" data-mode="exact">Exact amounts</button>
@@ -313,7 +313,7 @@
 
         <div id="expense-form-error" class="form-error" role="alert"></div>
 
-        <div style="display: flex; gap: 8px; margin-top: 20px;">
+        <div class="expense-submit-bar">
           <button type="button" id="btn-cancel-edit" class="btn btn-secondary" data-call="navigateTo" data-arg="home" style="flex:1;">Cancel</button>
           <button type="submit" id="btn-submit-expense" class="btn btn-primary" style="flex:2;">Save expense</button>
         </div>
@@ -1030,7 +1030,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v132";
+    const APP_BUILD = "v133";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -4442,7 +4442,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><input type="checkbox" class="split-equal-check" value="${escapeHtml(m)}" checked onchange="updateEqualPreview()"> ${escapeHtml(participantLabel(m))}</label>
+              <label><input type="checkbox" class="split-equal-check" value="${escapeHtml(m)}" checked onchange="updateEqualPreview()"> <span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${escapeHtml(personInitials(participantLabel(m)))}</span> ${escapeHtml(participantLabel(m))}</label>
               <span class="equal-share" data-member="${escapeHtml(m)}" style="font-size:0.88rem; font-weight:600; color:var(--muted);">${cur}0.00</span>
             </div>
           `;
@@ -4452,7 +4452,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label>${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${escapeHtml(personInitials(participantLabel(m)))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <span>${cur}</span>
                 <input type="number" step="0.01" class="split-exact-input" data-member="${escapeHtml(m)}" placeholder="0.00" style="width:100px; padding:6px;" oninput="updateExactPreview()">
@@ -4466,7 +4466,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label>${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${escapeHtml(personInitials(participantLabel(m)))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <input type="number" step="0.01" class="split-percent-input" data-member="${escapeHtml(m)}" placeholder="0" style="width:70px; padding:6px;" oninput="updatePercentPreview()">
                 <span>%</span>
@@ -4480,7 +4480,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label>${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${escapeHtml(personInitials(participantLabel(m)))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <input type="number" step="1" min="0" class="split-ratio-input" data-member="${escapeHtml(m)}" value="1" style="width:70px; padding:6px;" oninput="updateRatioPreview()">
                 <span>share(s)</span>

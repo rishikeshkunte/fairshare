@@ -1014,6 +1014,29 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   min-height: 46px;
   font-weight: 750;
 }
+#page-add-expense .split-row .avatar {
+  width: 26px;
+  height: 26px;
+  font-size: .68rem;
+}
+.expense-submit-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+@media (max-width: 860px) {
+  .expense-submit-bar {
+    position: sticky;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
+    z-index: 6;
+    margin: 16px -6px -6px;
+    padding: 10px;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--surface-solid) 92%, transparent);
+    backdrop-filter: blur(8px);
+    box-shadow: var(--shadow);
+  }
+}
 @media (min-width: 861px) {
   #page-add-expense .amount-stage {
     padding: 20px 24px;
