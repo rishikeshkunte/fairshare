@@ -264,13 +264,13 @@
               <span id="cat-detect-badge" class="cat-badge cat-badge-auto" style="display:none;">Auto</span>
             </label>
             <select id="category-select">
-              <option value="Food">Food & Dining</option>
-              <option value="Transport">Transport & Fuel</option>
-              <option value="Stay">Stay & Hotel</option>
-              <option value="Groceries">Groceries & Market</option>
-              <option value="Entertainment">Entertainment</option>
-              <option value="Utilities">Utilities & Bills</option>
-              <option value="Other">Other</option>
+              <option value="Food">🍽️ Food &amp; Dining</option>
+              <option value="Transport">🚕 Transport &amp; Fuel</option>
+              <option value="Stay">🏨 Stay &amp; Hotel</option>
+              <option value="Groceries">🛒 Groceries &amp; Market</option>
+              <option value="Entertainment">🎬 Entertainment</option>
+              <option value="Utilities">💡 Utilities &amp; Bills</option>
+              <option value="Other">📦 Other</option>
             </select>
           </div>
         </div>
@@ -479,18 +479,26 @@
 
   <!-- ================= PAGE 5: SPENDING ANALYTICS ================= -->
   <section id="page-analytics" class="app-page">
-    <div class="section-header"><div><h1>Spending analytics</h1><p id="analytics-subtitle">Compare categories, people, and monthly trends across groups and 1-on-1 bills.</p></div></div>
+    <div class="section-header"><div><h1>Spending insights</h1><p id="analytics-subtitle">A quick read on where your money goes.</p></div></div>
+    <div class="card analytics-headline-card">
+      <div>
+        <span class="eyebrow">This view</span>
+        <h2 id="analytics-headline">₹0.00 spent</h2>
+        <p id="analytics-summary" class="section-hint">Add an expense to see your spending pattern.</p>
+      </div>
+      <div id="analytics-top-category" class="analytics-top-pill">📦 No data</div>
+    </div>
     <div class="card">
       <div class="analytics-toolbar">
         <div class="tab-group" role="group" aria-label="Analytics view" id="analytics-view-tabs">
-          <button type="button" class="tab-btn active" data-analytics-view="category">By category</button>
-          <button type="button" class="tab-btn" data-analytics-view="people">Who spent what</button>
-          <button type="button" class="tab-btn" data-analytics-view="trend">Monthly trend</button>
+          <button type="button" class="tab-btn active" data-analytics-view="category">🍩 Categories</button>
+          <button type="button" class="tab-btn" data-analytics-view="people">👥 People</button>
+          <button type="button" class="tab-btn" data-analytics-view="trend">📈 Trend</button>
         </div>
         <div class="tab-group" role="group" aria-label="Analytics scope" id="analytics-scope-tabs">
-          <button type="button" class="tab-btn active" data-analytics-scope="active">Active group</button>
-          <button type="button" class="tab-btn" data-analytics-scope="all">All groups</button>
-          <button type="button" class="tab-btn" data-analytics-scope="direct">1-on-1</button>
+          <button type="button" class="tab-btn active" data-analytics-scope="active">📍 Active group</button>
+          <button type="button" class="tab-btn" data-analytics-scope="all">🗂 All groups</button>
+          <button type="button" class="tab-btn" data-analytics-scope="direct">👤 1-on-1</button>
         </div>
       </div>
       <p id="analytics-scope-note" class="section-hint" hidden></p>
@@ -1036,7 +1044,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v135";
+    const APP_BUILD = "v136";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -1075,6 +1083,13 @@
       "Groceries": "var(--cat-groceries)", "Entertainment": "var(--cat-entertainment)",
       "Utilities": "var(--cat-utilities)", "Other": "var(--cat-other)"
     };
+    const CATEGORY_EMOJI = {
+      "Food": "🍽️", "Transport": "🚕", "Stay": "🏨", "Groceries": "🛒",
+      "Entertainment": "🎬", "Utilities": "💡", "Other": "📦"
+    };
+    function categoryEmoji(label) {
+      return CATEGORY_EMOJI[label] || CATEGORY_EMOJI.Other;
+    }
     const CHART_SERIES_COLORS = [
       "var(--cat-food)", "var(--cat-transport)", "var(--cat-stay)", "var(--cat-groceries)",
       "var(--cat-entertainment)", "var(--cat-utilities)", "var(--cat-other)"
@@ -5907,6 +5922,50 @@
       const note = document.getElementById("analytics-scope-note");
       const styleTabs = document.getElementById("chart-style-tabs");
       const dash = document.getElementById("dash-analytics-desc");
+      const headline = document.getElementById("analytics-headline");
+      const summary = document.getElementById("analytics-summary");
+      const topPill = document.getElementById("analytics-top-category");
+
+      const catTotals = {};
+      rows.forEach(tx => {
+        const key = tx.category || "Other";
+        catTotals[key] = (catTotals[key] || 0) + (Number(tx.amount) || 0);
+      });
+      const topEntry = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0] || null;
+      const currentMonth = todayISO().slice(0, 7);
+      const previousDate = new Date();
+      previousDate.setMonth(previousDate.getMonth() - 1);
+      const previousMonth = new Date(previousDate.getTime() - previousDate.getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 7);
+      let thisMonth = 0;
+      let lastMonth = 0;
+      rows.forEach(tx => {
+        const key = String(tx.dateISO || "").slice(0, 7);
+        const amount = Number(tx.amount) || 0;
+        if (key === currentMonth) thisMonth += amount;
+        else if (key === previousMonth) lastMonth += amount;
+      });
+      if (headline && summary && topPill) {
+        if (total <= 0) {
+          headline.textContent = "No spending yet";
+          summary.textContent = "Add an expense to see your spending pattern.";
+          topPill.textContent = "📦 No data";
+        } else {
+          headline.textContent = `${formatMoney(total, cur)} spent`;
+          const parts = [];
+          if (topEntry) {
+            const pct = Math.round((topEntry[1] / total) * 100);
+            parts.push(`${categoryEmoji(topEntry[0])} ${topEntry[0]} is ${pct}% of spending`);
+            topPill.textContent = `${categoryEmoji(topEntry[0])} ${topEntry[0]}`;
+          }
+          if (lastMonth > 0 && thisMonth > 0) {
+            const delta = Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
+            if (delta !== 0) parts.push(`${Math.abs(delta)}% ${delta > 0 ? "more" : "less"} than last month`);
+          }
+          summary.textContent = parts.join(" · ") || "A quick read on where your money goes.";
+        }
+      }
+
       if (title) {
         title.textContent = analyticsView === "people"
           ? "Who spent what"
@@ -5931,7 +5990,7 @@
       if (total <= 0) {
         if (chartEmpty) {
           chartEmpty.style.display = "block";
-          chartEmpty.innerHTML = `<p>${emptyMessage}</p>`;
+          chartEmpty.innerHTML = `<p>${emptyMessage}</p><button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="add-expense">Add an expense</button>`;
         }
         if (chartArea) chartArea.style.display = "none";
         if (chartVisual) chartVisual.innerHTML = "";
@@ -5991,7 +6050,7 @@
             return `
               <div class="chart-bar-row">
                 <div class="chart-bar-meta">
-                  <span class="chart-bar-label"><span class="legend-color" style="background:${color};"></span>${escapeHtml(label)}</span>
+                  <span class="chart-bar-label"><span class="legend-color" style="background:${color};"></span>${categoryEmoji(label)} ${escapeHtml(label)}</span>
                   <span class="chart-bar-value">${formatMoney(val, cur)} · ${pct}%</span>
                 </div>
                 <div class="bar-track"><div class="bar-fill" style="background:${color}; width:${pct}%;"></div></div>
@@ -6025,7 +6084,7 @@
           const div = document.createElement("div");
           div.className = "legend-item";
           div.innerHTML = `
-            <span class="legend-label"><span class="legend-color" style="background:${color};"></span>${escapeHtml(label)}</span>
+            <span class="legend-label"><span class="legend-color" style="background:${color};"></span>${categoryEmoji(label)} ${escapeHtml(label)}</span>
             <span class="legend-value">${formatMoney(val, cur)} (${pct}%)</span>
           `;
           chartLegend.appendChild(div);
@@ -6349,7 +6408,7 @@
               <div class="tx-text">
                 <strong>${highlight(tx.desc, searchQuery)}</strong>
                 <span class="transaction-meta">
-                  <span class="tx-type ${isSettlement ? "is-settle" : "is-expense"}">${isSettlement ? "Settlement" : "Expense"}</span>
+                  <span class="tx-type ${isSettlement ? "is-settle" : "is-expense"}">${isSettlement ? "🤝 Settlement" : "🧾 Expense"}</span>
                   ${metaParts.join(" • ")}
                 </span>
               </div>

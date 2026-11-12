@@ -622,6 +622,17 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
 #chart-area[data-chart="bar"] .chart-legend { display: none; }
 .analytics-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
 .analytics-toolbar .tab-group { margin-bottom:0; flex-wrap:wrap; }
+.analytics-headline-card { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:14px; }
+.analytics-headline-card h2 { margin: 4px 0 4px; font-size: 1.6rem; letter-spacing: -0.02em; }
+.analytics-headline-card .section-hint { margin: 0; }
+.analytics-top-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 14px; border-radius: 999px; white-space: nowrap;
+  background: var(--box-bg); border: 1px solid var(--line); font-weight: 700;
+}
+@media (max-width: 600px) {
+  .analytics-headline-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
 #chart-area[data-view="people"] .chart-wrapper,
 #chart-area[data-view="trend"] .chart-wrapper { grid-template-columns:minmax(0,1fr); }
 #chart-area[data-view="people"] .chart-legend,
