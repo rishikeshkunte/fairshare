@@ -1112,7 +1112,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v147";
+    const APP_BUILD = "v148";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7416,7 +7416,7 @@
         const youEmail = document.getElementById("you-email");
         const youAvatar = document.getElementById("you-avatar");
         if (youName) youName.textContent = "You";
-        if (youEmail) youEmail.textContent = "Signed in with Gmail";
+        if (youEmail) youEmail.textContent = "Not signed in";
         if (youAvatar) {
           youAvatar.textContent = emojiForPerson("You");
           youAvatar.dataset.emojiPerson = "You";
@@ -8841,10 +8841,14 @@
       }
       const emojiStatus = document.getElementById("emoji-sync-status");
       if (emojiStatus) {
-        const people = Object.keys(appState.emojiChoices?.people || {}).length;
-        const groups = Object.keys(appState.emojiChoices?.groups || {}).length;
-        const account = currentUser?.uid ? ` · account …${currentUser.uid.slice(-6)}` : "";
-        emojiStatus.textContent = `Emoji choices: ${people} people · ${groups} groups${account}`;
+        if (!currentUser) {
+          emojiStatus.textContent = "Emoji choices: sign in to sync.";
+        } else {
+          const people = Object.keys(appState.emojiChoices?.people || {}).length;
+          const groups = Object.keys(appState.emojiChoices?.groups || {}).length;
+          const account = currentUser?.uid ? ` · account …${currentUser.uid.slice(-6)}` : "";
+          emojiStatus.textContent = `Emoji choices: ${people} people · ${groups} groups${account}`;
+        }
       }
     }
 
