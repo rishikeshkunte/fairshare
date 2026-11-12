@@ -1389,6 +1389,47 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .home-hero-side .btn { margin-top: 6px; justify-content: center; border-radius: 999px; }
 .home-hero-side .empty-state { padding: 12px 0 0; text-align: left; }
 .home-hero-side .empty-state .empty-state-description { margin: 0 0 10px; }
+.home-side-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.home-side-actions .btn { margin-top: 0; }
+
+.home-first-run { grid-column: 1 / -1; display: grid; gap: 18px; margin-top: 18px; }
+.home-first-run-head h2 { margin: 4px 0 6px; font-size: 1.35rem; letter-spacing: -0.02em; }
+.home-first-run-head p { margin: 0; color: var(--muted); max-width: 56ch; }
+.home-start-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.home-start-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 16px; text-align: left; cursor: pointer;
+  background: var(--box-bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 16px;
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.home-start-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--primary) 35%, var(--line)); box-shadow: var(--shadow); }
+.home-start-card strong { font-size: .95rem; }
+.home-start-card span:last-child { color: var(--muted); font-size: .78rem; }
+.home-start-icon { font-size: 1.3rem; line-height: 1; margin-bottom: 4px; }
+
+.home-people-card { grid-column: 1 / -1; margin-top: 18px; }
+.home-people-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.home-people-head h2 { margin: 2px 0 0; font-size: 1.2rem; letter-spacing: -0.02em; }
+.home-people-list { display: grid; gap: 6px; }
+.home-person {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 10px 8px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--text); text-align: left; cursor: pointer;
+}
+.home-person:hover { background: var(--box-bg); }
+.home-person .avatar { width: 34px; height: 34px; font-size: .8rem; }
+.home-person-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.home-person-main strong { font-size: .92rem; overflow-wrap: anywhere; }
+.home-person-main span { color: var(--muted); font-size: .76rem; }
+.home-person-amount { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; font-size: .92rem; white-space: nowrap; }
+.home-person-amount.is-owed { color: var(--positive); }
+.home-person-amount.is-owe { color: var(--negative); }
+
+.avatar-tone-0 { background: color-mix(in srgb, var(--primary) 18%, var(--chip-bg)); color: var(--primary); }
+.avatar-tone-1 { background: color-mix(in srgb, var(--accent) 26%, var(--chip-bg)); color: var(--text); }
+.avatar-tone-2 { background: color-mix(in srgb, var(--marigold) 26%, var(--chip-bg)); color: var(--text); }
+.avatar-tone-3 { background: color-mix(in srgb, var(--primary) 34%, var(--chip-bg)); color: var(--chip-text); }
 
 .home-quick-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .home-quick-card {
@@ -1444,6 +1485,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 @media (max-width: 980px) {
   .home-hero { grid-template-columns: 1fr; gap: 18px; padding: 24px; }
   .home-hero-side { padding-left: 0; padding-top: 18px; border-left: 0; border-top: 1px solid var(--line); }
+  .home-start-grid { grid-template-columns: 1fr; }
+  .home-people-head { align-items: flex-start; }
   .home-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .you-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

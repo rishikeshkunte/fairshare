@@ -27,13 +27,15 @@ test("inline application module parses as valid JavaScript", () => {
   }
 });
 
-test("home screen has separate review and settle actions and no invite-link button", () => {
+test("home screen has balance actions and the first-run guide", () => {
   const homeStart = html.indexOf('<section id="page-home"');
   const pageTwo = html.indexOf("PAGE 2: ADD / EDIT EXPENSE", homeStart);
   assert.ok(homeStart >= 0 && pageTwo > homeStart, "home section can be located");
   const home = html.slice(homeStart, pageTwo);
-  assert.match(home, /Review balances/);
+  assert.match(home, /All balances/);
   assert.match(home, /Settle up/);
+  assert.match(home, /id="home-first-run"/);
+  assert.match(home, /id="home-people-card"/);
   assert.doesNotMatch(home, />Invite link<\/button>/i);
 });
 
@@ -43,12 +45,11 @@ test("floating expense action is anchored to the bottom-left on desktop and mobi
 });
 
 test("empty state prompts group creation and blocks group payments without a group", () => {
-  assert.match(html, /id="home-no-groups-prompt"[^>]*hidden/);
-  assert.match(html, /data-call="openNewGroupPrompt">Create your first group<\/button>/);
+  assert.match(html, /id="home-first-run"[^>]*hidden/);
+  assert.match(html, /data-call="openNewGroupPrompt">Create a group<\/strong>|data-call="openNewGroupPrompt">/);
   assert.match(html, /scope === "group" && Object\.keys\(appState\.groups\)\.length === 0/);
   assert.match(html, /window\.openSettleUp = function\(\)[\s\S]*?Object\.keys\(appState\.groups\)\.length === 0/);
   assert.match(html, /isEmptyTemplate[\s\S]*?delete appState\.groups\["group_default"\]/);
-  assert.match(html, /if \(noGroupsPrompt\) noGroupsPrompt\.hidden = groups\.length > 0/);
 });
 
 test("signed-out state hides cached friends and direct activity", () => {
@@ -75,7 +76,7 @@ test("friend management and group member picker require sign-in", () => {
 });
 
 test("signed-out summaries, details, and trash exclude cached 1-on-1 data", () => {
-  assert.match(html, /function renderHomeAllDebts\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
+  assert.match(html, /function homePeopleItems\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
   assert.match(html, /function analyticsExpenses\(\)[\s\S]*?currentUser \? \(appState\.directTransactions \|\| \[\]\) : \[\]/);
   assert.match(html, /function renderDeletedTransactions\(\)[\s\S]*?filter\(item => currentUser \|\| item\.location !== "direct"\)/);
   assert.match(html, /window\.openDetailModal = function\(id\)[\s\S]*?found\.where === "direct" && !currentUser[\s\S]*?Sign in to view 1-on-1 transaction details/);
@@ -148,7 +149,7 @@ test("add-expense form has a clear amount focus, accessible scope choices, and r
 test("home does not duplicate a direct-only friend balances card", () => {
   assert.doesNotMatch(html, /direct-balances-card|direct-balances-list|renderDirectBalances/);
   assert.doesNotMatch(html, /Direct 1-on-1 friend balances/);
-  assert.match(html, /across groups & 1-on-1/);
+  assert.match(html, /id="home-people-card"/);
 });
 
 test("friends page shows a selected friend's 1-on-1 ledger", () => {
@@ -872,12 +873,10 @@ test("opening a group forces one diff to repair stale ledger documents", () => {
   assert.ok(html.includes("if (!options.force && group._normalizedSig === signature) return;"));
 });
 
-test("balances use two panes on desktop and one-tap sections on mobile", () => {
-  assert.match(css, /\.balances-layout > \.balances-members-card/);
-  assert.match(css, /#member-balance-body\[hidden\] \{ display: block !important; \}/);
-  assert.match(html, /id="btn-toggle-member-sheet"/);
-  assert.match(html, /fairshare_members_sheet/);
+test("balances use a two-pane layout without the retired member sheet", () => {
+  assert.match(css, /\.balances-layout/);
   assert.match(html, /function organizeBalancesPage\(\)/);
+  assert.doesNotMatch(html, /member-balance-card|btn-toggle-member-sheet|member-spend-tbody|member-inspect-select/);
 });
 
 test("settlement controls live in the settlements card", () => {
