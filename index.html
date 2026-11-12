@@ -1030,7 +1030,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v128";
+    const APP_BUILD = "v129";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3480,6 +3480,12 @@
       if (!key) return;
       if (!options.keepManaged) managedGroupId = "";
       appState.activeGroupId = key;
+      // Keep the balances view consistent with the group just chosen: if the
+      // user was on a 1-on-1 or another group scope, follow the new group.
+      if (balancesScope === "direct" || balancesScope.startsWith("group:")) {
+        balancesScope = `group:${key}`;
+        settlementVisibility = "mine";
+      }
       if (typeof cancelEditMode === "function") cancelEditMode();
       saveState();
       renderAll();
@@ -4990,6 +4996,7 @@
 
     function setBalancesScope(value) {
       balancesScope = value || "all";
+      settlementVisibility = "mine";
       if (balancesScope.startsWith("group:")) {
         const id = groupKeyFor(balancesScope.slice(6));
         if (id) {
@@ -5602,7 +5609,9 @@
           message = `No expenses in ${group.name || "this group"} yet — nothing to settle.`;
           tone = "var(--muted)";
         } else if (data.includeDirect === false && group) {
-          message = `All settled in ${group.name || "this group"}.`;
+          message = otherOpen
+            ? `You're settled in ${group.name || "this group"}. Other members still have open debts — switch Show to Everyone.`
+            : `All settled in ${group.name || "this group"}.`;
         } else {
           message = otherOpen
             ? "You are settled up in this view. Other members still have open debts — switch Show to Everyone."
