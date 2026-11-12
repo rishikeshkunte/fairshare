@@ -156,6 +156,7 @@
             <button type="button" data-expense-scope="friend">👤 Add a friend expense</button>
           </div>
           <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="balances">All balances</button>
+          <button type="button" class="btn btn-secondary" data-call="shareSummary">📤 Share summary</button>
         </div>
       </div>
 
@@ -1058,7 +1059,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v138";
+    const APP_BUILD = "v139";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7717,6 +7718,216 @@
       anchor.remove();
       URL.revokeObjectURL(url);
       toast("Diagnostics downloaded.");
+    };
+
+    function summaryShareData() {
+      const g = getGroup();
+      const hasGroup = Boolean(g.id && appState.groups[g.id]);
+      if (hasGroup) {
+        const myName = getMyGroupMemberName(g);
+        const cur = g.currency || "₹";
+        const expenses = (g.transactions || []).filter(tx => tx && tx.type === "expense");
+        const total = expenses.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+        const myShare = expenses.reduce((sum, tx) => sum + (Number(tx.shares?.[myName]) || 0), 0);
+        const balance = Number(netBalances(g)[myName]) || 0;
+        return {
+          hasGroup: true,
+          title: g.name || "Group",
+          cur,
+          total,
+          myShare,
+          balance,
+          owed: 0,
+          owe: 0,
+          memberCount: (g.members || []).length,
+          expenseCount: expenses.length
+        };
+      }
+      let owed = 0;
+      let owe = 0;
+      Object.values(appState.groups || {}).forEach(group => {
+        const myName = getMyGroupMemberName(group);
+        const balance = Number(netBalances(group)[myName]) || 0;
+        if (balance > 0.009) owed += balance;
+        else if (balance < -0.009) owe += Math.abs(balance);
+      });
+      if (currentUser) {
+        Object.values(directBalancesByFriend()).forEach(balance => {
+          if (balance > 0.009) owed += balance;
+          else if (balance < -0.009) owe += Math.abs(balance);
+        });
+      }
+      return {
+        hasGroup: false,
+        title: "Overall balance",
+        cur: getGroup().currency || "₹",
+        total: 0,
+        myShare: 0,
+        balance: owed - owe,
+        owed,
+        owe,
+        memberCount: (appState.friends || []).length,
+        expenseCount: 0
+      };
+    }
+
+    function canvasRoundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + width, y, x + width, y + height, radius);
+      ctx.arcTo(x + width, y + height, x, y + height, radius);
+      ctx.arcTo(x, y + height, x, y, radius);
+      ctx.arcTo(x, y, x + width, y, radius);
+      ctx.closePath();
+    }
+
+    function fitCanvasText(ctx, text, maxWidth, startSize, weight) {
+      let size = startSize;
+      do {
+        ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+        if (ctx.measureText(text).width <= maxWidth) break;
+        size -= 2;
+      } while (size > 20);
+      return size;
+    }
+
+    async function buildSummaryCardBlob() {
+      const data = summaryShareData();
+      try { await document.fonts.ready; } catch { /* ignore */ }
+      const canvas = document.createElement("canvas");
+      canvas.width = 1200;
+      canvas.height = 700;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+
+      const bg = ctx.createLinearGradient(0, 0, 1200, 700);
+      bg.addColorStop(0, "#0C1C16");
+      bg.addColorStop(0.55, "#17352B");
+      bg.addColorStop(1, "#1F3D32");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, 1200, 700);
+
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = "#E8A84C";
+      ctx.beginPath();
+      ctx.arc(1090, 80, 240, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      ctx.fillStyle = "#F4EFE6";
+      ctx.font = "700 32px system-ui, sans-serif";
+      ctx.fillText("What's My Share?", 72, 92);
+
+      ctx.fillStyle = "#9DB8AA";
+      ctx.font = "700 16px system-ui, sans-serif";
+      ctx.fillText(data.hasGroup ? "GROUP RECAP" : "YOUR BALANCE", 72, 152);
+
+      const titleSize = fitCanvasText(ctx, data.title, 960, 66, 700);
+      ctx.fillStyle = "#F4EFE6";
+      ctx.font = `700 ${titleSize}px system-ui, sans-serif`;
+      ctx.fillText(data.title, 72, 234);
+
+      ctx.fillStyle = "#9DB8AA";
+      ctx.font = "500 20px system-ui, sans-serif";
+      ctx.fillText(
+        data.hasGroup
+          ? `${data.expenseCount} expense${data.expenseCount === 1 ? "" : "s"} · ${data.memberCount} ${data.memberCount === 1 ? "person" : "people"}`
+          : `${data.memberCount} ${data.memberCount === 1 ? "contact" : "contacts"} across groups & 1-on-1`,
+        72,
+        274
+      );
+
+      const stats = data.hasGroup
+        ? [
+            ["Total spent", formatMoney(data.total, data.cur)],
+            ["Your share", formatMoney(data.myShare, data.cur)],
+            ["Your balance", formatSignedMoney(data.balance, data.cur)]
+          ]
+        : [
+            ["Owed to you", formatMoney(data.owed, data.cur)],
+            ["You owe", formatMoney(data.owe, data.cur)],
+            ["Net balance", formatSignedMoney(data.balance, data.cur)]
+          ];
+
+      const cardY = 328;
+      const cardWidth = 330;
+      const cardHeight = 168;
+      const gap = 33;
+      stats.forEach(([label, value], index) => {
+        const x = 72 + index * (cardWidth + gap);
+        ctx.fillStyle = "rgba(244, 239, 230, 0.07)";
+        canvasRoundRect(ctx, x, cardY, cardWidth, cardHeight, 18);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(244, 239, 230, 0.12)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = "#9DB8AA";
+        ctx.font = "700 14px system-ui, sans-serif";
+        ctx.fillText(label.toUpperCase(), x + 24, cardY + 46);
+
+        let valueColor = "#F4EFE6";
+        if (index === 2) {
+          valueColor = data.balance > 0.009 ? "#76D1A1" : (data.balance < -0.009 ? "#F0857A" : "#F4EFE6");
+        }
+        ctx.fillStyle = valueColor;
+        ctx.font = "700 36px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.fillText(value, x + 24, cardY + 112);
+      });
+
+      ctx.strokeStyle = "rgba(244, 239, 230, 0.18)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(72, 590);
+      ctx.lineTo(1128, 590);
+      ctx.stroke();
+
+      ctx.fillStyle = "#F4EFE6";
+      ctx.font = "600 22px system-ui, sans-serif";
+      ctx.fillText("Split it. Settle it. Done.", 72, 642);
+
+      ctx.fillStyle = "#9DB8AA";
+      ctx.font = "500 18px system-ui, sans-serif";
+      ctx.textAlign = "right";
+      ctx.fillText("whatismyshare.vercel.app", 1128, 642);
+      ctx.textAlign = "left";
+
+      return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    }
+
+    window.shareSummary = async function () {
+      const data = summaryShareData();
+      let blob = null;
+      try {
+        blob = await buildSummaryCardBlob();
+      } catch (err) {
+        console.warn("Summary card note:", err);
+      }
+      if (!blob) {
+        toast("Could not create the summary image.");
+        return;
+      }
+      const file = new File([blob], "whatsmyshare-summary.png", { type: "image/png" });
+      const shareText = data.hasGroup
+        ? `${data.title}: ${formatMoney(data.total, data.cur)} spent. My balance: ${formatSignedMoney(data.balance, data.cur)}. Tracked with What's My Share?`
+        : `My overall balance: ${formatSignedMoney(data.balance, data.cur)}. Tracked with What's My Share?`;
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "What's My Share?", text: shareText });
+          return;
+        }
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+      }
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "whatsmyshare-summary.png";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast("Summary image downloaded.");
     };
 
     // User-facing data export. This is the only data tool ordinary users need.
