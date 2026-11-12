@@ -330,7 +330,7 @@
     <div class="balances-scope-bar">
       <div class="balances-scope-picker">
         <label for="balances-scope-select">View</label>
-        <select id="balances-scope-select" aria-label="Choose balance scope"></select>
+        <select id="balances-scope-select" aria-label="Choose balance scope" onchange="window.__balancesScopeChanged && window.__balancesScopeChanged(this.value)"></select>
       </div>
       <p id="balances-scope-note" class="section-hint" hidden></p>
     </div>
@@ -398,7 +398,7 @@
           <div class="settlement-title" id="settlement-header-label">Suggested payments</div>
           <div class="settlement-filter">
             <label for="settlement-visibility">Show</label>
-            <select id="settlement-visibility" aria-label="Who to show in suggested settlements">
+            <select id="settlement-visibility" aria-label="Who to show in suggested settlements" onchange="window.__settlementVisibilityChanged && window.__settlementVisibilityChanged(this.value)">
               <option value="mine">Only mine</option>
               <option value="all">Everyone</option>
             </select>
@@ -1030,7 +1030,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v131";
+    const APP_BUILD = "v132";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3486,16 +3486,26 @@
         balancesScope = `group:${key}`;
         settlementVisibility = "mine";
       }
-      if (typeof cancelEditMode === "function") cancelEditMode();
-      saveState();
-      renderAll();
-      if (typeof listenToCloudGroup === "function") listenToCloudGroup(key);
-      if (quotaSaver) {
-        for (const [id, unsubscribe] of Array.from(normalizedUnsubs.entries())) {
-          if (id !== key) unsubscribe();
-        }
+      if (typeof cancelEditMode === "function") {
+        try { cancelEditMode(); } catch (err) { console.warn("Cancel edit note:", err); }
       }
-      if (typeof listenToNormalizedGroup === "function") listenToNormalizedGroup(key);
+      try {
+        saveState();
+      } catch (err) {
+        console.warn("Group switch save note:", err);
+      }
+      renderAll();
+      try {
+        if (typeof listenToCloudGroup === "function") listenToCloudGroup(key);
+        if (quotaSaver) {
+          for (const [id, unsubscribe] of Array.from(normalizedUnsubs.entries())) {
+            if (id !== key) unsubscribe();
+          }
+        }
+        if (typeof listenToNormalizedGroup === "function") listenToNormalizedGroup(key);
+      } catch (err) {
+        console.warn("Group listener note:", err);
+      }
     }
 
     if (groupSelector) {
@@ -5001,18 +5011,28 @@
         const id = groupKeyFor(balancesScope.slice(6));
         if (id) {
           balancesScope = `group:${id}`;
-          if (appState.activeGroupId !== id) {
-            switchActiveGroup(id);
-            if (appState.activeGroupId !== id) renderAll();
-          } else {
-            renderAll();
+          try {
+            if (appState.activeGroupId !== id) switchActiveGroup(id);
+          } catch (err) {
+            console.warn("Balances scope switch note:", err);
           }
+          // Keep the dropdown and the rendered rows aligned even if switching
+          // the active group failed partway through.
+          if (balancesScopeSelect) balancesScopeSelect.value = balancesScope;
+          renderAll();
           return;
         }
         balancesScope = "all";
       }
       renderAll();
     }
+
+    // Fallbacks for environments where a re-parented select loses its listener.
+    window.__balancesScopeChanged = setBalancesScope;
+    window.__settlementVisibilityChanged = function (value) {
+      settlementVisibility = value === "all" ? "all" : "mine";
+      renderAll();
+    };
 
     // Delegated listeners keep working even if the page-preparation pass moves
     // or rebuilds these selects. A direct listener on the original element can
