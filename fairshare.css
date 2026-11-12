@@ -506,7 +506,7 @@ input:focus, select:focus, textarea:focus {
   padding: 12px 14px; margin-bottom: 14px;
   border: 1px solid var(--line); border-radius: 14px; background: var(--box-bg);
 }
-.settle-preview .avatar { width: 28px; height: 28px; font-size: .72rem; }
+.settle-preview .avatar { width: 28px; height: 28px; font-size: .95rem; }
 .settle-preview-amount { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; }
 .settle-preview-hint { color: var(--muted); font-size: .82rem; }
 .settle-arrow { color: var(--muted); font-weight: 700; }
@@ -543,7 +543,7 @@ input:focus, select:focus, textarea:focus {
 .member-cell { display: flex; align-items: center; gap: 8px; }
 .avatar {
   width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center;
-  background: var(--chip-bg); color: var(--chip-text); font-size: 0.75rem; font-weight: 800; flex-shrink: 0;
+  background: var(--chip-bg); color: var(--chip-text); font-size: 0.95rem; line-height: 1; font-weight: 800; flex-shrink: 0;
 }
 .text-success, .text-danger, .text-muted.bal {
   display: inline-flex; border-radius: 999px; padding: 3px 8px; font-weight: 700;
@@ -1065,7 +1065,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 #page-add-expense .split-row .avatar {
   width: 26px;
   height: 26px;
-  font-size: .68rem;
+  font-size: .9rem;
 }
 .expense-submit-bar {
   display: flex;

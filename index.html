@@ -594,7 +594,7 @@
 
   <section id="page-account" class="app-page">
     <div class="you-hero">
-      <div class="you-avatar" id="you-avatar">Y</div>
+      <div class="you-avatar" id="you-avatar">🙂</div>
       <div>
         <span class="eyebrow">Your account</span>
         <h1 id="you-name">You</h1>
@@ -1044,7 +1044,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v136";
+    const APP_BUILD = "v137";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2127,10 +2127,10 @@
       const payerLabel = labelFor(payer);
       const receiverLabel = labelFor(receiver);
       settlePreview.innerHTML = `
-        <span class="avatar avatar-tone-${avatarTone(payerLabel)}">${escapeHtml(personInitials(payerLabel))}</span>
+        <span class="avatar avatar-tone-${avatarTone(payerLabel)}">${avatarEmoji(payerLabel)}</span>
         <strong>${escapeHtml(payerLabel)}</strong>
         <span class="settle-arrow" aria-hidden="true">→</span>
-        <span class="avatar avatar-tone-${avatarTone(receiverLabel)}">${escapeHtml(personInitials(receiverLabel))}</span>
+        <span class="avatar avatar-tone-${avatarTone(receiverLabel)}">${avatarEmoji(receiverLabel)}</span>
         <strong>${escapeHtml(receiverLabel)}</strong>
         <span class="settle-preview-amount">${formatMoney(amountPaise, g.currency || "₹")}</span>
       `;
@@ -3125,7 +3125,7 @@
 
         div.innerHTML = `
           <div class="friend-main">
-            <span class="avatar avatar-tone-${avatarTone(f.name)}">${escapeHtml(personInitials(f.name))}</span>
+            <span class="avatar avatar-tone-${avatarTone(f.name)}">${avatarEmoji(f.name)}</span>
             <div>
             <strong>${escapeHtml(f.name)}</strong>
             ${typePill}
@@ -4502,7 +4502,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><input type="checkbox" class="split-equal-check" value="${escapeHtml(m)}" checked onchange="updateEqualPreview()"> <span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${escapeHtml(personInitials(participantLabel(m)))}</span> ${escapeHtml(participantLabel(m))}</label>
+              <label><input type="checkbox" class="split-equal-check" value="${escapeHtml(m)}" checked onchange="updateEqualPreview()"> <span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${avatarEmoji(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
               <span class="equal-share" data-member="${escapeHtml(m)}" style="font-size:0.88rem; font-weight:600; color:var(--muted);">${cur}0.00</span>
             </div>
           `;
@@ -4512,7 +4512,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${escapeHtml(personInitials(participantLabel(m)))}</span> ${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${avatarEmoji(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <span>${cur}</span>
                 <input type="number" step="0.01" class="split-exact-input" data-member="${escapeHtml(m)}" placeholder="0.00" style="width:100px; padding:6px;" oninput="updateExactPreview()">
@@ -4526,7 +4526,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${escapeHtml(personInitials(participantLabel(m)))}</span> ${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${avatarEmoji(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <input type="number" step="0.01" class="split-percent-input" data-member="${escapeHtml(m)}" placeholder="0" style="width:70px; padding:6px;" oninput="updatePercentPreview()">
                 <span>%</span>
@@ -4540,7 +4540,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${escapeHtml(personInitials(participantLabel(m)))}</span> ${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${avatarEmoji(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <input type="number" step="1" min="0" class="split-ratio-input" data-member="${escapeHtml(m)}" value="1" style="width:70px; padding:6px;" oninput="updateRatioPreview()">
                 <span>share(s)</span>
@@ -5734,6 +5734,18 @@
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
 
+    const AVATAR_EMOJIS = [
+      "🦊", "🐼", "🐨", "🐯", "🦁", "🐸", "🐙", "🦄",
+      "🐻", "🐰", "🐵", "🦉", "🐢", "🐳", "🦋", "🐝",
+      "🐧", "🦒", "🦓", "🐘", "🦩", "🦜", "🐿️", "🦔"
+    ];
+
+    function avatarEmoji(name) {
+      let hash = 0;
+      for (const char of String(name || "?")) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+      return AVATAR_EMOJIS[hash % AVATAR_EMOJIS.length];
+    }
+
     function avatarTone(name) {
       let hash = 0;
       for (const char of String(name || "")) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
@@ -5814,7 +5826,7 @@
       list.innerHTML = items.map(item => {
         const verb = item.direction === "owed" ? "owes you" : "you owe";
         return `<button type="button" class="home-person" data-call="navigateTo" data-arg="balances">
-          <span class="avatar avatar-tone-${avatarTone(item.person)}">${escapeHtml(personInitials(item.person))}</span>
+          <span class="avatar avatar-tone-${avatarTone(item.person)}">${avatarEmoji(item.person)}</span>
           <span class="home-person-main">
             <strong>${escapeHtml(item.person)}</strong>
             <span>${verb} · ${escapeHtml(item.context)}</span>
@@ -6404,7 +6416,7 @@
 
           item.innerHTML = `
             <div class="tx-main">
-              <span class="avatar avatar-tone-${avatarTone(avatarLabel)}">${escapeHtml(personInitials(avatarLabel))}</span>
+              <span class="avatar avatar-tone-${avatarTone(avatarLabel)}">${avatarEmoji(avatarLabel)}</span>
               <div class="tx-text">
                 <strong>${highlight(tx.desc, searchQuery)}</strong>
                 <span class="transaction-meta">
@@ -6709,7 +6721,7 @@
           const displayName = displayGroupMember(g, name);
           const avatarEl = document.createElement("span");
           avatarEl.className = `avatar avatar-tone-${avatarTone(displayName)}`;
-          avatarEl.textContent = personInitials(displayName);
+          avatarEl.textContent = avatarEmoji(displayName);
           chip.appendChild(avatarEl);
           const label = document.createElement("span");
           label.textContent = displayName;
@@ -6747,7 +6759,7 @@
           const displayName = displayGroupMember(g, name);
           const avatar = document.createElement("span");
           avatar.className = "avatar";
-          avatar.textContent = displayName.slice(0, 1).toUpperCase();
+          avatar.textContent = avatarEmoji(displayName);
           chip.appendChild(avatar);
           chip.appendChild(document.createTextNode(displayName));
           homeMembersChips.appendChild(chip);
@@ -7051,7 +7063,7 @@
         const youAvatar = document.getElementById("you-avatar");
         if (youName) youName.textContent = user.displayName || firstName;
         if (youEmail) youEmail.textContent = user.email || "Signed in with Gmail";
-        if (youAvatar) youAvatar.textContent = (user.displayName || user.email || "Y").trim().slice(0, 1).toUpperCase();
+        if (youAvatar) youAvatar.textContent = avatarEmoji(user.displayName || user.email || "Y");
       } else {
         authBtn.textContent = "Sign in";
         if (myDisplayAccount) {
@@ -7062,7 +7074,7 @@
         const youAvatar = document.getElementById("you-avatar");
         if (youName) youName.textContent = "You";
         if (youEmail) youEmail.textContent = "Signed in with Gmail";
-        if (youAvatar) youAvatar.textContent = "Y";
+        if (youAvatar) youAvatar.textContent = avatarEmoji("You");
       }
       document.querySelectorAll("[data-needs-auth]").forEach((node) => {
         node.disabled = !user;
