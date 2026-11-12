@@ -1030,7 +1030,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v127";
+    const APP_BUILD = "v128";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -4980,20 +4980,29 @@
       if (balancesScope.startsWith("group:") && !appState.groups[balancesScope.slice(6)]) {
         balancesScope = "all";
       }
-      const groups = [...data.allGroups].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+      const groups = Object.entries(appState.groups || {})
+        .filter(([, group]) => group && group.name)
+        .sort(([, a], [, b]) => String(a.name || "").localeCompare(String(b.name || "")));
       balancesScopeSelect.innerHTML = `<option value="all">All groups &amp; 1-on-1</option><option value="direct">1-on-1 only</option>` +
-        groups.map(group => `<option value="group:${escapeHtml(group.id)}">${escapeHtml(group.name || "Group")}${group.id === appState.activeGroupId ? " (active)" : ""}</option>`).join("");
+        groups.map(([groupId, group]) => `<option value="group:${escapeHtml(groupId)}">${escapeHtml(group.name || "Group")}${groupId === appState.activeGroupId ? " (active)" : ""}</option>`).join("");
       balancesScopeSelect.value = balancesScope;
     }
 
     function setBalancesScope(value) {
       balancesScope = value || "all";
       if (balancesScope.startsWith("group:")) {
-        const id = balancesScope.slice(6);
-        if (appState.groups[id] && appState.activeGroupId !== id) {
-          switchActiveGroup(id);
+        const id = groupKeyFor(balancesScope.slice(6));
+        if (id) {
+          balancesScope = `group:${id}`;
+          if (appState.activeGroupId !== id) {
+            switchActiveGroup(id);
+            if (appState.activeGroupId !== id) renderAll();
+          } else {
+            renderAll();
+          }
           return;
         }
+        balancesScope = "all";
       }
       renderAll();
     }
@@ -5488,7 +5497,7 @@
           if (!(debt.amount >= 1)) return;
           items.push({
             kind: "group",
-            groupId: group.id,
+            groupId: groupKeyFor(group.id) || group.id,
             groupName: group.name || "Group",
             currency: group.currency || "₹",
             from: debt.from,
@@ -5575,7 +5584,7 @@
           : "Pick a single group to change its simplify setting. The all-groups view uses each group's own setting.";
       }
       if (settlementHeaderLabel) {
-        settlementHeaderLabel.textContent = `Who pays whom · ${data.label}`;
+        settlementHeaderLabel.textContent = `Suggested payments · ${data.label}`;
       }
 
       const allItems = allOpenSettlementItems(data);
@@ -5584,9 +5593,22 @@
       const items = settlementVisibility === "all" ? allItems : allItems.filter(isMine);
       if (!items.length) {
         const otherOpen = settlementVisibility !== "all" && allItems.some(item => !isMine(item));
-        settlementListEl.innerHTML = otherOpen
-          ? `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">You are settled up in this view. Other members still have open debts — switch Show to Everyone.</div>`
-          : `<div style="text-align:center; padding:18px; color:var(--positive); font-weight:600;">You are fully settled up in this view.</div>`;
+        const group = data.singleGroup;
+        const hasLedger = Boolean(group && (group.transactions || [])
+          .some(tx => tx && (tx.type === "expense" || tx.type === "settlement")));
+        let message;
+        let tone = "var(--positive)";
+        if (data.includeDirect === false && group && !hasLedger) {
+          message = `No expenses in ${group.name || "this group"} yet — nothing to settle.`;
+          tone = "var(--muted)";
+        } else if (data.includeDirect === false && group) {
+          message = `All settled in ${group.name || "this group"}.`;
+        } else {
+          message = otherOpen
+            ? "You are settled up in this view. Other members still have open debts — switch Show to Everyone."
+            : "You are fully settled up in this view.";
+        }
+        settlementListEl.innerHTML = `<div style="text-align:center; padding:18px; color:${tone}; font-weight:600;">${escapeHtml(message)}</div>`;
         return;
       }
 
