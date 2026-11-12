@@ -1030,7 +1030,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v129";
+    const APP_BUILD = "v130";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -5132,6 +5132,12 @@
     }
 
     function renderBalancesAndSettlements() {
+      // The dropdown is the source of truth for the visible scope. If the
+      // in-memory value ever drifts (for example after a group switch), the
+      // list would otherwise keep showing the previous scope's rows.
+      if (balancesScopeSelect && balancesScopeSelect.value) {
+        balancesScope = balancesScopeSelect.value;
+      }
       const data = balancesScopeData();
       renderBalancesScopeSelect(data);
       const cur = data.currency;
@@ -5594,7 +5600,8 @@
         settlementHeaderLabel.textContent = `Suggested payments · ${data.label}`;
       }
 
-      const allItems = allOpenSettlementItems(data);
+      const allItems = allOpenSettlementItems(data)
+        .filter(item => !data.singleGroup || item.kind !== "direct");
       const isMine = item => item.kind === "direct" || item.fromLabel === "You" || item.toLabel === "You";
       if (settlementVisibilitySelect) settlementVisibilitySelect.value = settlementVisibility;
       const items = settlementVisibility === "all" ? allItems : allItems.filter(isMine);
