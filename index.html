@@ -1112,7 +1112,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v148";
+    const APP_BUILD = "v149";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2012,6 +2012,7 @@
 
     let cloudFriendsMap = {};
     let cloudEmojiChoices = { people: {}, groups: {} };
+    let emojiChoicesLoaded = false;
     const pendingEmojiKeys = new Map();
     let cloudDeletedGroupsMap = {};
     let rosterFlushQueued = false;
@@ -2075,6 +2076,20 @@
       });
     }
 
+    function pushLocalEmojiChoices() {
+      if (!fx || !currentUser || !emojiChoicesLoaded) return;
+      const localPeople = appState.emojiChoices?.people || {};
+      const localGroups = appState.emojiChoices?.groups || {};
+      Object.entries(localPeople).forEach(([key, emoji]) => {
+        if (emoji == null || key in cloudEmojiChoices.people) return;
+        saveEmojiChoiceToCloud("person", key, emoji);
+      });
+      Object.entries(localGroups).forEach(([key, emoji]) => {
+        if (emoji == null || key in cloudEmojiChoices.groups) return;
+        saveEmojiChoiceToCloud("group", key, emoji);
+      });
+    }
+
     function flushPendingEmojiChoices() {
       if (!fx || !currentUser) return;
       Array.from(pendingEmojiKeys.keys()).forEach(token => {
@@ -2104,6 +2119,7 @@
         const cloudPeople = cloudChoices.people && typeof cloudChoices.people === "object" ? cloudChoices.people : {};
         const cloudGroups = cloudChoices.groups && typeof cloudChoices.groups === "object" ? cloudChoices.groups : {};
         cloudEmojiChoices = { people: cloudPeople, groups: cloudGroups };
+        emojiChoicesLoaded = true;
         const localPeople = appState.emojiChoices?.people && typeof appState.emojiChoices.people === "object" ? appState.emojiChoices.people : {};
         const localGroups = appState.emojiChoices?.groups && typeof appState.emojiChoices.groups === "object" ? appState.emojiChoices.groups : {};
         const mergedPeople = { ...localPeople, ...cloudPeople };
@@ -8861,6 +8877,9 @@
         const choices = (snap.data() || {}).emojiChoices || {};
         const cloudPeople = choices.people && typeof choices.people === "object" ? choices.people : {};
         const cloudGroups = choices.groups && typeof choices.groups === "object" ? choices.groups : {};
+        cloudEmojiChoices = { people: cloudPeople, groups: cloudGroups };
+        emojiChoicesLoaded = true;
+        pushLocalEmojiChoices();
         const localPeople = appState.emojiChoices?.people && typeof appState.emojiChoices.people === "object" ? appState.emojiChoices.people : {};
         const localGroups = appState.emojiChoices?.groups && typeof appState.emojiChoices.groups === "object" ? appState.emojiChoices.groups : {};
         const mergedPeople = { ...localPeople, ...cloudPeople };
