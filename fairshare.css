@@ -254,6 +254,26 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
 .group-picker-text span { color: var(--muted); font-size: .75rem; }
 .group-picker-check { color: var(--primary); font-weight: 800; }
 .group-picker-empty { padding: 18px; text-align: center; color: var(--muted); font-size: .85rem; }
+.emoji-sheet { max-width: 520px; width: min(520px, 100%); }
+.emoji-categories { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 10px; }
+.emoji-cat {
+  border: 1px solid var(--line); border-radius: 10px; padding: 6px 9px;
+  background: var(--box-bg); font-size: 1.05rem; line-height: 1; cursor: pointer;
+}
+.emoji-cat.is-active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--box-bg)); }
+.emoji-grid {
+  display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px;
+  max-height: 46vh; overflow: auto;
+}
+.emoji-option {
+  border: 0; border-radius: 8px; padding: 6px 0;
+  background: transparent; font-size: 1.35rem; line-height: 1; cursor: pointer;
+}
+.emoji-option:hover { background: var(--box-bg); }
+.emoji-picker-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
+@media (max-width: 600px) {
+  .emoji-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
 .group-tab, .group-tab-add {
   width:auto; min-width:120px; max-width:240px; display:block; padding:9px 14px; border:1px solid var(--line);
   border-radius:11px; background:var(--surface-solid); color:var(--muted); text-align:left;

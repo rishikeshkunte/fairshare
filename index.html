@@ -1031,6 +1031,24 @@
     </div>
   </div>
 
+  <!-- Emoji Picker Sheet -->
+  <div id="emoji-picker-overlay" class="balances-overlay" hidden>
+    <div class="balances-sheet emoji-sheet" role="dialog" aria-modal="true" aria-labelledby="emoji-picker-title">
+      <div class="balances-sheet-head">
+        <strong id="emoji-picker-title">Choose emoji</strong>
+        <button type="button" class="btn btn-secondary" data-call="closeEmojiPicker">Close</button>
+      </div>
+      <div class="balances-sheet-body">
+        <div id="emoji-picker-categories" class="emoji-categories" role="tablist" aria-label="Emoji categories"></div>
+        <div id="emoji-picker-grid" class="emoji-grid" role="listbox" aria-label="Emojis"></div>
+        <div class="emoji-picker-foot">
+          <span id="emoji-picker-target" class="group-hint"></span>
+          <button type="button" class="btn btn-secondary" data-call="resetEmojiChoice">Use default</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, stripReceiptBytes, newId } from "./js/money.js";
     import { toast, askConfirm, askPrompt } from "./js/ui.js";
@@ -1040,6 +1058,22 @@
     import { normalizeLegacyGroup, validateNormalizedGroup } from "./js/groupschema.js";
     import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, mergeNormalizedTransactions, stableStringify } from "./js/normalizedsync.js";
     import { diffFriendsMap, friendsFromCloud, diffDeletedGroupsMap, deletedGroupsFromCloud } from "./js/profileschema.js";
+
+    document.body.addEventListener("click", (event) => {
+      const personNode = event.target.closest ? event.target.closest("[data-emoji-person]") : null;
+      if (personNode) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.openEmojiPicker("person", personNode.dataset.emojiPerson, personNode.dataset.emojiLabel || personNode.dataset.emojiPerson);
+        return;
+      }
+      const groupNode = event.target.closest ? event.target.closest("[data-emoji-group]") : null;
+      if (groupNode) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.openEmojiPicker("group", groupNode.dataset.emojiGroup, groupNode.dataset.emojiLabel || groupNode.dataset.emojiGroup);
+      }
+    }, true);
 
     document.body.addEventListener("click", (event) => {
       const node = event.target.closest("[data-call]");
@@ -1077,7 +1111,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v142";
+    const APP_BUILD = "v143";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -1750,7 +1784,7 @@
     const LEGACY_STATE_KEYS = ["fairshare_state_v9", "fairshare_state_v8", "fairshare_state_v7", "fairshare_state_v6"];
 
     function emptyState(theme = "light") {
-      return { theme, schemaVersion: 9, activeGroupId: null, friends: [], directTransactions: [], deletedTransactions: [], deletedGroups: [], groups: {} };
+      return { theme, schemaVersion: 9, activeGroupId: null, friends: [], directTransactions: [], deletedTransactions: [], deletedGroups: [], groups: {}, emojiChoices: { people: {}, groups: {} } };
     }
 
     function stateKeyFor(user = currentUser) {
@@ -1781,6 +1815,11 @@
       appState.deletedTransactions = (Array.isArray(appState.deletedTransactions) ? appState.deletedTransactions : [])
         .filter(Boolean);
       appState.deletedGroups = (Array.isArray(appState.deletedGroups) ? appState.deletedGroups : []).map(String);
+      const choices = appState.emojiChoices && typeof appState.emojiChoices === "object" ? appState.emojiChoices : {};
+      appState.emojiChoices = {
+        people: choices.people && typeof choices.people === "object" ? choices.people : {},
+        groups: choices.groups && typeof choices.groups === "object" ? choices.groups : {}
+      };
       const groups = {};
       const source = appState.groups && typeof appState.groups === "object" ? appState.groups : {};
       Object.entries(source).forEach(([id, group]) => {
@@ -1818,6 +1857,12 @@
         if (parsed.directTransactions && Array.isArray(parsed.directTransactions)) appState.directTransactions = parsed.directTransactions;
         if (parsed.deletedTransactions && Array.isArray(parsed.deletedTransactions)) appState.deletedTransactions = parsed.deletedTransactions;
         if (parsed.deletedGroups && Array.isArray(parsed.deletedGroups)) appState.deletedGroups = parsed.deletedGroups.map(String);
+        if (parsed.emojiChoices && typeof parsed.emojiChoices === "object") {
+          appState.emojiChoices = {
+            people: parsed.emojiChoices.people && typeof parsed.emojiChoices.people === "object" ? parsed.emojiChoices.people : {},
+            groups: parsed.emojiChoices.groups && typeof parsed.emojiChoices.groups === "object" ? parsed.emojiChoices.groups : {}
+          };
+        }
         if (parsed.groups && Object.keys(parsed.groups).length > 0) {
           appState.groups = parsed.groups;
           Object.values(appState.groups).forEach(g => {
@@ -2160,10 +2205,10 @@
       const payerLabel = labelFor(payer);
       const receiverLabel = labelFor(receiver);
       settlePreview.innerHTML = `
-        <span class="avatar avatar-tone-${avatarTone(payerLabel)}">${avatarEmoji(payerLabel)}</span>
+        <span class="avatar avatar-tone-${avatarTone(payerLabel)}" data-emoji-person="${escapeHtml(payerLabel)}" data-emoji-label="${escapeHtml(payerLabel)}" title="Change emoji">${emojiForPerson(payerLabel)}</span>
         <strong>${escapeHtml(payerLabel)}</strong>
         <span class="settle-arrow" aria-hidden="true">→</span>
-        <span class="avatar avatar-tone-${avatarTone(receiverLabel)}">${avatarEmoji(receiverLabel)}</span>
+        <span class="avatar avatar-tone-${avatarTone(receiverLabel)}" data-emoji-person="${escapeHtml(receiverLabel)}" data-emoji-label="${escapeHtml(receiverLabel)}" title="Change emoji">${emojiForPerson(receiverLabel)}</span>
         <strong>${escapeHtml(receiverLabel)}</strong>
         <span class="settle-preview-amount">${formatMoney(amountPaise, g.currency || "₹")}</span>
       `;
@@ -3161,7 +3206,7 @@
 
         div.innerHTML = `
           <div class="friend-main">
-            <span class="avatar avatar-tone-${avatarTone(f.name)}">${avatarEmoji(f.name)}</span>
+            <span class="avatar avatar-tone-${avatarTone(f.name)}" data-emoji-person="${escapeHtml(f.name)}" data-emoji-label="${escapeHtml(f.name)}" title="Change emoji">${emojiForPerson(f.name)}</span>
             <div>
             <strong>${escapeHtml(f.name)}</strong>
             ${typePill}
@@ -3465,7 +3510,7 @@
           button.setAttribute("role", "tab");
           const memberCount = (group.members || []).length;
           button.innerHTML = `
-            <span class="group-chip-emoji" aria-hidden="true">${groupEmoji(group.name)}</span>
+            <span class="group-chip-emoji" data-emoji-group="${escapeHtml(groupId)}" data-emoji-label="${escapeHtml(group.name)}" title="Change emoji">${emojiForGroup(groupId, group.name)}</span>
             <span class="group-chip-text">
               <strong>${escapeHtml(group.name)}</strong>
               <span>${memberCount} ${memberCount === 1 ? "person" : "people"} · ${escapeHtml(group.currency || "₹")}</span>
@@ -3513,7 +3558,7 @@
         const memberCount = (group.members || []).length;
         const active = groupId === activeKey;
         return `<button type="button" class="group-picker-row${active ? " is-active" : ""}" data-group-id="${escapeHtml(groupId)}">
-          <span class="group-picker-emoji" aria-hidden="true">${groupEmoji(group.name)}</span>
+          <span class="group-picker-emoji" data-emoji-group="${escapeHtml(groupId)}" data-emoji-label="${escapeHtml(group.name)}" title="Change emoji">${emojiForGroup(groupId, group.name)}</span>
           <span class="group-picker-text">
             <strong>${escapeHtml(group.name)}</strong>
             <span>${memberCount} ${memberCount === 1 ? "person" : "people"} · ${escapeHtml(group.currency || "₹")}</span>
@@ -3538,6 +3583,71 @@
     };
 
     window.closeGroupPicker = closeBalancesOverlays;
+
+    let emojiTarget = null;
+    let emojiCategoryIndex = 0;
+
+    function renderEmojiPicker() {
+      const categories = document.getElementById("emoji-picker-categories");
+      const grid = document.getElementById("emoji-picker-grid");
+      const target = document.getElementById("emoji-picker-target");
+      if (!categories || !grid) return;
+      if (target) target.textContent = emojiTarget ? `Changing ${emojiTarget.label}` : "";
+      categories.innerHTML = EMOJI_CATEGORIES.map((category, index) =>
+        `<button type="button" class="emoji-cat${index === emojiCategoryIndex ? " is-active" : ""}" role="tab" aria-selected="${index === emojiCategoryIndex}" data-emoji-cat="${index}" title="${category.title}">${category.label}</button>`
+      ).join("");
+      categories.querySelectorAll("[data-emoji-cat]").forEach(button => {
+        button.addEventListener("click", () => {
+          emojiCategoryIndex = Number(button.dataset.emojiCat) || 0;
+          renderEmojiPicker();
+        });
+      });
+      const emojis = (EMOJI_CATEGORIES[emojiCategoryIndex] || EMOJI_CATEGORIES[0]).emojis;
+      grid.innerHTML = emojis.map(emoji =>
+        `<button type="button" class="emoji-option" data-emoji="${emoji}" role="option" aria-label="${emoji}">${emoji}</button>`
+      ).join("");
+      grid.querySelectorAll("[data-emoji]").forEach(button => {
+        button.addEventListener("click", () => applyEmojiChoice(button.dataset.emoji));
+      });
+    }
+
+    function applyEmojiChoice(emoji) {
+      if (!emojiTarget || !emoji) return;
+      if (!appState.emojiChoices) appState.emojiChoices = { people: {}, groups: {} };
+      if (emojiTarget.type === "group") {
+        appState.emojiChoices.groups[emojiTarget.key] = emoji;
+      } else {
+        appState.emojiChoices.people[emojiTarget.key] = emoji;
+      }
+      persistLocalState();
+      closeBalancesOverlays();
+      renderAll();
+      toast("Emoji updated.");
+    }
+
+    window.openEmojiPicker = function (type, key, label) {
+      const targetKey = type === "group" ? String(key || "") : personEmojiKey(key);
+      if (!targetKey) return;
+      emojiTarget = { type, key: targetKey, label: label || key || "this item" };
+      emojiCategoryIndex = 0;
+      renderEmojiPicker();
+      openBalancesOverlay("emoji-picker-overlay");
+    };
+
+    window.closeEmojiPicker = closeBalancesOverlays;
+
+    window.resetEmojiChoice = function () {
+      if (!emojiTarget) return;
+      if (emojiTarget.type === "group") {
+        delete appState.emojiChoices.groups[emojiTarget.key];
+      } else {
+        delete appState.emojiChoices.people[emojiTarget.key];
+      }
+      persistLocalState();
+      closeBalancesOverlays();
+      renderAll();
+      toast("Default emoji restored.");
+    };
 
     const groupPickerSearch = document.getElementById("group-picker-search");
     if (groupPickerSearch) {
@@ -4609,7 +4719,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><input type="checkbox" class="split-equal-check" value="${escapeHtml(m)}" checked onchange="updateEqualPreview()"> <span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${avatarEmoji(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
+              <label><input type="checkbox" class="split-equal-check" value="${escapeHtml(m)}" checked onchange="updateEqualPreview()"> <span class="avatar avatar-tone-${avatarTone(participantLabel(m))}" data-emoji-person="${escapeHtml(participantLabel(m))}" data-emoji-label="${escapeHtml(participantLabel(m))}" title="Change emoji">${emojiForPerson(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
               <span class="equal-share" data-member="${escapeHtml(m)}" style="font-size:0.88rem; font-weight:600; color:var(--muted);">${cur}0.00</span>
             </div>
           `;
@@ -4619,7 +4729,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${avatarEmoji(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}" data-emoji-person="${escapeHtml(participantLabel(m))}" data-emoji-label="${escapeHtml(participantLabel(m))}" title="Change emoji">${emojiForPerson(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <span>${cur}</span>
                 <input type="number" step="0.01" class="split-exact-input" data-member="${escapeHtml(m)}" placeholder="0.00" style="width:100px; padding:6px;" oninput="updateExactPreview()">
@@ -4633,7 +4743,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${avatarEmoji(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}" data-emoji-person="${escapeHtml(participantLabel(m))}" data-emoji-label="${escapeHtml(participantLabel(m))}" title="Change emoji">${emojiForPerson(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <input type="number" step="0.01" class="split-percent-input" data-member="${escapeHtml(m)}" placeholder="0" style="width:70px; padding:6px;" oninput="updatePercentPreview()">
                 <span>%</span>
@@ -4647,7 +4757,7 @@
         participants.forEach(m => {
           html += `
             <div class="split-row">
-              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}">${avatarEmoji(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
+              <label><span class="avatar avatar-tone-${avatarTone(participantLabel(m))}" data-emoji-person="${escapeHtml(participantLabel(m))}" data-emoji-label="${escapeHtml(participantLabel(m))}" title="Change emoji">${emojiForPerson(participantLabel(m))}</span> ${escapeHtml(participantLabel(m))}</label>
               <div style="display:flex; align-items:center; gap:4px;">
                 <input type="number" step="1" min="0" class="split-ratio-input" data-member="${escapeHtml(m)}" value="1" style="width:70px; padding:6px;" oninput="updateRatioPreview()">
                 <span>share(s)</span>
@@ -5864,6 +5974,51 @@
       return GROUP_EMOJIS[hash % GROUP_EMOJIS.length];
     }
 
+    function personEmojiKey(name) {
+      return String(name || "").trim().toLowerCase();
+    }
+
+    function emojiForPerson(name) {
+      const key = personEmojiKey(name);
+      return (appState.emojiChoices && appState.emojiChoices.people && appState.emojiChoices.people[key]) || avatarEmoji(name);
+    }
+
+    function emojiForGroup(groupId, name) {
+      return (appState.emojiChoices && appState.emojiChoices.groups && appState.emojiChoices.groups[groupId])
+        || groupEmoji(name);
+    }
+
+    const EMOJI_CATEGORIES = [
+      {
+        id: "smileys", label: "😀", title: "Smileys",
+        emojis: ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "🥲", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🥳", "🤩", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🫣", "🤭", "🫢", "🤫", "🤥", "😶", "😐", "😑", "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😵", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾"]
+      },
+      {
+        id: "animals", label: "🐶", title: "Animals",
+        emojis: ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐽", "🐸", "🐵", "🙈", "🙉", "🙊", "🐒", "🐔", "🐧", "🐦", "🐤", "🐣", "🐥", "🦆", "🦅", "🦉", "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🪱", "🐛", "🦋", "🐌", "🐞", "🐜", "🪰", "🦗", "🕷️", "🕸️", "🦂", "🐢", "🐍", "🦎", "🦖", "🦕", "🐙", "🦑", "🦐", "🦞", "🦀", "🐡", "🐠", "🐟", "🐬", "🐳", "🐋", "🦈", "🦭", "🐊", "🐅", "🐆", "🦓", "🦍", "🦧", "🐘", "🦛", "🦏", "🐪", "🐫", "🦒", "🦘", "🐃", "🐂", "🐄", "🐎", "🐖", "🐏", "🐑", "🦙", "🐐", "🦌", "🐕", "🐩", "🦮", "🐈", "🐓", "🦃", "🦚", "🦜", "🦢", "🦩", "🕊️", "🐇", "🦝", "🦨", "🦡", "🦫", "🦦", "🦥", "🐁", "🐀", "🐿️", "🦔"]
+      },
+      {
+        id: "food", label: "🍔", title: "Food & Drink",
+        emojis: ["🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒", "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🥑", "🥦", "🥬", "🥒", "🌶️", "🫑", "🌽", "🥕", "🫒", "🧄", "🧅", "🥔", "🍠", "🥐", "🥯", "🍞", "🥖", "🥨", "🧀", "🥚", "🍳", "🧈", "🥞", "🧇", "🥓", "🥩", "🍗", "🍖", "🌭", "🍔", "🍟", "🍕", "🥪", "🥙", "🧆", "🌮", "🌯", "🥗", "🥘", "🍝", "🍜", "🍲", "🍛", "🍣", "🍱", "🥟", "🦪", "🍤", "🍙", "🍚", "🍘", "🍥", "🥮", "🍢", "🍡", "🍧", "🍨", "🍦", "🥧", "🧁", "🍰", "🎂", "🍮", "🍭", "🍬", "🍫", "🍿", "🍩", "🍪", "🌰", "🥜", "🍯", "🥛", "🍼", "☕", "🍵", "🧃", "🥤", "🧋", "🍶", "🍺", "🍻", "🥂", "🍷", "🥃", "🍸", "🍹", "🍾"]
+      },
+      {
+        id: "activities", label: "⚽️", title: "Activities",
+        emojis: ["⚽️", "🏀", "🏈", "⚾️", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱", "🏓", "🏸", "🏒", "🏑", "🥍", "🏏", "🥅", "⛳️", "🏹", "🎣", "🤿", "🥊", "🥋", "🎽", "🛹", "🛼", "🛷", "⛸️", "🥌", "🎿", "⛷️", "🏂", "🪂", "🏋️", "🤼", "🤸", "⛹️", "🤺", "🤾", "🏌️", "🏇", "🧘", "🏄", "🏊", "🤽", "🚣", "🧗", "🚵", "🚴", "🏆", "🥇", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🎗️", "🎫", "🎟️", "🎪", "🤹", "🎭", "🎨", "🎬", "🎤", "🎧", "🎼", "🎹", "🥁", "🎷", "🎺", "🎸", "🎻", "🎲", "♟️", "🎯", "🎳", "🎮", "🎰", "🧩"]
+      },
+      {
+        id: "travel", label: "✈️", title: "Travel & Places",
+        emojis: ["🚗", "🚕", "🚙", "🚌", "🚎", "🏎️", "🚓", "🚑", "🚒", "🚐", "🛻", "🚚", "🚛", "🚜", "🛴", "🚲", "🛵", "🏍️", "🛺", "🚨", "🚔", "🚍", "🚘", "🚖", "🚡", "🚠", "🚟", "🚃", "🚋", "🚞", "🚝", "🚄", "🚅", "🚈", "🚂", "🚆", "🚇", "🚊", "🚉", "✈️", "🛫", "🛬", "🛩️", "💺", "🛰️", "🚀", "🛸", "🚁", "🛶", "⛵️", "🚤", "🛥️", "🛳️", "⛴️", "🚢", "⚓️", "⛽️", "🚧", "🚦", "🚥", "🚏", "🗺️", "🗿", "🗽", "🗼", "🏰", "🏯", "🏟️", "🎡", "🎢", "🎠", "⛲️", "⛱️", "🏖️", "🏝️", "🏜️", "🌋", "⛰️", "🏔️", "🗻", "🏕️", "⛺️", "🏠", "🏡", "🏘️", "🏢", "🏬", "🏥", "🏦", "🏨", "🏪", "🏫", "🏛️", "⛪️", "🕌", "🕍", "⛩️"]
+      },
+      {
+        id: "objects", label: "💡", title: "Objects",
+        emojis: ["⌚️", "📱", "📲", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "🕹️", "💽", "💾", "💿", "📀", "📷", "📸", "📹", "🎥", "📽️", "📞", "☎️", "📟", "📠", "📺", "📻", "🎙️", "🧭", "⏱️", "⏲️", "⏰", "🕰️", "⌛️", "⏳️", "📡", "🔋", "🔌", "💡", "🔦", "🕯️", "🧯", "💸", "💵", "💴", "💶", "💷", "🪙", "💰", "💳", "💎", "⚖️", "🔧", "🔨", "🛠️", "🔩", "⚙️", "🧱", "⛓️", "🧲", "🔫", "💣", "🧨", "🔪", "🗡️", "🛡️", "🚬", "⚰️", "🏺", "🔮", "📿", "🧿", "🔭", "🔬", "🩹", "🩺", "💊", "💉", "🧬", "🦠", "🧪", "🌡️", "🧹", "🧺", "🧻", "🚽", "🚿", "🛁", "🧼", "🪥", "🪒", "🧽", "🧴", "🔑", "🗝️", "🚪", "🪑", "🛋️", "🛏️", "🧸", "🖼️", "🪞", "🛍️", "🛒", "🎁", "🎈", "🎀", "📦", "✏️", "✒️", "🖋️", "🖊️", "🖌️", "📝", "💼", "📁", "📅", "📇", "📈", "📉", "📊", "📋", "📌", "📍", "📎", "📏", "📐", "✂️", "🗑️", "🔒", "🔓", "🔐"]
+      },
+      {
+        id: "symbols", label: "❤️", title: "Symbols",
+        emojis: ["❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💟", "☮️", "✝️", "☪️", "🕉️", "☸️", "✡️", "🔯", "🕎", "☯️", "☦️", "🛐", "⛎", "♈️", "♉️", "♊️", "♋️", "♌️", "♍️", "♎️", "♏️", "♐️", "♑️", "♒️", "♓️", "🆔", "⚛️", "🉑", "☢️", "☣️", "📴", "📳", "🈶", "🈚️", "🈸", "🈺", "🈷️", "✴️", "🆚", "💮", "🉐", "㊙️", "㊗️", "🈴", "🈵", "🈹", "🈲", "🅰️", "🅱️", "🆎", "🆑", "🅾️", "🆘", "❌", "⭕️", "🛑", "⛔️", "📛", "🚫", "💯", "💢", "♨️", "🚷", "🚯", "🚳", "🚱", "🔞", "📵", "🚭", "❗️", "❕", "❓", "❔", "‼️", "⁉️", "🔅", "🔆", "〽️", "⚠️", "🚸", "🔱", "⚜️", "🔰", "♻️", "✅", "💹", "❇️", "✳️", "❎", "🌐", "💠", "Ⓜ️", "🌀", "💤", "🏧", "🚾", "♿️", "🅿️", "🈳", "🈂️", "🛂", "🛃", "🛄", "🛅"]
+      }
+    ];
+
     function avatarTone(name) {
       let hash = 0;
       for (const char of String(name || "")) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
@@ -5944,7 +6099,7 @@
       list.innerHTML = items.map(item => {
         const verb = item.direction === "owed" ? "owes you" : "you owe";
         return `<button type="button" class="home-person" data-call="navigateTo" data-arg="balances">
-          <span class="avatar avatar-tone-${avatarTone(item.person)}">${avatarEmoji(item.person)}</span>
+          <span class="avatar avatar-tone-${avatarTone(item.person)}" data-emoji-person="${escapeHtml(item.person)}" data-emoji-label="${escapeHtml(item.person)}" title="Change emoji">${emojiForPerson(item.person)}</span>
           <span class="home-person-main">
             <strong>${escapeHtml(item.person)}</strong>
             <span>${verb} · ${escapeHtml(item.context)}</span>
@@ -6534,7 +6689,7 @@
 
           item.innerHTML = `
             <div class="tx-main">
-              <span class="avatar avatar-tone-${avatarTone(avatarLabel)}">${avatarEmoji(avatarLabel)}</span>
+              <span class="avatar avatar-tone-${avatarTone(avatarLabel)}" data-emoji-person="${escapeHtml(avatarLabel)}" data-emoji-label="${escapeHtml(avatarLabel)}" title="Change emoji">${emojiForPerson(avatarLabel)}</span>
               <div class="tx-text">
                 <strong>${highlight(tx.desc, searchQuery)}</strong>
                 <span class="transaction-meta">
@@ -6839,7 +6994,10 @@
           const displayName = displayGroupMember(g, name);
           const avatarEl = document.createElement("span");
           avatarEl.className = `avatar avatar-tone-${avatarTone(displayName)}`;
-          avatarEl.textContent = avatarEmoji(displayName);
+          avatarEl.textContent = emojiForPerson(displayName);
+          avatarEl.dataset.emojiPerson = displayName;
+          avatarEl.dataset.emojiLabel = displayName;
+          avatarEl.title = "Change emoji";
           chip.appendChild(avatarEl);
           const label = document.createElement("span");
           label.textContent = displayName;
@@ -6877,7 +7035,10 @@
           const displayName = displayGroupMember(g, name);
           const avatar = document.createElement("span");
           avatar.className = "avatar";
-          avatar.textContent = avatarEmoji(displayName);
+          avatar.textContent = emojiForPerson(displayName);
+          avatar.dataset.emojiPerson = displayName;
+          avatar.dataset.emojiLabel = displayName;
+          avatar.title = "Change emoji";
           chip.appendChild(avatar);
           chip.appendChild(document.createTextNode(displayName));
           homeMembersChips.appendChild(chip);
@@ -7182,7 +7343,12 @@
         const youAvatar = document.getElementById("you-avatar");
         if (youName) youName.textContent = user.displayName || firstName;
         if (youEmail) youEmail.textContent = user.email || "Signed in with Gmail";
-        if (youAvatar) youAvatar.textContent = avatarEmoji(user.displayName || user.email || "Y");
+        if (youAvatar) {
+          youAvatar.textContent = emojiForPerson(user.displayName || user.email || "Y");
+          youAvatar.dataset.emojiPerson = user.displayName || user.email || "Y";
+          youAvatar.dataset.emojiLabel = user.displayName || user.email || "You";
+          youAvatar.title = "Change emoji";
+        }
       } else {
         authBtn.textContent = "Sign in";
         if (myDisplayAccount) {
@@ -7193,7 +7359,12 @@
         const youAvatar = document.getElementById("you-avatar");
         if (youName) youName.textContent = "You";
         if (youEmail) youEmail.textContent = "Signed in with Gmail";
-        if (youAvatar) youAvatar.textContent = avatarEmoji("You");
+        if (youAvatar) {
+          youAvatar.textContent = emojiForPerson("You");
+          youAvatar.dataset.emojiPerson = "You";
+          youAvatar.dataset.emojiLabel = "You";
+          youAvatar.title = "Change emoji";
+        }
       }
       document.querySelectorAll("[data-needs-auth]").forEach((node) => {
         node.disabled = !user;

@@ -340,7 +340,7 @@ test("group chips use map keys and stable identity", () => {
   assert.match(html, /function groupKeyFor\(groupId\)/);
   assert.match(html, /const key = groupKeyFor\(groupId\)/);
   assert.match(html, /button\.dataset\.groupId = groupId/);
-  assert.match(html, /groupEmoji\(group\.name\)/);
+  assert.match(html, /emojiForGroup\(groupId, group\.name\)/);
 });
 
 test("group management requires an explicit group selection", () => {
