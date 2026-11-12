@@ -223,9 +223,9 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
   background: color-mix(in srgb, var(--primary) 8%, var(--surface-solid));
 }
 .group-chip-emoji {
-  width: 34px; height: 34px; flex-shrink: 0; border-radius: 12px;
-  display: grid; place-items: center; font-size: 1.2rem;
-  background: var(--box-bg);
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px;
+  display: grid; place-items: center; font-size: 1.6rem;
+  background: transparent;
 }
 .group-chip-text { display: flex; flex-direction: column; min-width: 0; }
 .group-chip-text strong { font-size: .88rem; overflow-wrap: anywhere; }
@@ -246,8 +246,8 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
 .group-picker-row:hover { background: var(--box-bg); }
 .group-picker-row.is-active { background: color-mix(in srgb, var(--primary) 8%, var(--box-bg)); }
 .group-picker-emoji {
-  width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px;
-  display: grid; place-items: center; font-size: 1.2rem; background: var(--box-bg);
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px;
+  display: grid; place-items: center; font-size: 1.6rem; background: transparent;
 }
 .group-picker-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .group-picker-text strong { font-size: .92rem; overflow-wrap: anywhere; }
@@ -596,7 +596,7 @@ input:focus, select:focus, textarea:focus {
   padding: 12px 14px; margin-bottom: 14px;
   border: 1px solid var(--line); border-radius: 14px; background: var(--box-bg);
 }
-.settle-preview .avatar { width: 28px; height: 28px; font-size: .95rem; }
+.settle-preview .avatar { width: 36px; height: 36px; font-size: 1.5rem; }
 .settle-preview-amount { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; }
 .settle-preview-hint { color: var(--muted); font-size: .82rem; }
 .settle-arrow { color: var(--muted); font-weight: 700; }
@@ -632,9 +632,11 @@ input:focus, select:focus, textarea:focus {
 .member-spend-table td { padding: 12px; border-top: 1px solid var(--line); vertical-align: middle; }
 .member-cell { display: flex; align-items: center; gap: 8px; }
 .avatar {
-  width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center;
-  background: var(--chip-bg); color: var(--chip-text); font-size: 0.95rem; line-height: 1; font-weight: 800; flex-shrink: 0;
+  width: 38px; height: 38px; border-radius: 10px; display: inline-grid; place-items: center;
+  background: transparent; color: inherit; font-size: 1.55rem; line-height: 1; flex-shrink: 0;
 }
+[data-emoji-person], [data-emoji-group] { cursor: pointer; border-radius: 10px; }
+[data-emoji-person]:hover, [data-emoji-group]:hover { background: var(--hover-item); }
 .text-success, .text-danger, .text-muted.bal {
   display: inline-flex; border-radius: 999px; padding: 3px 8px; font-weight: 700;
 }
@@ -669,7 +671,7 @@ input:focus, select:focus, textarea:focus {
 .transaction-meta { display: block; color: var(--muted); font-size: 0.78rem; }
 .transaction-amount { font-weight: 700; }
 .tx-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.tx-main .avatar { width: 34px; height: 34px; font-size: .78rem; }
+.tx-main .avatar { width: 38px; height: 38px; font-size: 1.55rem; }
 .tx-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .tx-text strong { overflow-wrap: anywhere; }
 .tx-type {
@@ -768,7 +770,7 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
 .friends-list-container { display: flex; flex-direction: column; gap: 8px; }
 .friend-row { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:10px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
 .friend-main { display:flex; align-items:flex-start; gap:10px; min-width:0; flex:1; }
-.friend-main .avatar { width:34px; height:34px; font-size:.78rem; margin-top:2px; }
+.friend-main .avatar { width: 38px; height: 38px; font-size: 1.55rem; margin-top: 2px; }
 .friend-row:first-child { border-top:0; }
 .friend-row > div:last-child { display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:flex-end; }
 .friend-group-balances { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
@@ -1154,9 +1156,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   font-weight: 750;
 }
 #page-add-expense .split-row .avatar {
-  width: 26px;
-  height: 26px;
-  font-size: .9rem;
+  width: 32px;
+  height: 32px;
+  font-size: 1.3rem;
 }
 .expense-submit-bar {
   display: flex;
@@ -1582,7 +1584,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   background: transparent; color: var(--text); text-align: left; cursor: pointer;
 }
 .home-person:hover { background: var(--box-bg); }
-.home-person .avatar { width: 34px; height: 34px; font-size: .8rem; }
+.home-person .avatar { width: 42px; height: 42px; font-size: 1.8rem; }
 .home-person-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .home-person-main strong { font-size: .92rem; overflow-wrap: anywhere; }
 .home-person-main span { color: var(--muted); font-size: .76rem; }
@@ -1590,10 +1592,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .home-person-amount.is-owed { color: var(--positive); }
 .home-person-amount.is-owe { color: var(--negative); }
 
-.avatar-tone-0 { background: color-mix(in srgb, var(--primary) 18%, var(--chip-bg)); color: var(--primary); }
-.avatar-tone-1 { background: color-mix(in srgb, var(--accent) 26%, var(--chip-bg)); color: var(--text); }
-.avatar-tone-2 { background: color-mix(in srgb, var(--marigold) 26%, var(--chip-bg)); color: var(--text); }
-.avatar-tone-3 { background: color-mix(in srgb, var(--primary) 34%, var(--chip-bg)); color: var(--chip-text); }
+.avatar-tone-0, .avatar-tone-1, .avatar-tone-2, .avatar-tone-3 { background: transparent; color: inherit; }
 
 .home-quick-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .home-quick-card {
@@ -1622,14 +1621,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   border-radius: 22px;
 }
 .you-avatar {
-  width: 58px; height: 58px; flex-shrink: 0;
+  width: 66px; height: 66px; flex-shrink: 0;
   display: grid; place-items: center;
-  border-radius: 18px;
-  background: var(--primary);
-  color: var(--on-primary);
-  font-family: var(--display);
-  font-size: 1.4rem;
-  font-weight: 700;
+  background: transparent;
+  font-size: 2.6rem;
+  line-height: 1;
 }
 .you-hero h1 { margin: 2px 0 2px; font-size: 1.5rem; letter-spacing: -0.02em; }
 .you-hero p { margin: 0; color: var(--muted); font-size: .86rem; overflow-wrap: anywhere; }

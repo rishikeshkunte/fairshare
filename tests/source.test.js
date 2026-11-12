@@ -343,6 +343,14 @@ test("group chips use map keys and stable identity", () => {
   assert.match(html, /emojiForGroup\(groupId, group\.name\)/);
 });
 
+test("emoji choices sync through the profile map", () => {
+  assert.match(html, /const pendingEmojiKeys = new Set\(\)/);
+  assert.match(html, /emojiChoices: \{ people: \{ \[key\]: emoji \} \}/);
+  assert.match(html, /emojiChoices: \{ groups: \{ \[key\]: emoji \} \}/);
+  assert.match(html, /cloudEmojiChoices/);
+  assert.match(html, /flushPendingEmojiChoices\(\)/);
+});
+
 test("group management requires an explicit group selection", () => {
   assert.match(html, /id="manage-group-select"/);
   assert.match(html, /<option value="">Choose a group\.\.\.<\/option>/);

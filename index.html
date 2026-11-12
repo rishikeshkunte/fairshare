@@ -1111,7 +1111,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v143";
+    const APP_BUILD = "v144";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2010,6 +2010,8 @@
     }
 
     let cloudFriendsMap = {};
+    let cloudEmojiChoices = { people: {}, groups: {} };
+    const pendingEmojiKeys = new Set();
     let cloudDeletedGroupsMap = {};
     let rosterFlushQueued = false;
 
@@ -2055,6 +2057,39 @@
       saveFriendsRosterToCloud();
     }
 
+    function saveEmojiChoiceToCloud(type, key, emoji) {
+      if (!fx || !currentUser || !currentUser.uid) return;
+      const token = `${type === "group" ? "g" : "p"}:${key}`;
+      pendingEmojiKeys.add(token);
+      const profileRef = fx.storeMod.doc(fx.db, "user_profiles", currentUser.uid);
+      const payload = type === "group"
+        ? { emojiChoices: { groups: { [key]: emoji } } }
+        : { emojiChoices: { people: { [key]: emoji } } };
+      fx.storeMod.setDoc(profileRef, payload, { merge: true }, { label: "emoji-choice" }).then(() => {
+        pendingEmojiKeys.delete(token);
+        if (type === "group") cloudEmojiChoices.groups[key] = emoji;
+        else cloudEmojiChoices.people[key] = emoji;
+      }).catch(err => {
+        console.warn("Emoji choice sync note:", err?.code || err);
+      });
+    }
+
+    function flushPendingEmojiChoices() {
+      if (!fx || !currentUser) return;
+      Array.from(pendingEmojiKeys).forEach(token => {
+        const type = token.startsWith("g:") ? "group" : "person";
+        const key = token.slice(2);
+        const value = type === "group"
+          ? appState.emojiChoices?.groups?.[key]
+          : appState.emojiChoices?.people?.[key];
+        if (value === undefined) {
+          pendingEmojiKeys.delete(token);
+          return;
+        }
+        saveEmojiChoiceToCloud(type, key, value);
+      });
+    }
+
     function listenToFriendsRoster(user) {
       if (!fx || !user || !user.uid) return;
       if (unsubscribeFriendsRosterListener && cloudSubscriptionsUid === user.uid) return;
@@ -2063,6 +2098,23 @@
         const cloudData = snapshot.exists() ? (snapshot.data() || {}) : {};
         cloudFriendsMap = cloudData.friendsMap && typeof cloudData.friendsMap === "object" ? cloudData.friendsMap : {};
         cloudDeletedGroupsMap = cloudData.deletedGroupsMap && typeof cloudData.deletedGroupsMap === "object" ? cloudData.deletedGroupsMap : {};
+
+        const cloudChoices = cloudData.emojiChoices && typeof cloudData.emojiChoices === "object" ? cloudData.emojiChoices : {};
+        const cloudPeople = cloudChoices.people && typeof cloudChoices.people === "object" ? cloudChoices.people : {};
+        const cloudGroups = cloudChoices.groups && typeof cloudChoices.groups === "object" ? cloudChoices.groups : {};
+        cloudEmojiChoices = { people: cloudPeople, groups: cloudGroups };
+        const localPeople = appState.emojiChoices?.people && typeof appState.emojiChoices.people === "object" ? appState.emojiChoices.people : {};
+        const localGroups = appState.emojiChoices?.groups && typeof appState.emojiChoices.groups === "object" ? appState.emojiChoices.groups : {};
+        const mergedPeople = { ...localPeople, ...cloudPeople };
+        const mergedGroups = { ...localGroups, ...cloudGroups };
+        pendingEmojiKeys.forEach(token => {
+          const key = token.slice(2);
+          if (token.startsWith("p:") && key in localPeople) mergedPeople[key] = localPeople[key];
+          else if (token.startsWith("g:") && key in localGroups) mergedGroups[key] = localGroups[key];
+        });
+        const emojiChanged = stableStringify({ people: localPeople, groups: localGroups })
+          !== stableStringify({ people: mergedPeople, groups: mergedGroups });
+        if (emojiChanged) appState.emojiChoices = { people: mergedPeople, groups: mergedGroups };
         const cloudFriends = friendsFromCloud(cloudFriendsMap);
         const mergedFriends = mergeFriendRecords(cloudFriends, appState.friends || []);
         const localChanged = stableStringify(mergedFriends) !== stableStringify(appState.friends || []);
@@ -2892,8 +2944,9 @@
               || deletedForFriend(appState.deletedTransactions, linked.name, linked.email).length;
             if (pairId && hasLocal) directPairDirty.add(pairId);
           }
-          persistLocalState();
-          renderFriendsRoster();
+        persistLocalState();
+        if (emojiChanged) renderAll();
+        renderFriendsRoster();
           renderFriendPickerDropdown();
           renderDirectFriendDropdown();
           return;
@@ -3619,6 +3672,7 @@
       } else {
         appState.emojiChoices.people[emojiTarget.key] = emoji;
       }
+      saveEmojiChoiceToCloud(emojiTarget.type, emojiTarget.key, emoji);
       persistLocalState();
       closeBalancesOverlays();
       renderAll();
@@ -3639,10 +3693,11 @@
     window.resetEmojiChoice = function () {
       if (!emojiTarget) return;
       if (emojiTarget.type === "group") {
-        delete appState.emojiChoices.groups[emojiTarget.key];
+        appState.emojiChoices.groups[emojiTarget.key] = null;
       } else {
-        delete appState.emojiChoices.people[emojiTarget.key];
+        appState.emojiChoices.people[emojiTarget.key] = null;
       }
+      saveEmojiChoiceToCloud(emojiTarget.type, emojiTarget.key, null);
       persistLocalState();
       closeBalancesOverlays();
       renderAll();
@@ -8804,6 +8859,7 @@
       if (!fx || !currentUser) return;
       saveFriendsRosterToCloud();
       saveDeletedGroupsToCloud();
+      flushPendingEmojiChoices();
       if (options.all) pushAllDirectPairs();
       else flushDirtyDirectPairs();
       // Lifecycle repair: diff each group against its last snapshot. Clean
