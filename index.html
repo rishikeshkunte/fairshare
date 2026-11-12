@@ -1030,7 +1030,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v126";
+    const APP_BUILD = "v127";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3307,10 +3307,17 @@
       });
     }
 
+    function groupKeyFor(groupId) {
+      if (!groupId) return "";
+      if (appState.groups[groupId]) return groupId;
+      const match = Object.entries(appState.groups || {}).find(([, group]) => group && group.id === groupId);
+      return match ? match[0] : "";
+    }
+
     function renderGroupSelector() {
       if (groupSelector) groupSelector.innerHTML = "";
       if (expenseGroupSelect) expenseGroupSelect.innerHTML = "";
-      const groups = Object.values(appState.groups);
+      const groups = Object.entries(appState.groups || {});
       [groupSelector, expenseGroupSelect].forEach(select => {
         if (!select) return;
         select.disabled = groups.length === 0;
@@ -3319,13 +3326,13 @@
           select.appendChild(opt);
         }
       });
-      groups.forEach(grp => {
+      groups.forEach(([groupId, grp]) => {
         [groupSelector, expenseGroupSelect].forEach(select => {
           if (!select) return;
           const opt = document.createElement("option");
-          opt.value = grp.id;
+          opt.value = groupId;
           opt.textContent = `${grp.name} (${grp.currency})`;
-          if (grp.id === appState.activeGroupId) opt.selected = true;
+          if (groupId === appState.activeGroupId) opt.selected = true;
           select.appendChild(opt);
         });
       });
@@ -3333,33 +3340,41 @@
       if (homeGroupName) homeGroupName.textContent = groups.length ? getGroup().name : "No groups yet";
     }
 
-    function renderGroupTabs(groups = Object.values(appState.groups)) {
+    function renderGroupTabs(groupEntries = Object.entries(appState.groups || {})) {
       if (!groupTabs) return;
-      groupTabs.innerHTML = "";
-      if (!groups.length) {
-        const empty = document.createElement("div");
-        empty.className = "group-tabs-empty";
-        empty.textContent = "No groups yet";
-        groupTabs.appendChild(empty);
+      if (!groupEntries.length) {
+        groupTabs.innerHTML = `<div class="group-tabs-empty">No groups yet</div>`;
         return;
       }
-      // One picker replaces the old tab strip: choosing a group makes it the
-      // selected group everywhere, and Manage works on that selection.
-      const picker = document.createElement("select");
-      picker.id = "groups-page-picker";
-      picker.className = "groups-page-picker";
-      picker.setAttribute("aria-label", "Select a group");
-      groups.forEach(group => {
-        const option = document.createElement("option");
-        option.value = group.id;
-        option.textContent = `${group.name} (${group.currency || ""})`.trim();
-        option.selected = group.id === appState.activeGroupId;
-        picker.appendChild(option);
-      });
-      picker.addEventListener("change", (event) => {
-        if (event.target.value) switchActiveGroup(event.target.value);
-      });
-      groupTabs.appendChild(picker);
+      // Keep the picker element stable: replacing a focused select inside its
+      // own change handler can drop the selection on some browsers.
+      let picker = groupTabs.querySelector("#groups-page-picker");
+      if (!picker) {
+        groupTabs.innerHTML = "";
+        picker = document.createElement("select");
+        picker.id = "groups-page-picker";
+        picker.className = "groups-page-picker";
+        picker.setAttribute("aria-label", "Select a group");
+        picker.addEventListener("change", (event) => {
+          if (event.target.value) switchActiveGroup(event.target.value);
+        });
+        groupTabs.appendChild(picker);
+      }
+      const signature = groupEntries
+        .map(([groupId, group]) => `${groupId}:${group.name}:${group.currency || ""}`)
+        .join("|");
+      if (picker.dataset.signature !== signature) {
+        picker.innerHTML = "";
+        groupEntries.forEach(([groupId, group]) => {
+          const option = document.createElement("option");
+          option.value = groupId;
+          option.textContent = `${group.name} (${group.currency || ""})`.trim();
+          picker.appendChild(option);
+        });
+        picker.dataset.signature = signature;
+      }
+      const activeKey = groupKeyFor(appState.activeGroupId) || groupEntries[0][0];
+      picker.value = activeKey;
     }
 
     function renderManageGroupSelector() {
@@ -3461,19 +3476,20 @@
     }
 
     function switchActiveGroup(groupId, options = {}) {
-      if (!groupId || !appState.groups[groupId]) return;
+      const key = groupKeyFor(groupId);
+      if (!key) return;
       if (!options.keepManaged) managedGroupId = "";
-      appState.activeGroupId = groupId;
+      appState.activeGroupId = key;
       if (typeof cancelEditMode === "function") cancelEditMode();
       saveState();
       renderAll();
-      if (typeof listenToCloudGroup === "function") listenToCloudGroup(groupId);
+      if (typeof listenToCloudGroup === "function") listenToCloudGroup(key);
       if (quotaSaver) {
         for (const [id, unsubscribe] of Array.from(normalizedUnsubs.entries())) {
-          if (id !== groupId) unsubscribe();
+          if (id !== key) unsubscribe();
         }
       }
-      if (typeof listenToNormalizedGroup === "function") listenToNormalizedGroup(groupId);
+      if (typeof listenToNormalizedGroup === "function") listenToNormalizedGroup(key);
     }
 
     if (groupSelector) {
@@ -5174,9 +5190,10 @@
 
       // 1. Sum your net position across every group, not only the selected group.
       Object.values(appState.groups).forEach(group => {
+        if (!group) return;
         const groupBalances = {};
-        group.members.forEach(member => { groupBalances[member] = 0; });
-        group.transactions.forEach(tx => {
+        (group.members || []).forEach(member => { groupBalances[member] = 0; });
+        (group.transactions || []).forEach(tx => {
           if (tx.type === "expense") {
             if (groupBalances[tx.payer] !== undefined) groupBalances[tx.payer] += Number(tx.amount) || 0;
             Object.entries(tx.shares || {}).forEach(([member, share]) => {
@@ -5608,7 +5625,7 @@
       Object.values(appState.groups || {}).forEach(group => {
         if (!group?.members?.length) return;
         const myName = getMyGroupMemberName(group);
-        const debts = group.simplifyDebts !== false
+        const debts = group.simplifyDebts !== false || !Array.isArray(group.transactions)
           ? simplifiedDebts(netBalances(group))
           : pairwiseDebts(group);
         debts.forEach(debt => {

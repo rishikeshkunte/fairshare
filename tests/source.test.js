@@ -336,6 +336,13 @@ test("invite rules validate tokens, expiry, revocation, and use", () => {
   assert.match(rules, /inviteToken/);
 });
 
+test("group picker uses map keys and keeps the select element stable", () => {
+  assert.match(html, /function groupKeyFor\(groupId\)/);
+  assert.match(html, /const key = groupKeyFor\(groupId\)/);
+  assert.match(html, /let picker = groupTabs\.querySelector\("#groups-page-picker"\)/);
+  assert.match(html, /picker\.value = activeKey/);
+});
+
 test("group management requires an explicit group selection", () => {
   assert.match(html, /id="manage-group-select"/);
   assert.match(html, /<option value="">Choose a group\.\.\.<\/option>/);
