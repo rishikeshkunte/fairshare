@@ -336,11 +336,11 @@ test("invite rules validate tokens, expiry, revocation, and use", () => {
   assert.match(rules, /inviteToken/);
 });
 
-test("group picker uses map keys and keeps the select element stable", () => {
+test("group chips use map keys and stable identity", () => {
   assert.match(html, /function groupKeyFor\(groupId\)/);
   assert.match(html, /const key = groupKeyFor\(groupId\)/);
-  assert.match(html, /let picker = groupTabs\.querySelector\("#groups-page-picker"\)/);
-  assert.match(html, /picker\.value = activeKey/);
+  assert.match(html, /button\.dataset\.groupId = groupId/);
+  assert.match(html, /groupEmoji\(group\.name\)/);
 });
 
 test("group management requires an explicit group selection", () => {
@@ -841,9 +841,10 @@ test("normalized ledger documents replace instead of merging stale share keys", 
   assert.ok(html.includes("signature, merge: true"));
 });
 
-test("groups page uses a picker with an in-tab manage panel", () => {
+test("groups page uses scannable group chips with an in-tab manage panel", () => {
   assert.match(html, /data-call="openGroupManagement"/);
-  assert.match(html, /picker\.id = "groups-page-picker"/);
+  assert.match(html, /className = "group-chip"/);
+  assert.match(html, /button\.addEventListener\("click", \(\) => switchActiveGroup\(groupId\)\)/);
   assert.match(html, /window\.openGroupManagement = function\(\)/);
   assert.match(html, /managedGroupId = id;/);
 });

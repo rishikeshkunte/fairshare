@@ -210,6 +210,26 @@ h1, h2, h3, .brand-title, .dash-card-title, .metric-val, #home-standing-text, #f
   width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 11px;
   background: var(--surface-solid); color: var(--text); font-size: .92rem; font-weight: 600;
 }
+.group-chip {
+  display: flex; align-items: center; gap: 10px;
+  min-width: 190px; padding: 10px 12px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface-solid); color: var(--text);
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.group-chip:hover { border-color: color-mix(in srgb, var(--primary) 30%, var(--line)); transform: translateY(-1px); }
+.group-chip.is-active {
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--line));
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface-solid));
+}
+.group-chip-emoji {
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: 12px;
+  display: grid; place-items: center; font-size: 1.2rem;
+  background: var(--box-bg);
+}
+.group-chip-text { display: flex; flex-direction: column; min-width: 0; }
+.group-chip-text strong { font-size: .88rem; overflow-wrap: anywhere; }
+.group-chip-text span { color: var(--muted); font-size: .72rem; }
 .group-tab, .group-tab-add {
   width:auto; min-width:120px; max-width:240px; display:block; padding:9px 14px; border:1px solid var(--line);
   border-radius:11px; background:var(--surface-solid); color:var(--muted); text-align:left;
@@ -809,6 +829,7 @@ mark { background: #fde68a; color: inherit; border-radius: 4px; padding: 0 2px; 
   .global-theme-toggle-slot .btn { width:auto; min-height:40px; padding:8px 10px; }
   .group-tabs { flex-wrap: nowrap; overflow-x:auto; padding-bottom:5px; }
   .group-tab { max-width:180px; flex:0 0 auto; }
+  .group-chip { flex:0 0 auto; min-width:170px; }
   .workspace { padding: 16px 14px 108px; }
   .mobile-bottom-nav { display: flex; }
   .expense-fab-wrap { left:16px; right:auto; bottom:calc(84px + env(safe-area-inset-bottom)); }

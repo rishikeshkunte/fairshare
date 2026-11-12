@@ -1063,7 +1063,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v140";
+    const APP_BUILD = "v141";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -3426,37 +3426,42 @@
       if (!groupTabs) return;
       if (!groupEntries.length) {
         groupTabs.innerHTML = `<div class="group-tabs-empty">No groups yet</div>`;
+        groupTabs.dataset.signature = "";
         return;
       }
-      // Keep the picker element stable: replacing a focused select inside its
-      // own change handler can drop the selection on some browsers.
-      let picker = groupTabs.querySelector("#groups-page-picker");
-      if (!picker) {
-        groupTabs.innerHTML = "";
-        picker = document.createElement("select");
-        picker.id = "groups-page-picker";
-        picker.className = "groups-page-picker";
-        picker.setAttribute("aria-label", "Select a group");
-        picker.addEventListener("change", (event) => {
-          if (event.target.value) switchActiveGroup(event.target.value);
-        });
-        groupTabs.appendChild(picker);
-      }
-      const signature = groupEntries
-        .map(([groupId, group]) => `${groupId}:${group.name}:${group.currency || ""}`)
+      const sorted = [...groupEntries]
+        .filter(([, group]) => group && group.name)
+        .sort(([, a], [, b]) => String(a.name || "").localeCompare(String(b.name || "")));
+      const signature = sorted
+        .map(([groupId, group]) => `${groupId}:${group.name}:${group.currency || ""}:${(group.members || []).length}`)
         .join("|");
-      if (picker.dataset.signature !== signature) {
-        picker.innerHTML = "";
-        groupEntries.forEach(([groupId, group]) => {
-          const option = document.createElement("option");
-          option.value = groupId;
-          option.textContent = `${group.name} (${group.currency || ""})`.trim();
-          picker.appendChild(option);
+      if (groupTabs.dataset.signature !== signature) {
+        groupTabs.innerHTML = "";
+        sorted.forEach(([groupId, group]) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "group-chip";
+          button.dataset.groupId = groupId;
+          button.setAttribute("role", "tab");
+          const memberCount = (group.members || []).length;
+          button.innerHTML = `
+            <span class="group-chip-emoji" aria-hidden="true">${groupEmoji(group.name)}</span>
+            <span class="group-chip-text">
+              <strong>${escapeHtml(group.name)}</strong>
+              <span>${memberCount} ${memberCount === 1 ? "person" : "people"} · ${escapeHtml(group.currency || "₹")}</span>
+            </span>
+          `;
+          button.addEventListener("click", () => switchActiveGroup(groupId));
+          groupTabs.appendChild(button);
         });
-        picker.dataset.signature = signature;
+        groupTabs.dataset.signature = signature;
       }
-      const activeKey = groupKeyFor(appState.activeGroupId) || groupEntries[0][0];
-      picker.value = activeKey;
+      const activeKey = groupKeyFor(appState.activeGroupId) || sorted[0][0];
+      groupTabs.querySelectorAll(".group-chip").forEach(button => {
+        const active = button.dataset.groupId === activeKey;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
     }
 
     function renderManageGroupSelector() {
@@ -5766,6 +5771,17 @@
       let hash = 0;
       for (const char of String(name || "?")) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
       return AVATAR_EMOJIS[hash % AVATAR_EMOJIS.length];
+    }
+
+    const GROUP_EMOJIS = [
+      "🏖️", "🏠", "🍕", "🎉", "✈️", "🚗",
+      "🎓", "💼", "🧾", "🏕️", "🎬", "🛒"
+    ];
+
+    function groupEmoji(name) {
+      let hash = 0;
+      for (const char of String(name || "?")) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+      return GROUP_EMOJIS[hash % GROUP_EMOJIS.length];
     }
 
     function avatarTone(name) {
