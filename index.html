@@ -323,13 +323,6 @@
 
   <!-- ================= PAGE 3: BALANCES & SETTLE ================= -->
   <section id="page-balances" class="app-page">
-    <div class="balances-page-head home-section-heading">
-      <div>
-        <span class="eyebrow">Balances</span>
-        <h1>Balances &amp; settlements</h1>
-        <p class="section-hint">Pick a scope, then record the payment once.</p>
-      </div>
-    </div>
     <div class="page-back-bar">
       <button type="button" class="btn btn-settle" style="padding:6px 12px; font-size:0.82rem;" data-call="openSettleUp">Record a payment</button>
     </div>
@@ -1037,7 +1030,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v125";
+    const APP_BUILD = "v126";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2190,7 +2183,7 @@
         balancesPage.querySelector(".btn-back-home")?.remove();
         const heading = document.createElement("div");
         heading.className = "home-section-heading";
-        heading.innerHTML = "<div><span class='eyebrow'>Your balances</span><h2>Balances & settlements</h2><span id='balances-group-scope' class='section-hint'>Active group</span></div>";
+        heading.innerHTML = "<div><span class='eyebrow'>Overview</span><h2>Balances & settlements</h2><span id='balances-group-scope' class='section-hint'>Active group</span></div>";
         balancesPage.prepend(heading);
         homePage.appendChild(balancesPage);
       }

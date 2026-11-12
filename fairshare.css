@@ -1706,9 +1706,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 /* --- Responsive balances: two panes on desktop, one-tap sections on mobile --- */
 .balances-summary-strip { margin: 0 0 16px; }
-.balances-page-head { align-items: flex-end; }
-.balances-page-head h1 { margin: 2px 0 0; font-size: 1.8rem; letter-spacing: -0.03em; }
-.balances-page-head .section-hint { margin: 4px 0 0; }
 .balances-summary-strip .summary-grid { margin: 0; }
 .balances-collapse-btn {
   display: none; width: 100%; align-items: center; justify-content: space-between;
