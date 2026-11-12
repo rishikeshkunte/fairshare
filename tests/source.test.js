@@ -370,7 +370,7 @@ test("groups page shows its own expense totals and balances", () => {
   assert.match(render, /netBalances\(g\)/);
   assert.match(render, /simplifiedDebts/);
   assert.match(render, /group-expenses-recent/);
-  assert.match(html, /renderGroupExpenseSummary\(\);/);
+  assert.match(html, /renderGroupExpenseSummary/);
 });
 
 test("balances and settlement layout adapts across desktop, tablet, and mobile", () => {

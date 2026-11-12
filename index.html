@@ -1030,7 +1030,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v130";
+    const APP_BUILD = "v131";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -5014,16 +5014,18 @@
       renderAll();
     }
 
-    if (balancesScopeSelect) {
-      balancesScopeSelect.addEventListener("change", (event) => setBalancesScope(event.target.value));
-    }
-
-    if (settlementVisibilitySelect) {
-      settlementVisibilitySelect.addEventListener("change", (event) => {
+    // Delegated listeners keep working even if the page-preparation pass moves
+    // or rebuilds these selects. A direct listener on the original element can
+    // be lost when the element is re-parented.
+    document.addEventListener("change", (event) => {
+      const id = event.target && event.target.id;
+      if (id === "balances-scope-select") {
+        setBalancesScope(event.target.value);
+      } else if (id === "settlement-visibility") {
         settlementVisibility = event.target.value === "all" ? "all" : "mine";
         renderAll();
-      });
-    }
+      }
+    });
 
     function buildScopedPeople(data) {
       const people = new Map();
@@ -5503,7 +5505,7 @@
       const items = [];
       data.groups.forEach(group => {
         if (!group) return;
-        const debts = group.simplifyDebts !== false
+        const debts = group.simplifyDebts !== false || !Array.isArray(group.members) || !Array.isArray(group.transactions)
           ? simplifiedDebts(netBalances(group))
           : pairwiseDebts(group);
         debts.forEach(debt => {
@@ -6526,6 +6528,8 @@
 
     function renderMembers() {
       const g = getGroup();
+      if (!Array.isArray(g.members)) g.members = [];
+      if (!Array.isArray(g.transactions)) g.transactions = [];
       if (memberCountSpan) memberCountSpan.textContent = g.members.length;
       if (membersContainer) {
         membersContainer.innerHTML = "";
@@ -6626,32 +6630,44 @@
       renderFriendPickerDropdown();
     }
 
+    function safeRender(label, fn) {
+      try {
+        fn();
+      } catch (err) {
+        console.warn(`Render note (${label}):`, err);
+      }
+    }
+
     function renderAll() {
       // A snapshot-driven render must not tear down the field the user is
       // typing in: on mobile that dismisses the soft keyboard mid-entry.
       const activeElement = document.activeElement;
       const typingInExpenseForm = Boolean(activeElement && activeElement.closest
         && activeElement.closest("#expense-form"));
-      const activeGroupForRepair = appState.groups[appState.activeGroupId];
-      if (activeGroupForRepair && !activeGroupForRepair.normalizedVersion) {
-        let groupRepaired = false;
-        if (migrateGroupSelfName(activeGroupForRepair)) groupRepaired = true;
-        if (repairGroupIdentity(activeGroupForRepair)) groupRepaired = true;
-        if (repairGroupMoney(activeGroupForRepair)) groupRepaired = true;
-        if (groupRepaired) persistLocalState();
+      try {
+        const activeGroupForRepair = appState.groups[appState.activeGroupId];
+        if (activeGroupForRepair && !activeGroupForRepair.normalizedVersion) {
+          let groupRepaired = false;
+          if (migrateGroupSelfName(activeGroupForRepair)) groupRepaired = true;
+          if (repairGroupIdentity(activeGroupForRepair)) groupRepaired = true;
+          if (repairGroupMoney(activeGroupForRepair)) groupRepaired = true;
+          if (groupRepaired) persistLocalState();
+        }
+        if (reconcileDirectFriendNames()) persistLocalState();
+        // Repairs are local. Pushing 1-on-1 ledgers from here ran inside snapshot
+        // listeners (renderAll is called by every listener); the lifecycle flush
+        // uploads repaired pairs instead.
+        if (repairDirectMoney()) persistLocalState();
+      } catch (err) {
+        console.warn("Repair note:", err);
       }
-      if (reconcileDirectFriendNames()) persistLocalState();
-      // Repairs are local. Pushing 1-on-1 ledgers from here ran inside snapshot
-      // listeners (renderAll is called by every listener); the lifecycle flush
-      // uploads repaired pairs instead.
-      if (repairDirectMoney()) persistLocalState();
-      renderDirectFriendDropdown();
-      applyTheme();
-      renderGroupSelector();
-      renderManageGroupSelector();
+      safeRender("direct-dropdown", renderDirectFriendDropdown);
+      safeRender("theme", applyTheme);
+      safeRender("group-selector", renderGroupSelector);
+      safeRender("manage-selector", renderManageGroupSelector);
       const syncBuild = document.getElementById("sync-build-label");
       if (syncBuild) syncBuild.textContent = `Build ${APP_BUILD}`;
-      updateSyncHealth();
+      safeRender("sync-health", updateSyncHealth);
 
       const groups = Object.values(appState.groups);
       const g = getGroup();
@@ -6680,13 +6696,13 @@
       }
       currencyLabels.forEach(el => el.textContent = g.currency);
 
-      if (!typingInExpenseForm) renderMembers();
-      renderBalancesAndSettlements();
-      renderHomeSummary();
-      renderGroupExpenseSummary();
-      renderAnalytics();
-      renderTransactions();
-      renderFriendsRoster();
+      safeRender("members", () => { if (!typingInExpenseForm) renderMembers(); });
+      safeRender("balances", renderBalancesAndSettlements);
+      safeRender("home", renderHomeSummary);
+      safeRender("group-summary", renderGroupExpenseSummary);
+      safeRender("analytics", renderAnalytics);
+      safeRender("transactions", renderTransactions);
+      safeRender("friends", renderFriendsRoster);
     }
 
     // --- Firebase Auth & Firestore Sync (loaded only for sign-in) ---
