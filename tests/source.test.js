@@ -277,7 +277,7 @@ test("group sync can be repaired from cloud", () => {
 });
 
 test("maintenance controls are not exposed to users", () => {
-  assert.doesNotMatch(html, /data-call="syncNow"/);
+  assert.match(html, /data-call="syncNow"/);
   assert.doesNotMatch(html, /data-call="refreshAppData"/);
   assert.doesNotMatch(html, /data-call="pullAllGroupsFromCloud"/);
   assert.doesNotMatch(html, /data-call="purgeDeletedGroupsFromCloud"/);
@@ -519,7 +519,7 @@ test("receipt reconciliation preserves local receipt fields", () => {
   assert.match(html, /import\s*\{[^}]*\bpreserveLocalReceipts\b[^}]*\}\s*from "\.\/js\/sync\.js"/);
   assert.match(sync, /export function preserveLocalReceipts/);
   assert.match(html, /preserveLocalReceipts\(reconciled\.transactions, localTransactions\)/);
-  assert.match(html, /preserveLocalReceipts\(merged\.transactions, group\.transactions \|\| \[\]\)/);
+  assert.match(html, /preserveLocalReceipts\(reconciled\.transactions, group\.transactions \|\| \[\]\)/);
   assert.match(html, /preserveLocalReceipts\(next\.directTransactions, localDirectTransactions\)/);
 });
 
@@ -898,6 +898,7 @@ test("settlement controls live in the settlements card", () => {
 test("inactive group ledgers refresh without background listeners", () => {
   assert.ok(html.includes("async function refreshInactiveGroupLedgers(options = {})"));
   assert.ok(html.includes("refreshInactiveGroupLedgers({ groupId })"));
-  assert.ok(html.includes("lastInactiveRefreshAt < 5 * 60 * 1000"));
+  assert.ok(html.includes("lastInactiveRefreshAt < 60 * 1000"));
+  assert.ok(html.includes("mergeNormalizedTransactions({"));
   assert.ok(html.includes("localGroup._cloudNormAt"));
 });

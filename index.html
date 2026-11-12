@@ -622,6 +622,10 @@
         <p class="group-hint" style="margin-top:8px;">Saves a JSON copy of your groups, expenses, settlements and contacts.</p>
       </div>
       <div style="margin-top:14px;">
+        <button type="button" class="btn btn-secondary" data-call="syncNow">Sync now</button>
+        <p class="group-hint" id="last-synced-label" style="margin-top:8px;">Not synced yet.</p>
+      </div>
+      <div style="margin-top:14px;">
         <button type="button" class="btn btn-secondary" data-call="promptPwaInstall" id="pwa-install-you">Install app</button>
         <p class="group-hint" style="margin-top:8px;" id="pwa-install-note">Add What's My Share? to your home screen for one-tap access and offline use.</p>
       </div>
@@ -1059,7 +1063,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v139";
+    const APP_BUILD = "v140";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2245,6 +2249,9 @@
         document.getElementById("home-balance-details")?.scrollIntoView({ behavior: "smooth", block: "start" });
       } else {
         window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      if (requestedPage === "home" || requestedPage === "balances") {
+        refreshInactiveGroupLedgers().catch(err => console.warn("Group refresh note:", err));
       }
     };
 
@@ -5307,9 +5314,9 @@
       let overallOwed = 0;
       let overallOwe = 0;
 
-      // 1. Sum your net position across every group, not only the selected group.
+      // 1. Sum your net position across every group in the active currency.
       Object.values(appState.groups).forEach(group => {
-        if (!group) return;
+        if (!group || (group.currency || "₹") !== homeCur) return;
         const groupBalances = {};
         (group.members || []).forEach(member => { groupBalances[member] = 0; });
         (group.transactions || []).forEach(tx => {
@@ -6866,6 +6873,7 @@
       const syncBuild = document.getElementById("sync-build-label");
       if (syncBuild) syncBuild.textContent = `Build ${APP_BUILD}`;
       safeRender("sync-health", updateSyncHealth);
+      safeRender("last-sync", updateLastSyncLabel);
 
       const groups = Object.values(appState.groups);
       const g = getGroup();
@@ -7355,6 +7363,7 @@
           persistLocalState();
           renderAll();
         }
+        refreshInactiveGroupLedgers().catch(err => console.warn("Group refresh note:", err));
       }, (err) => {
         console.warn("Cloud group discovery note:", err?.code || err);
         setCloudSyncStatus(`Cloud sync failed: ${err?.code || "unknown error"}`);
@@ -7382,6 +7391,7 @@
           if (currentUser?.uid === user.uid) window.runNormalizedMigration({ quiet: true });
         }, 20000);
       }
+      refreshInactiveGroupLedgers().catch(err => console.warn("Group refresh note:", err));
     }
 
     window.reloadGroupFromCloud = async function() {
@@ -8430,19 +8440,20 @@
     // (and therefore Home's overall balance) would stay stale until opened.
     // Refresh them with one-off reads on lifecycle events, throttled.
     let lastInactiveRefreshAt = 0;
+    let lastCloudRefreshAt = 0;
     async function refreshInactiveGroupLedgers(options = {}) {
       if (!fx || !currentUser) return;
       const onlyGroupId = String(options.groupId || '');
+      const force = Boolean(options.force);
       if (!onlyGroupId) {
         const now = Date.now();
-        if (now - lastInactiveRefreshAt < 5 * 60 * 1000) return;
+        if (!force && now - lastInactiveRefreshAt < 60 * 1000) return;
         lastInactiveRefreshAt = now;
       }
       let changed = false;
       for (const group of Object.values(appState.groups || {})) {
         if (!group || !group.id || !group.normalizedVersion) continue;
         if (onlyGroupId && group.id !== onlyGroupId) continue;
-        if (group.id === appState.activeGroupId) continue;
         if (normalizedUnsubs.has(group.id)) continue;
         try {
           const ref = fx.storeMod.doc(fx.db, "groups", group.id);
@@ -8455,13 +8466,12 @@
           const expenseDocs = expenseSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           const settlementDocs = settlementSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           const projected = projectGroupTransactions({ memberDocs, expenseDocs, settlementDocs });
-          const merged = mergePairLedger({
+          const reconciled = mergeNormalizedTransactions({
+            projected,
             localTransactions: group.transactions || [],
-            remoteTransactions: projected,
-            localDeleted: group.deletedTransactions || [],
-            remoteDeleted: []
+            deletedDocs: [...expenseDocs, ...settlementDocs]
           });
-          const nextTransactions = preserveLocalReceipts(merged.transactions, group.transactions || []);
+          const nextTransactions = preserveLocalReceipts(reconciled.transactions, group.transactions || []);
           if (stableStringify(nextTransactions) !== stableStringify(group.transactions || [])) {
             group.transactions = nextTransactions;
             changed = true;
@@ -8488,7 +8498,40 @@
         persistLocalState();
         renderAll();
       }
+      lastCloudRefreshAt = Date.now();
+      updateLastSyncLabel();
     }
+
+    function updateLastSyncLabel() {
+      const label = document.getElementById("last-synced-label");
+      if (!label) return;
+      if (!lastCloudRefreshAt) {
+        label.textContent = "Not synced yet.";
+        return;
+      }
+      const seconds = Math.max(0, Math.round((Date.now() - lastCloudRefreshAt) / 1000));
+      label.textContent = seconds < 60
+        ? "Last synced just now."
+        : `Last synced ${Math.round(seconds / 60)} min ago.`;
+    }
+
+    window.syncNow = async function () {
+      if (!fx || !currentUser) {
+        toast("Sign in with Gmail to sync.");
+        return;
+      }
+      toast("Syncing with the cloud…");
+      try {
+        await refreshInactiveGroupLedgers({ force: true });
+        flushPendingLocalMutations();
+        syncUserCloud(currentUser);
+        renderAll();
+        toast("Synced.");
+      } catch (err) {
+        console.warn("Sync now note:", err);
+        toast("Sync failed. Please try again.");
+      }
+    };
 
     function flushPendingLocalMutations(options = {}) {
       if (!fx || !currentUser) return;
