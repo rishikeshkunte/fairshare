@@ -1055,7 +1055,7 @@
     import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, stripReceiptBytes, newId } from "./js/money.js";
     import { toast, askConfirm, askPrompt } from "./js/ui.js";
     import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, cloudIntent, setCloudIntent } from "./js/firebase.js";
-    import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, mergePairLedger, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
+    import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
     import { repairGroupNames } from "./js/groupnames.js";
     import { normalizeLegacyGroup, validateNormalizedGroup } from "./js/groupschema.js";
     import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, mergeNormalizedTransactions, stableStringify } from "./js/normalizedsync.js";
@@ -1115,7 +1115,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v152";
+    const APP_BUILD = "v153";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -5143,7 +5143,6 @@
           if (expenseDateInput) expenseDateInput.value = todayISO();
           categoryManuallyOverridden = false;
           updateCatBadge(null);
-          if (btnClearReceipt) btnClearReceipt.click();
         }
 
         saveState();
@@ -5164,7 +5163,6 @@
       showExpenseError("");
       categoryManuallyOverridden = false;
       updateCatBadge(null);
-      if (btnClearReceipt) btnClearReceipt.click();
     };
 
     if (btnCancelEdit) btnCancelEdit.addEventListener("click", cancelEditMode);
@@ -7684,12 +7682,7 @@
               ownerEmail: cloudData.ownerEmail || null,
               normalizedVersion: cloudData.normalizedVersion || 0,
               simplifyDebts: cloudData.simplifyDebts !== false,
-              transactions: mergePairLedger({
-                localTransactions: [],
-                remoteTransactions: migrated.transactions || [],
-                localDeleted: [],
-                remoteDeleted: cloudData.deletedTransactions || []
-              }).transactions,
+              transactions: [],
               deletedTransactions: Array.isArray(cloudData.deletedTransactions) ? cloudData.deletedTransactions : []
             };
             changed = true;

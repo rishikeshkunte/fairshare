@@ -93,7 +93,7 @@ test("group discovery rules restrict reads to signed-in group members", () => {
 
 test("shared expense sync uses transactional merges and stable participant identities", () => {
   assert.match(html, /runTransaction\(fx\.db, async transaction/);
-  assert.match(html, /mergePairLedger\(/);
+  assert.match(sync, /export function mergePairLedger/);
   assert.match(html, /buildPairWritePayload\(/);
   assert.match(html, /participantKeys/);
   assert.match(sync, /export function canonicalizePairTransaction/);
@@ -470,7 +470,7 @@ test("direct expense deletion persists its tombstone before syncing the shared l
 });
 
 test("shared ledgers use the timestamp-aware merge from the sync module", () => {
-  assert.match(html, /mergePairLedger\(/);
+  assert.match(html, /applyRemotePair\(/);
   assert.doesNotMatch(html, /function mergeTransactionsWithDeletes/);
   assert.match(sync, /export function mergePairLedger/);
   assert.match(sync, /Number\(tomb\.deletedAt \|\| 0\) >= txStamp\(tx\)/);
@@ -489,7 +489,7 @@ test("Gmail linking upgrades a same-name local friend without an email", () => {
 test("application wires the shared direct-pair sync module instead of inline merge logic", () => {
   assert.match(html, /import\s*\{[^}]*\bapplyRemotePair\b[^}]*\}\s*from\s*"\.\/js\/sync\.js"/);
   assert.match(html, /import\s*\{[^}]*\bbuildPairWritePayload\b[^}]*\}\s*from\s*"\.\/js\/sync\.js"/);
-  assert.match(html, /import\s*\{[^}]*\bmergePairLedger\b[^}]*\}\s*from\s*"\.\/js\/sync\.js"/);
+  assert.match(sync, /mergePairLedger\(\{/);
   assert.match(html, /function refreshDirectListeners\(\)[\s\S]*?applyRemotePair\(/);
   assert.match(html, /remotePairNeedsPush\(/);
   assert.match(html, /buildPairWritePayload\(/);
@@ -521,7 +521,12 @@ test("direct-pair rules derive canonical membership from the auth token and stab
 
 test("receipt UI and the scan-bill integration are removed", () => {
   assert.doesNotMatch(html, /GOOGLE_VISION_API_KEY|vision\.googleapis\.com|scanReceiptImage|parseReceiptText|receipt-scan-status|detected-amounts-wrapper|Scan bill receipt/i);
-  assert.doesNotMatch(html, /receipt-file|receipt-dropzone|receipt-thumb|btn-clear-receipt|data-receipt|Receipt photo|activeReceiptBase64|uploadReceipt|safeImageSrc/i);
+  assert.doesNotMatch(html, /receipt-file|receipt-dropzone|receipt-thumb|btn-clear-receipt|data-receipt|Receipt photo|activeReceiptBase64|uploadReceipt|safeImageSrc|btnClearReceipt/i);
+});
+
+test("a newly discovered group starts empty instead of reading an undefined legacy ledger", () => {
+  assert.doesNotMatch(html, /migrated\.transactions/);
+  assert.match(html, /transactions: \[\],\s*deletedTransactions: Array\.isArray\(cloudData\.deletedTransactions\)/);
 });
 
 test("receipt reconciliation preserves local receipt fields", () => {
