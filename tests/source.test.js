@@ -931,7 +931,7 @@ test("revoked membership is retired, ignored by claims, and pruned locally", () 
   const verify = html.slice(html.indexOf("async function verifyMissingCloudGroups"), html.indexOf("async function claimPendingMemberships"));
   assert.match(verify, /snapshot\.metadata\.fromCache/);
   assert.match(verify, /navigator\.onLine === false/);
-  assert.match(verify, /getDoc\(fx\.storeMod\.doc\(fx\.db, "groups", groupId\)\)/);
+  assert.match(verify, /getDocFromServer\(fx\.storeMod\.doc\(fx\.db, "groups", groupId\)\)/);
   assert.match(verify, /pruneGroupLocally\(groupId\)/);
   assert.match(html, /verifyMissingCloudGroups\(snapshot\);/);
   const prune = html.slice(html.indexOf("function pruneGroupLocally"), html.indexOf("if (btnDeleteGroup)"));

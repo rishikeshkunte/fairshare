@@ -1115,7 +1115,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v151";
+    const APP_BUILD = "v152";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -8612,7 +8612,7 @@
           if (!appState.groups[groupId]) continue;
           let action = "keep";
           try {
-            const snap = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "groups", groupId));
+            const snap = await fx.storeMod.getDocFromServer(fx.storeMod.doc(fx.db, "groups", groupId));
             action = missingGroupAction({
               exists: snap.exists(),
               data: snap.exists() ? (snap.data() || {}) : null,
