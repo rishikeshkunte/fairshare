@@ -32,13 +32,13 @@ test("marketing home has the conversion demos and a single primary CTA", () => {
   assert.match(marketing, /Start free with Gmail/);
   assert.match(marketing, /id="sticky-cta"/);
   assert.match(marketing, /js\/marketing\.js/);
-  assert.match(marketing, /id="hero-film"/);
-  assert.match(marketing, /id="film-toggle"/);
-  assert.match(marketing, /scene-settle/);
+  assert.match(marketing, /id="hero-visual"/);
+  assert.match(marketing, /id="phone-wrap"/);
+  assert.match(marketing, /id="hero-balance"/);
   assert.match(marketingJs, /intent=split&amount=/);
   assert.match(marketingJs, /track\("cta_click"/);
-  assert.match(marketingJs, /function showFilmScene/);
-  assert.match(marketingJs, /film_toggle/);
+  assert.match(marketingJs, /function animateHeroBalance/);
+  assert.match(marketingJs, /cycleHeroChips/);
 });
 
 test("content pages use the same primary CTA", () => {
