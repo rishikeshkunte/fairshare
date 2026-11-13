@@ -323,6 +323,32 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     await assertSucceeds(setDoc(doc(bobDb, "groups", "gclaim", "members", memberId), stamped({ uid: "bob" })));
   });
 
+  await t.test("a retired member document cannot be self-claimed", async () => {
+    const memberId = "email_bob_outlook_com";
+    await env.clearFirestore();
+    await seed(["groups", "gretired"], {
+      id: "gretired",
+      name: "Retired group",
+      currency: "INR",
+      members: ["Alice"],
+      memberUids: ["alice"],
+      transactions: [],
+      deletedTransactions: []
+    });
+    await seed(["groups", "gretired", "members", memberId], {
+      displayName: "Bob",
+      emailCanonical: BOB_KEY,
+      role: "member",
+      status: "removed"
+    });
+    await assertFails(updateDoc(doc(bobDb, "groups", "gretired"), stamped({
+      memberUids: ["alice", "bob"],
+      lastClaimMemberId: memberId,
+      updatedAt: Timestamp.now(),
+      updatedBy: BOB_RAW
+    })));
+  });
+
   await t.test("group access accepts memberUids when the email list is absent", async () => {
     await env.clearFirestore();
     await seed(["groups", "guid"], {

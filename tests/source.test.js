@@ -777,10 +777,12 @@ test("adding a connected friend to a group links their Gmail", () => {
   assert.match(add, /g\.memberLinks = \{ \.\.\.\(g\.memberLinks \|\| \{\}\), \[name\]: normalizeEmail\(linkedFriend\.email\) \}/);
 });
 
-test("stale name-only member documents are retired after an email link", () => {
-  assert.match(html, /if \(!id\.startsWith\("name_"\) \|\| planMemberIds\.has\(id\)\) continue;/);
-  assert.match(html, /planNameEmails\.has\(name\)/);
-  assert.match(html, /status: "removed", removedAt: Date\.now\(\)/);
+test("member documents missing from the plan are retired, including after an email link", () => {
+  assert.match(html, /if \(planMemberIds\.has\(id\)\) continue;/);
+  const start = html.indexOf("A member document that is no longer in the plan");
+  const retire = html.slice(start, html.indexOf("if (ops.length)", start));
+  assert.match(retire, /status: "removed", emailCanonical: "", removedAt: Date\.now\(\)/);
+  assert.match(retire, /merge: true/);
 });
 
 test("rules enforce the current-client write fence", () => {
@@ -913,4 +915,26 @@ test("inactive group ledgers refresh without background listeners", () => {
   assert.ok(html.includes("lastInactiveRefreshAt < 60 * 1000"));
   assert.ok(html.includes("mergeNormalizedTransactions({"));
   assert.ok(html.includes("localGroup._cloudNormAt"));
+});
+
+test("revoked membership is retired, ignored by claims, and pruned locally", () => {
+  assert.match(html, /import \{ isActiveMembershipDoc, memberDocumentMatchesRemoval, missingGroupAction \} from "\.\/js\/membership\.js"/);
+  assert.match(html, /async function retireMemberDocuments\(groupId, name, email, uid\)/);
+  const remove = html.slice(html.indexOf("window.removeMember = async function"), html.indexOf("window.linkMemberEmail"));
+  assert.match(remove, /await retireMemberDocuments\(g\.id, name, removedEmail, removedUid\)/);
+  const retire = html.slice(html.indexOf("async function retireMemberDocuments"), html.indexOf("function collectMemberUids"));
+  assert.match(retire, /status: "removed"/);
+  assert.match(retire, /emailCanonical: ""/);
+  assert.match(html, /if \(!isActiveMembershipDoc\(docSnap\.data\(\)\)\) return;/);
+  assert.match(html, /if \(groupId && isActiveMembershipDoc\(docSnap\.data\(\)\)\) pendingMembershipClaims\.set/);
+  assert.match(html, /async function verifyMissingCloudGroups\(snapshot\)/);
+  const verify = html.slice(html.indexOf("async function verifyMissingCloudGroups"), html.indexOf("async function claimPendingMemberships"));
+  assert.match(verify, /snapshot\.metadata\.fromCache/);
+  assert.match(verify, /navigator\.onLine === false/);
+  assert.match(verify, /getDoc\(fx\.storeMod\.doc\(fx\.db, "groups", groupId\)\)/);
+  assert.match(verify, /pruneGroupLocally\(groupId\)/);
+  assert.match(html, /verifyMissingCloudGroups\(snapshot\);/);
+  const prune = html.slice(html.indexOf("function pruneGroupLocally"), html.indexOf("if (btnDeleteGroup)"));
+  assert.match(prune, /return dropLocalGroup\(groupId, \{ tombstone: false \}\)/);
+  assert.doesNotMatch(prune, /deletedGroups/);
 });

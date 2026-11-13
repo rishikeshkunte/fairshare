@@ -1060,6 +1060,7 @@
     import { normalizeLegacyGroup, validateNormalizedGroup } from "./js/groupschema.js";
     import { projectGroupTransactions, projectGroupMembers, memberLinksFromDocs, mergeNormalizedTransactions, stableStringify } from "./js/normalizedsync.js";
     import { diffFriendsMap, friendsFromCloud, diffDeletedGroupsMap, deletedGroupsFromCloud } from "./js/profileschema.js";
+    import { isActiveMembershipDoc, memberDocumentMatchesRemoval, missingGroupAction } from "./js/membership.js";
 
     document.body.addEventListener("click", (event) => {
       const personNode = event.target.closest ? event.target.closest("[data-emoji-person]") : null;
@@ -1107,13 +1108,14 @@
     const membershipHydrated = new Set();
     const pendingMembershipClaims = new Map();
     let membershipClaimInFlight = false;
+    let missingGroupCheckInFlight = false;
     const normalizedWrittenByGroup = new Map();
     const normalizedHydrated = new Set();
     const quotaSaver = true;
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v150";
+    const APP_BUILD = "v151";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2601,6 +2603,9 @@
       const removedEmail = g.memberLinks?.[name];
       const removedUid = (removedEmail ? rosterUidForEmail(removedEmail) : "")
         || await memberUidFromDocs(g.id, name, removedEmail);
+      // Retire the member document before pruning the UID. A live document with
+      // this email would otherwise let the removed account claim the group back.
+      await retireMemberDocuments(g.id, name, removedEmail, removedUid);
       g.members = g.members.filter(m => m !== name);
       if (g.memberLinks) delete g.memberLinks[name];
       if (g.memberUids && removedUid) {
@@ -2753,6 +2758,29 @@
         return match?.data()?.uid ? String(match.data().uid) : "";
       } catch {
         return "";
+      }
+    }
+
+    async function retireMemberDocuments(groupId, name, email, uid) {
+      if (!fx || !currentUser || !groupId) return;
+      try {
+        const groupRef = fx.storeMod.doc(fx.db, "groups", groupId);
+        const snap = await fx.storeMod.getDocs(fx.storeMod.collection(groupRef, "members"));
+        const matches = snap.docs
+          .map(docSnap => ({ id: docSnap.id, data: docSnap.data() || {} }))
+          .filter(entry => memberDocumentMatchesRemoval(entry.data, { name, email, uid }));
+        if (!matches.length) return;
+        const removedBy = (currentUser.email || "").toLowerCase().trim();
+        for (const entry of matches) {
+          await fx.storeMod.setDoc(fx.storeMod.doc(groupRef, "members", entry.id), {
+            status: "removed",
+            emailCanonical: "",
+            removedAt: Date.now(),
+            removedBy
+          }, { merge: true }, { label: "member-retire" });
+        }
+      } catch (err) {
+        console.warn("Member retire note:", err?.code || err);
       }
     }
 
@@ -3890,21 +3918,41 @@
       });
     }
 
-    function removeGroupLocally(groupId) {
+    function dropLocalGroup(groupId, options = {}) {
       if (!groupId || !appState.groups[groupId]) return false;
       const normalizedUnsub = normalizedUnsubs.get(groupId);
       if (normalizedUnsub) normalizedUnsub();
-      appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(groupId)]));
+      const pendingWrite = normalizedWriteTimers.get(groupId);
+      if (pendingWrite) {
+        clearTimeout(pendingWrite);
+        normalizedWriteTimers.delete(groupId);
+      }
+      membershipHydrated.delete(groupId);
+      normalizedHydrated.delete(groupId);
+      normalizedWrittenByGroup.delete(groupId);
+      if (options.tombstone) {
+        appState.deletedGroups = Array.from(new Set([...(appState.deletedGroups || []), String(groupId)]));
+      }
       delete appState.groups[groupId];
       if (managedGroupId === groupId) managedGroupId = "";
       if (appState.activeGroupId === groupId) {
         appState.activeGroupId = Object.keys(appState.groups)[0] || null;
       }
       persistLocalState();
-      saveDeletedGroupsToCloud();
+      if (options.tombstone) saveDeletedGroupsToCloud();
       if (typeof listenToCloudGroup === "function") listenToCloudGroup(appState.activeGroupId);
       renderAll();
       return true;
+    }
+
+    function removeGroupLocally(groupId) {
+      return dropLocalGroup(groupId, { tombstone: true });
+    }
+
+    // Membership was revoked by another member. Remove the cached copy without
+    // a deletedGroups tombstone so a later invite can add this account back.
+    function pruneGroupLocally(groupId) {
+      return dropLocalGroup(groupId, { tombstone: false });
     }
 
     if (btnDeleteGroup) {
@@ -7705,6 +7753,7 @@
           persistLocalState();
           renderAll();
         }
+        verifyMissingCloudGroups(snapshot);
         refreshInactiveGroupLedgers().catch(err => console.warn("Group refresh note:", err));
       }, (err) => {
         console.warn("Cloud group discovery note:", err?.code || err);
@@ -8391,25 +8440,20 @@
       plan.members.forEach(member => put("members", member));
       plan.expenses.forEach(expense => put("expenses", expense));
       plan.settlements.forEach(settlement => put("settlements", settlement));
-      // When a member gains an email link, their document id changes from
-      // name_* to email_*. Retire the stale same-name document, otherwise the
-      // group projects two members with the same name.
+      // A member document that is no longer in the plan is retired, not left
+      // active. This covers a name_* document replaced by the same person's
+      // email_* document and a member removed from the group. Retiring also
+      // clears the email so the account cannot self-claim the group again, and
+      // survives retries because it is part of the normalized diff.
       const planMemberIds = new Set(plan.members.map(member => member.id));
-      const planNameEmails = new Map();
-      plan.members.forEach(member => {
-        if (!member.emailCanonical) return;
-        planNameEmails.set(String(member.displayName || "").trim().toLowerCase(), member.emailCanonical);
-      });
       for (const [key, signature] of Array.from(written.entries())) {
         if (!key.startsWith("members/")) continue;
         const id = key.slice("members/".length);
-        if (!id.startsWith("name_") || planMemberIds.has(id)) continue;
+        if (planMemberIds.has(id)) continue;
         let record = null;
         try { record = JSON.parse(signature); } catch { continue; }
-        if (!record || record.status === "removed" || record.emailCanonical) continue;
-        const name = String(record.displayName || "").trim().toLowerCase();
-        if (!name || !planNameEmails.has(name)) continue;
-        const retired = { status: "removed", removedAt: Date.now() };
+        if (!record || record.status === "removed") continue;
+        const retired = { status: "removed", emailCanonical: "", removedAt: Date.now() };
         ops.push({
           ref: fx.storeMod.doc(groupRef, "members", id),
           data: retired,
@@ -8512,6 +8556,7 @@
           const groupId = docSnap.ref.parent?.parent?.id;
           if (!groupId) return;
           if ((appState.deletedGroups || []).includes(groupId)) return;
+          if (!isActiveMembershipDoc(docSnap.data())) return;
           if (!appState.groups[groupId]) {
             appState.groups[groupId] = {
               id: groupId,
@@ -8548,6 +8593,43 @@
       }, err => console.warn("Membership discovery note:", err?.code || err));
     }
 
+    // A group can drop out of the discovery query when another member removes
+    // this account. Before deleting the cached copy, confirm by reading the
+    // group document: local-only groups that have not uploaded yet must stay.
+    async function verifyMissingCloudGroups(snapshot) {
+      if (!fx || !currentUser || missingGroupCheckInFlight) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      if (!snapshot || !snapshot.metadata || snapshot.metadata.fromCache) return;
+      const present = new Set();
+      snapshot.forEach(docSnap => present.add(docSnap.id));
+      const missing = Object.values(appState.groups || {})
+        .filter(group => group && group.id && !present.has(group.id))
+        .map(group => group.id);
+      if (!missing.length) return;
+      missingGroupCheckInFlight = true;
+      try {
+        for (const groupId of missing) {
+          if (!appState.groups[groupId]) continue;
+          let action = "keep";
+          try {
+            const snap = await fx.storeMod.getDoc(fx.storeMod.doc(fx.db, "groups", groupId));
+            action = missingGroupAction({
+              exists: snap.exists(),
+              data: snap.exists() ? (snap.data() || {}) : null,
+              uid: currentUser?.uid
+            });
+          } catch (err) {
+            action = missingGroupAction({ error: String(err?.code || err?.message || ""), uid: currentUser?.uid });
+            if (action === "keep") console.warn("Membership check note:", err?.code || err);
+          }
+          if (action === "tombstone") removeGroupLocally(groupId);
+          else if (action === "prune") pruneGroupLocally(groupId);
+        }
+      } finally {
+        missingGroupCheckInFlight = false;
+      }
+    }
+
     // Adds the signed-in UID to groups whose member documents already carry
     // this account's email. Runs on sign-in/online/visibility, never from a
     // snapshot callback, so the read-only listener rule is preserved.
@@ -8564,7 +8646,7 @@
         ));
         snap.forEach(docSnap => {
           const groupId = docSnap.ref.parent?.parent?.id;
-          if (groupId) pendingMembershipClaims.set(groupId, docSnap.id);
+          if (groupId && isActiveMembershipDoc(docSnap.data())) pendingMembershipClaims.set(groupId, docSnap.id);
         });
         for (const [groupId, memberDocId] of Array.from(pendingMembershipClaims.entries())) {
           if ((appState.deletedGroups || []).includes(groupId)) {
@@ -8608,6 +8690,9 @@
             hydrateNormalizedGroupMetadata(groupId);
             listenToNormalizedGroup(groupId);
           } catch (err) {
+            if (String(err?.code || "").includes("permission-denied")) {
+              pendingMembershipClaims.delete(groupId);
+            }
             console.warn("Member claim note:", err?.code || err);
           }
         }
