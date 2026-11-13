@@ -1110,13 +1110,14 @@
     let membershipClaimInFlight = false;
     let membershipClaimTimer = 0;
     let missingGroupCheckInFlight = false;
+    let splitIntentTimer = 0;
     const normalizedWrittenByGroup = new Map();
     const normalizedHydrated = new Set();
     const quotaSaver = true;
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v154";
+    const APP_BUILD = "v155";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -7380,6 +7381,7 @@
           try {
             syncUserCloud(user);
             cloudSyncUid = user.uid;
+            scheduleSplitIntentApply();
           } catch (err) {
             console.error("Cloud sync note:", err);
           }
@@ -8792,6 +8794,10 @@
         clearTimeout(membershipClaimTimer);
         membershipClaimTimer = 0;
       }
+      if (splitIntentTimer) {
+        clearTimeout(splitIntentTimer);
+        splitIntentTimer = 0;
+      }
     }
 
     function listenToCloudGroup(groupId) {
@@ -9454,6 +9460,87 @@
       processPendingInvite();
     }
 
+    // The marketing split demo hands off an amount and a people count. Keep the
+    // values across the Gmail sign-in, then prefill the expense form. Nothing is
+    // stored until the signed-in user saves.
+    function readSplitIntent() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("intent") !== "split") return;
+      const amount = Number(params.get("amount"));
+      const peopleRaw = Number(params.get("people"));
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000) return;
+      const people = Math.min(20, Math.max(2, Number.isFinite(peopleRaw) ? Math.round(peopleRaw) : 2));
+      try {
+        sessionStorage.setItem("fairshare_split_intent", JSON.stringify({
+          amountPaise: Math.round(amount * 100),
+          people
+        }));
+      } catch { /* ignore */ }
+      ["intent", "amount", "people"].forEach(key => params.delete(key));
+      const query = params.toString();
+      window.history.replaceState({}, document.title, window.location.pathname + (query ? `?${query}` : "") + (window.location.hash || ""));
+    }
+
+    function storedSplitIntent() {
+      try {
+        const intent = JSON.parse(sessionStorage.getItem("fairshare_split_intent") || "null");
+        if (!intent || !Number.isFinite(Number(intent.amountPaise)) || Number(intent.amountPaise) <= 0) return null;
+        return intent;
+      } catch {
+        return null;
+      }
+    }
+
+    function clearStoredSplitIntent() {
+      try { sessionStorage.removeItem("fairshare_split_intent"); } catch { /* ignore */ }
+    }
+
+    function scheduleSplitIntentApply() {
+      if (splitIntentTimer || !storedSplitIntent()) return;
+      splitIntentTimer = window.setTimeout(() => {
+        splitIntentTimer = 0;
+        applySplitIntent();
+      }, 1500);
+    }
+
+    function applySplitIntent() {
+      const intent = storedSplitIntent();
+      if (!intent || !currentUser) return;
+      clearStoredSplitIntent();
+      let group = appState.groups[appState.activeGroupId] || Object.values(appState.groups || {})[0];
+      if (!group?.id) {
+        const people = Math.min(20, Math.max(2, Number(intent.people) || 2));
+        const selfName = myGroupSelfName();
+        const id = "group_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        group = {
+          id,
+          name: "My first split",
+          currency: "₹",
+          ownerUid: currentUser.uid,
+          ownerEmail: currentUser.email,
+          members: [selfName, ...Array.from({ length: people - 1 }, (_, index) => `Friend ${index + 1}`)],
+          memberLinks: { [selfName]: currentUser.email },
+          memberUids: [currentUser.uid],
+          simplifyDebts: true,
+          transactions: []
+        };
+        appState.groups[id] = group;
+        appState.activeGroupId = id;
+        persistLocalState();
+        saveState(group);
+      }
+      window.navigateTo("add-expense");
+      renderAll();
+      if (amountInput) {
+        amountInput.value = paiseToInput(intent.amountPaise);
+        amountInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      if (descInput && !descInput.value.trim()) descInput.value = "First split";
+      window.setTimeout(() => {
+        try { amountInput?.focus({ preventScroll: true }); } catch { /* ignore */ }
+      }, 100);
+    }
+
     function materializeRecurring() {
       const now = Date.now();
       const advance = (stamp, freq) => {
@@ -9624,6 +9711,7 @@
 
     const initialPage = window.location.hash.replace("#", "") || "home";
     navigateTo(initialPage);
+    readSplitIntent();
     checkInviteInURL();
   </script>
 </body>

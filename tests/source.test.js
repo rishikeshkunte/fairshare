@@ -954,3 +954,16 @@ test("membership discovery schedules a deferred claim outside the listener", () 
   assert.match(scheduler, /1200/);
   assert.match(html, /pendingMembershipClaims\.clear\(\);[\s\S]*?clearTimeout\(membershipClaimTimer\)/);
 });
+
+test("marketing split intent pre-fills the expense form after sign-in", () => {
+  assert.match(html, /function readSplitIntent\(\)/);
+  assert.match(html, /params\.get\("intent"\) !== "split"/);
+  assert.match(html, /amount > 10000000/);
+  assert.match(html, /sessionStorage\.setItem\("fairshare_split_intent"/);
+  assert.match(html, /function scheduleSplitIntentApply\(\)/);
+  assert.match(html, /scheduleSplitIntentApply\(\);/);
+  assert.match(html, /function applySplitIntent\(\)/);
+  assert.match(html, /name: "My first split"/);
+  assert.match(html, /amountInput\.value = paiseToInput\(intent\.amountPaise\)/);
+  assert.match(html, /readSplitIntent\(\);\s*checkInviteInURL\(\);/);
+});

@@ -225,3 +225,69 @@ details p { padding: 0 0 16px; color: rgba(15, 31, 24, .66); font-size: .9rem; }
   .cta-box { padding: 30px; }
   .footer-grid { grid-template-columns: 1fr; }
 }
+
+/* Conversion: demos, steps, proof, sticky CTA */
+.hero-trust { margin-top: 14px; font-size: .78rem; color: rgba(15, 31, 24, .58); }
+.demo-section { background: radial-gradient(700px 300px at 100% 0%, rgba(232, 168, 76, .12), transparent 65%), var(--cream); }
+.demo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.demo-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 18px; }
+.demo-card h3 { font-size: clamp(1.25rem, 2.2vw, 1.6rem); margin-top: 6px; }
+.demo-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.demo-form { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; }
+.demo-field label { display: block; font-size: .68rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: rgba(15, 31, 24, .52); margin-bottom: 6px; }
+.demo-field input, .demo-field select { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--cream); font: 600 .95rem var(--body); color: var(--ink); }
+.demo-field input:focus, .demo-field select:focus { outline: 2px solid var(--marigold); outline-offset: 1px; }
+.demo-result { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-radius: 16px; color: var(--ivory); background: radial-gradient(300px 160px at 0 0, rgba(232, 168, 76, .22), transparent 70%), var(--forest); }
+.demo-result small { display: block; font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; opacity: .65; font-weight: 800; }
+.demo-result strong { display: block; font-family: var(--display); font-size: 1.9rem; letter-spacing: -.03em; }
+.demo-badge { border-radius: 999px; padding: 7px 10px; background: rgba(245, 240, 230, .14); font-size: .66rem; font-weight: 800; }
+.demo-note { font-size: .75rem; color: rgba(15, 31, 24, .55); }
+.demo-card .btn { width: 100%; }
+.debt-toggle { display: inline-flex; padding: 4px; gap: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--cream); }
+.debt-toggle button { border: 0; background: transparent; border-radius: 999px; padding: 8px 11px; font: 700 .72rem var(--body); color: rgba(15, 31, 24, .58); cursor: pointer; }
+.debt-toggle button[aria-pressed="true"] { background: var(--forest); color: var(--ivory); }
+.debt-viz, .debt-pairwise, .debt-simplified { display: grid; gap: 10px; }
+.debt-simplified { display: none; }
+.debt-demo.is-simplified .debt-pairwise { display: none; }
+.debt-demo.is-simplified .debt-simplified { display: grid; }
+.debt-row { display: flex; align-items: center; gap: 8px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; font-size: .84rem; }
+.debt-row .emoji { font-size: 1.15rem; }
+.debt-row .debt-arrow { color: var(--marigold); font-weight: 800; }
+.debt-amt { margin-left: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; font-size: .78rem; }
+.debt-row-final { border-color: rgba(47, 143, 99, .4); background: rgba(47, 143, 99, .06); }
+.debt-badge { font-size: .74rem; font-weight: 800; color: var(--positive); }
+.how-section { background: var(--ivory); }
+.how-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px; }
+.step-num { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--forest); color: var(--ivory); font-family: var(--display); font-weight: 700; margin-bottom: 14px; }
+.step h3 { font-size: 1.15rem; margin-bottom: 8px; }
+.step p { color: rgba(15, 31, 24, .64); font-size: .9rem; }
+.proof-section { padding-top: 0; }
+.proof-box { display: grid; grid-template-columns: 1.5fr 1fr; gap: 30px; align-items: center; border-radius: 30px; padding: 38px; background: var(--ivory); border: 1px solid var(--line); }
+.proof-box h2 { font-size: clamp(1.7rem, 3vw, 2.4rem); margin: 8px 0 12px; }
+.proof-box p { color: rgba(15, 31, 24, .66); max-width: 56ch; }
+.proof-points { display: flex; flex-wrap: wrap; gap: 8px; }
+.proof-points span { border: 1px solid var(--line); border-radius: 999px; padding: 9px 12px; background: var(--surface); font-size: .78rem; font-weight: 700; }
+.settle-chip { position: absolute; right: 0; top: 18px; padding: 9px 13px; border-radius: 999px; background: var(--marigold); color: var(--ink); font-size: .72rem; font-weight: 800; box-shadow: 0 14px 30px rgba(15, 31, 24, .18); animation: settleFloat 5s ease-in-out infinite; }
+@keyframes settleFloat { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
+.reveal { opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; }
+.reveal.is-visible { opacity: 1; transform: none; }
+.sticky-cta { display: none; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 18px; background: rgba(31, 61, 50, .96); color: var(--ivory); box-shadow: 0 18px 40px rgba(15, 31, 24, .3); backdrop-filter: blur(12px); }
+.sticky-cta strong { display: block; font-size: .86rem; }
+.sticky-cta span { display: block; font-size: .68rem; opacity: .66; }
+.sticky-cta .btn { padding: 10px 14px; }
+@media (max-width: 980px) {
+  .demo-grid, .how-grid, .proof-box { grid-template-columns: 1fr; }
+  .demo-card-head { flex-direction: column; }
+}
+@media (max-width: 720px) {
+  .demo-form { grid-template-columns: 1fr; }
+  .sticky-cta.show { display: flex; }
+  body.has-sticky-cta { padding-bottom: 84px; }
+  .settle-chip { top: auto; bottom: 8px; right: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .settle-chip { animation: none; }
+  html { scroll-behavior: auto; }
+}

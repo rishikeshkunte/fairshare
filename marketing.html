@@ -42,7 +42,7 @@
   }
   </script>
 </head>
-<body>
+<body class="has-sticky-cta">
   <header class="site-header">
     <div class="wrap">
       <a class="brand" href="./">
@@ -57,8 +57,7 @@
         <a href="blog/">Blog</a>
       </nav>
       <div class="nav-cta">
-        <a class="btn btn-ghost" href="app/">Open app</a>
-        <a class="btn btn-primary" href="app/">Get started</a>
+        <a class="btn btn-primary" href="app/">Start free with Gmail</a>
       </div>
     </div>
   </header>
@@ -71,12 +70,13 @@
           <h1>Split expenses.<br><span>Keep friendships.</span></h1>
           <p class="hero-lede">Track shared bills, see exactly who owes whom, and settle up in seconds — whether it's a trip, a flat, or one dinner.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="app/">Open the app →</a>
-            <a class="btn btn-ghost" href="#features">See how it works</a>
+            <a class="btn btn-primary" href="app/">Start free with Gmail →</a>
+            <a class="btn btn-ghost" href="#demo">See how it works</a>
           </div>
+          <p class="hero-trust">Free in beta · Gmail sign-in · We use your name and email only.</p>
           <div class="hero-proof">
             <span><b>0</b> ads, ever</span>
-            <span><b>∞</b> expenses</span>
+            <span><b>No</b> paywalls</span>
             <span><b>1 min</b> to first split</span>
           </div>
         </div>
@@ -125,6 +125,78 @@
               <div class="mini-row"><span class="emoji">🙉</span><span class="txt"><b>Shivam</b><small>emoji avatars</small></span></div>
             </div>
           </div>
+          <div class="settle-chip" aria-hidden="true">✓ Settled in 2 taps</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="demo" class="demo-section">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Try it</span>
+            <h2>See the math before you sign up.</h2>
+          </div>
+          <p>Two quick demos: split a bill, then watch a chain of debts collapse into one payment.</p>
+        </div>
+        <div class="demo-grid">
+          <article class="demo-card">
+            <div>
+              <span class="eyebrow">Split a bill</span>
+              <h3>Who pays what?</h3>
+            </div>
+            <div class="demo-form">
+              <div class="demo-field">
+                <label for="demo-amount">Bill total (₹)</label>
+                <input id="demo-amount" type="number" min="1" step="1" value="1200" inputmode="decimal">
+              </div>
+              <div class="demo-field">
+                <label for="demo-people">People</label>
+                <select id="demo-people">
+                  <option>2</option>
+                  <option>3</option>
+                  <option selected>4</option>
+                  <option>5</option>
+                  <option>6</option>
+                  <option>8</option>
+                </select>
+              </div>
+            </div>
+            <div class="demo-result">
+              <div>
+                <small>Each person pays</small>
+                <strong id="demo-each">₹300.00</strong>
+              </div>
+              <span class="demo-badge">Equal split</span>
+            </div>
+            <a class="btn btn-primary" id="demo-cta" href="app/?intent=split&amount=1200.00&people=4">Save this split with Gmail →</a>
+            <p class="demo-note">Nothing is saved until you sign in. The demo only does the math.</p>
+          </article>
+
+          <article class="demo-card debt-demo" id="debt-demo">
+            <div class="demo-card-head">
+              <div>
+                <span class="eyebrow">Simplify debts</span>
+                <h3>Three payments become one.</h3>
+              </div>
+              <div class="debt-toggle" role="group" aria-label="Debt view">
+                <button type="button" data-debt-view="pairwise" aria-pressed="true">Pairwise</button>
+                <button type="button" data-debt-view="simplified" aria-pressed="false">Simplified</button>
+              </div>
+            </div>
+            <div class="debt-viz">
+              <div class="debt-pairwise">
+                <div class="debt-row"><span class="emoji">🦊</span><b>Aryan</b><span class="debt-arrow">→</span><span class="emoji">🐼</span><b>Poorva</b><span class="debt-amt">₹500</span></div>
+                <div class="debt-row"><span class="emoji">🐼</span><b>Poorva</b><span class="debt-arrow">→</span><span class="emoji">🦁</span><b>Shivam</b><span class="debt-amt">₹500</span></div>
+                <div class="debt-row"><span class="emoji">🦁</span><b>Shivam</b><span class="debt-arrow">→</span><span class="emoji">🐨</span><b>Meera</b><span class="debt-amt">₹500</span></div>
+              </div>
+              <div class="debt-simplified">
+                <div class="debt-row debt-row-final"><span class="emoji">🦊</span><b>Aryan</b><span class="debt-arrow">→</span><span class="emoji">🐨</span><b>Meera</b><span class="debt-amt">₹500</span></div>
+                <div class="debt-badge">✓ 2 fewer payments · same balances</div>
+              </div>
+            </div>
+            <p class="demo-note">Everyone ends up in the same place. There are just fewer transfers to make.</p>
+          </article>
         </div>
       </div>
     </section>
@@ -168,6 +240,35 @@
             <div class="icon">📲</div>
             <h3>Install it like an app</h3>
             <p>Add it to your home screen and keep your ledger on your device first.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="how-section">
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">How it works</span>
+            <h2>Three taps from bill to balance.</h2>
+          </div>
+          <p>Add it, split it, settle it. No spreadsheet and no group-chat arithmetic.</p>
+        </div>
+        <div class="how-grid">
+          <article class="step">
+            <span class="step-num">1</span>
+            <h3>Add the expense</h3>
+            <p>Type the amount, pick who paid, and choose the people involved.</p>
+          </article>
+          <article class="step">
+            <span class="step-num">2</span>
+            <h3>Split it your way</h3>
+            <p>Equal, exact amounts, percentages, or shares. The preview updates live.</p>
+          </article>
+          <article class="step">
+            <span class="step-num">3</span>
+            <h3>Settle with fewer payments</h3>
+            <p>Simplify debts and record who paid whom. Balances update everywhere.</p>
           </article>
         </div>
       </div>
@@ -223,6 +324,21 @@
       </div>
     </section>
 
+    <section class="proof-section">
+      <div class="wrap proof-box">
+        <div>
+          <span class="eyebrow">Why it exists</span>
+          <h2>A calmer ledger, built for real life.</h2>
+          <p>We built What's My Share? for our own trips and shared flats. It stays local-first, has no ads, and asks for nothing beyond your Gmail name and email. No bank access. No payment links. Just the math and a clear next payment.</p>
+        </div>
+        <div class="proof-points">
+          <span>No ads</span>
+          <span>No bank access</span>
+          <span>Local-first</span>
+        </div>
+      </div>
+    </section>
+
     <section class="faq">
       <div class="wrap">
         <div class="section-head">
@@ -248,13 +364,21 @@
             <p>Open the app in your browser, add your first expense, and install it to your home screen.</p>
           </div>
           <div class="cta-actions">
-            <a class="btn btn-light" href="app/">Open the app →</a>
+            <a class="btn btn-light" href="app/">Start free with Gmail →</a>
             <a class="btn btn-marigold" href="features.html">Explore features</a>
           </div>
         </div>
       </div>
     </section>
   </main>
+
+  <div class="sticky-cta" id="sticky-cta">
+    <div>
+      <strong>Start free with Gmail</strong>
+      <span>Free in beta · No ads</span>
+    </div>
+    <a class="btn btn-primary" href="app/">Open app</a>
+  </div>
 
   <footer class="site-footer">
     <div class="wrap">
@@ -289,6 +413,7 @@
       </div>
     </div>
   </footer>
+  <script src="js/marketing.js" defer></script>
   <script>
     const params = new URLSearchParams(window.location.search);
     if (params.has("invite") || params.has("joinGroup")) {

@@ -81,7 +81,7 @@ function routeableFirebaseModule() {
   };
 }
 
-async function openAccount(browser, label) {
+async function openAccount(browser, label, url = APP_URL) {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 900 },
     serviceWorkers: "block"
@@ -94,7 +94,7 @@ async function openAccount(browser, label) {
     }
   });
   page.on("pageerror", (error) => console.log(`[${label}] pageerror`, error.message));
-  await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
+  await page.goto(url, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => Boolean(window.FAIRSHARE_BUILD), null, { timeout: 20000 });
   await page.waitForFunction(async () => {
     try {
@@ -324,6 +324,26 @@ async function run() {
       throw new Error("add-by-email claim did not add Bob's UID");
     }
     console.log("PASS claim: add-by-email membership was claimed and the group appeared");
+
+    const carolEmail = `carol.${runId}@example.com`;
+    const carol = await adminAuth.createUser({ email: carolEmail, password, emailVerified: true, displayName: "Carol E2E" });
+    const carolSession = await openAccount(browser, "carol", `${APP_URL}?intent=split&amount=1200&people=4`);
+    await signIn(carolSession.page, carolEmail, password);
+    await carolSession.page.waitForFunction(() => window.location.hash === "#add-expense", null, { timeout: 20000 });
+    await carolSession.page.waitForFunction(
+      () => document.getElementById("amount")?.value === "1200.00",
+      null,
+      { timeout: 10000 }
+    );
+    const carolState = await carolSession.page.evaluate((uid) => {
+      try { return JSON.parse(localStorage.getItem(`fairshare_state_v9:${uid}`) || "{}"); } catch { return {}; }
+    }, carol.uid);
+    const starterGroups = Object.values(carolState.groups || {});
+    if (!starterGroups.some((group) => group.name === "My first split")) {
+      throw new Error("split intent did not create the starter group");
+    }
+    console.log("PASS intent: demo values became a starter group and a prefilled expense");
+    await carolSession.context.close();
 
     await aliceSession.context.close();
     await bobSession.context.close();
