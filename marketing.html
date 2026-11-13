@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>What's My Share? — Split expenses, keep friendships</title>
   <meta name="description" content="Track shared bills, see who owes whom, and settle up in seconds. Free, ad-free group expense splitting that works offline and installs like an app.">
-  <link rel="canonical" href="https://whatismyshare.vercel.app/site/">
+  <link rel="canonical" href="https://whatismyshare.vercel.app/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="What's My Share? — Split expenses, keep friendships">
   <meta property="og:description" content="Shared bills, simple balances, and a calm way to settle up. Free, ad-free, and offline-ready.">
-  <meta property="og:url" content="https://whatismyshare.vercel.app/site/">
+  <meta property="og:url" content="https://whatismyshare.vercel.app/">
   <meta property="og:image" content="https://whatismyshare.vercel.app/icons/icon-512.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#1F3D32">
-  <link rel="icon" type="image/png" href="../icons/favicon-32.png">
+  <link rel="icon" type="image/png" href="icons/favicon-32.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -47,7 +47,7 @@
   <header class="site-header">
     <div class="wrap">
       <a class="brand" href="./">
-        <img src="../icons/icon-192.png" alt="">
+        <img src="icons/icon-192.png" alt="">
         What's My Share?
       </a>
       <nav class="site-nav" aria-label="Main">
@@ -58,8 +58,8 @@
         <a href="blog/">Blog</a>
       </nav>
       <div class="nav-cta">
-        <a class="btn btn-ghost" href="../">Open app</a>
-        <a class="btn btn-primary" href="../">Get started</a>
+        <a class="btn btn-ghost" href="app/">Open app</a>
+        <a class="btn btn-primary" href="app/">Get started</a>
       </div>
     </div>
   </header>
@@ -72,7 +72,7 @@
           <h1>Split expenses.<br><span>Keep friendships.</span></h1>
           <p class="hero-lede">Track shared bills, see exactly who owes whom, and settle up in seconds — whether it's a trip, a flat, or one dinner.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="../">Open the app →</a>
+            <a class="btn btn-primary" href="app/">Open the app →</a>
             <a class="btn btn-ghost" href="#features">See how it works</a>
           </div>
           <div class="hero-proof">
@@ -86,7 +86,7 @@
           <div class="phone">
             <div class="phone-screen">
               <div class="phone-status"><span>9:41</span><span>◉ ◉ ◉</span></div>
-              <div class="mini-brand"><img src="../icons/icon-192.png" alt=""> MyShare</div>
+              <div class="mini-brand"><img src="icons/icon-192.png" alt=""> MyShare</div>
               <div class="mini-balance">
                 <div class="label">Your balance</div>
                 <strong>You are owed ₹2,480</strong>
@@ -115,7 +115,7 @@
           </div>
           <div class="phone small">
             <div class="phone-screen">
-              <div class="mini-brand"><img src="../icons/icon-192.png" alt=""> Settle up</div>
+              <div class="mini-brand"><img src="icons/icon-192.png" alt=""> Settle up</div>
               <div class="mini-split">
                 <div class="head"><span>Settle up</span><span>Group · Goa</span></div>
                 <div class="line"><span>🦊 Aryan</span><span>→</span><span>🐼 Poorva</span></div>
@@ -251,7 +251,7 @@
             <p>Open the app in your browser, add your first expense, and install it to your home screen.</p>
           </div>
           <div class="cta-actions">
-            <a class="btn btn-light" href="../">Open the app →</a>
+            <a class="btn btn-light" href="app/">Open the app →</a>
             <a class="btn btn-marigold" href="features.html">Explore features</a>
           </div>
         </div>
@@ -263,14 +263,14 @@
     <div class="wrap">
       <div class="footer-grid">
         <div>
-          <a class="brand" href="./"><img src="../icons/icon-192.png" alt=""> What's My Share?</a>
+          <a class="brand" href="./"><img src="icons/icon-192.png" alt=""> What's My Share?</a>
           <p style="margin-top:12px; font-size:.86rem; max-width:34ch;">Split it. Settle it. Done. A calmer expense tracker for friends, flatmates, and trips.</p>
         </div>
         <div>
           <h4>App</h4>
-          <a href="../">Open the app</a>
-          <a href="../#add-expense">Add an expense</a>
-          <a href="../#balances">Balances</a>
+          <a href="app/">Open the app</a>
+          <a href="app/#add-expense">Add an expense</a>
+          <a href="app/#balances">Balances</a>
         </div>
         <div>
           <h4>Learn</h4>
@@ -292,5 +292,17 @@
       </div>
     </div>
   </footer>
+  <script>
+    if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) {
+      window.location.replace("/app/");
+    }
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => {
+          if (registration.scope === window.location.origin + "/") registration.unregister();
+        });
+      }).catch(() => {});
+    }
+  </script>
 </body>
 </html>

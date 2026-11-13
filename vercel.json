@@ -1,0 +1,13 @@
+{
+  "redirects": [
+    { "source": "/app", "destination": "/app/", "permanent": false },
+    { "source": "/site", "destination": "/", "permanent": true },
+    { "source": "/site/:path*", "destination": "/:path*", "permanent": true },
+    { "source": "/index.html", "destination": "/app/", "permanent": false }
+  ],
+  "rewrites": [
+    { "source": "/", "destination": "/marketing.html" },
+    { "source": "/app/", "destination": "/index.html" },
+    { "source": "/app/:path*", "destination": "/:path*" }
+  ]
+}

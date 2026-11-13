@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="What's My Share? splits group expenses, simplifies who owes whom, and tracks spending. Works offline, with optional Gmail sync.">
   <meta name="theme-color" content="#1F3D32">
-  <link rel="canonical" href="https://whatismyshare.vercel.app/">
+  <meta name="robots" content="noindex">
+  <link rel="canonical" href="https://whatismyshare.vercel.app/app/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="What's My Share? — group expense tracker">
   <meta property="og:description" content="Split bills with friends, simplify debts, and keep a ledger on your device. Gmail sync is optional.">
-  <meta property="og:url" content="https://whatismyshare.vercel.app/">
+  <meta property="og:url" content="https://whatismyshare.vercel.app/app/">
   <meta property="og:image" content="https://whatismyshare.vercel.app/icons/icon-512.png">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="What's My Share? — group expense tracker">
@@ -1112,7 +1113,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v149";
+    const APP_BUILD = "v150";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;

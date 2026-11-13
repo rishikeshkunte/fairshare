@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://whatismyshare.vercel.app/site/sitemap.xml
+Sitemap: https://whatismyshare.vercel.app/sitemap.xml
