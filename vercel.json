@@ -1,13 +1,12 @@
 {
-  "redirects": [
-    { "source": "/app", "destination": "/app/", "permanent": false },
-    { "source": "/site", "destination": "/", "permanent": true },
-    { "source": "/site/:path*", "destination": "/:path*", "permanent": true },
-    { "source": "/index.html", "destination": "/app/", "permanent": false }
-  ],
-  "rewrites": [
-    { "source": "/", "destination": "/marketing.html" },
-    { "source": "/app/", "destination": "/index.html" },
-    { "source": "/app/:path*", "destination": "/:path*" }
+  "routes": [
+    { "src": "/", "dest": "/marketing.html" },
+    { "src": "/index.html", "status": 307, "headers": { "Location": "/app/" } },
+    { "src": "/app", "status": 307, "headers": { "Location": "/app/" } },
+    { "src": "/app/", "dest": "/index.html" },
+    { "src": "/app/(.*)", "dest": "/$1" },
+    { "src": "/site/?", "status": 308, "headers": { "Location": "/" } },
+    { "src": "/site/(.*)", "status": 308, "headers": { "Location": "/$1" } },
+    { "handle": "filesystem" }
   ]
 }
