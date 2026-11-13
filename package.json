@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node --test",
     "test:rules": "firebase emulators:exec --only firestore --project demo-fairshare \"node --test tests/rules.test.js\"",
+    "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-fairshare \"node tests/e2e/run.js\"",
     "repair:dry": "node ops/repair.mjs --project fairshare-app-ba160",
     "repair:apply": "node ops/repair.mjs --project fairshare-app-ba160 --apply",
     "migrate:profiles:dry": "node ops/migrate-profiles.mjs --project fairshare-app-ba160",
@@ -14,6 +15,7 @@
     "@firebase/rules-unit-testing": "^6.0.0",
     "firebase": "^13.1.0",
     "firebase-admin": "^14.5.0",
-    "firebase-tools": "^15.34.1"
+    "firebase-tools": "^15.34.1",
+    "playwright-core": "^1.65.0"
   }
 }
