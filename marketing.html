@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="site.css">
+  <link rel="stylesheet" href="site.css?v=155">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -81,51 +81,43 @@
           </div>
         </div>
 
-        <div class="phone-wrap" aria-hidden="true">
-          <div class="phone">
-            <div class="phone-screen">
-              <div class="phone-status"><span>9:41</span><span>◉ ◉ ◉</span></div>
-              <div class="mini-brand"><img src="icons/icon-192.png" alt=""> MyShare</div>
-              <div class="mini-balance">
-                <div class="label">Your balance</div>
-                <strong>You are owed ₹2,480</strong>
-                <div class="sub">Across 3 groups · settled in 2 taps</div>
+        <div class="hero-visual" id="hero-film">
+          <div class="film-glow" aria-hidden="true"></div>
+          <div class="float-card float-a" aria-hidden="true">🦊 <b>Aryan</b> owes you <strong>₹1,240</strong></div>
+          <div class="float-card float-b" aria-hidden="true">✓ Payment recorded</div>
+          <div class="film-card" role="group" aria-label="Product demo">
+            <div class="film-top">
+              <span class="film-live"><i aria-hidden="true"></i> Live demo</span>
+              <button type="button" class="film-toggle" id="film-toggle" aria-label="Pause the demo" aria-pressed="false">Pause</button>
+            </div>
+            <div class="film-stage">
+              <div class="film-scene scene-add is-active">
+                <span class="scene-eyebrow">Add expense</span>
+                <div class="scene-amount">₹3,600</div>
+                <div class="scene-title">Dinner · 4 people</div>
+                <div class="scene-people" aria-hidden="true"><span>🦊</span><span>🐼</span><span>🦁</span><span>🐨</span></div>
+                <div class="scene-hint">Aryan paid · split equally</div>
               </div>
-              <div class="mini-chips">
-                <span class="mini-chip on">🏖️ Goa</span>
-                <span class="mini-chip">🏠 Flat</span>
-                <span class="mini-chip">🎉 Diwali</span>
+              <div class="film-scene scene-split">
+                <span class="scene-eyebrow">Split equally</span>
+                <div class="split-rows">
+                  <div class="split-row"><span>🦊 Aryan</span><i style="--w:25%"></i><b>₹900</b></div>
+                  <div class="split-row"><span>🐼 Poorva</span><i style="--w:50%"></i><b>₹900</b></div>
+                  <div class="split-row"><span>🦁 Shivam</span><i style="--w:75%"></i><b>₹900</b></div>
+                  <div class="split-row"><span>🐨 Meera</span><i style="--w:100%"></i><b>₹900</b></div>
+                </div>
+                <div class="scene-hint">Every share updates live</div>
               </div>
-              <div class="mini-list">
-                <div class="mini-row"><span class="emoji">🦊</span><span class="txt"><b>Aryan</b><small>owes you · Goa</small></span><span class="amount pos">+₹1,240</span></div>
-                <div class="mini-row"><span class="emoji">🐼</span><span class="txt"><b>Poorva</b><small>you owe · Flat</small></span><span class="amount neg">−₹860</span></div>
-                <div class="mini-row"><span class="emoji">🦁</span><span class="txt"><b>Shivam</b><small>owes you · Diwali</small></span><span class="amount pos">+₹2,100</span></div>
-              </div>
-              <div class="mini-split">
-                <div class="head"><span>Dinner · ₹3,600</span><span>4 people</span></div>
-                <div class="line"><span>🦊 Aryan</span><span>₹900</span></div>
-                <div class="bar"><i style="width:25%"></i></div>
-                <div class="line"><span>🐼 Poorva</span><span>₹900</span></div>
-                <div class="bar"><i style="width:50%"></i></div>
-                <div class="line"><span>🦁 Shivam</span><span>₹900</span></div>
-                <div class="bar"><i style="width:75%"></i></div>
+              <div class="film-scene scene-settle">
+                <span class="scene-eyebrow">Settle up</span>
+                <div class="settle-line"><span>🦊 Aryan</span><span class="settle-arrow">→</span><span>🐨 Meera</span><strong>₹1,240</strong></div>
+                <div class="settle-stamp">✓ Settled</div>
+                <div class="scene-hint">One payment · zero group-chat math</div>
               </div>
             </div>
+            <div class="film-progress" aria-hidden="true"><i id="film-progress"></i></div>
+            <div class="film-steps" aria-hidden="true"><span data-film-step="0">Add</span><span data-film-step="1">Split</span><span data-film-step="2">Settle</span></div>
           </div>
-          <div class="phone small">
-            <div class="phone-screen">
-              <div class="mini-brand"><img src="icons/icon-192.png" alt=""> Settle up</div>
-              <div class="mini-split">
-                <div class="head"><span>Settle up</span><span>Group · Goa</span></div>
-                <div class="line"><span>🦊 Aryan</span><span>→</span><span>🐼 Poorva</span></div>
-                <div class="amount pos" style="text-align:right">₹1,240</div>
-                <div class="line" style="margin-top:6px"><span>Payment recorded</span><span>✓</span></div>
-              </div>
-              <div class="mini-row"><span class="emoji">😎</span><span class="txt"><b>You</b><small>emoji avatars</small></span></div>
-              <div class="mini-row"><span class="emoji">🙉</span><span class="txt"><b>Shivam</b><small>emoji avatars</small></span></div>
-            </div>
-          </div>
-          <div class="settle-chip" aria-hidden="true">✓ Settled in 2 taps</div>
         </div>
       </div>
     </section>
@@ -413,7 +405,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/marketing.js" defer></script>
+  <script src="js/marketing.js?v=155" defer></script>
   <script>
     const params = new URLSearchParams(window.location.search);
     if (params.has("invite") || params.has("joinGroup")) {
