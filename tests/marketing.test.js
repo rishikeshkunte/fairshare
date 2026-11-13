@@ -1,6 +1,6 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
@@ -34,11 +34,16 @@ test("marketing home has the conversion demos and a single primary CTA", () => {
   assert.match(marketing, /js\/marketing\.js/);
   assert.match(marketing, /id="hero-visual"/);
   assert.match(marketing, /id="phone-wrap"/);
-  assert.match(marketing, /id="hero-balance"/);
+  assert.match(marketing, /id="hero-video"/);
+  assert.match(marketing, /hero-dark/);
+  assert.match(marketing, /video-fallback/);
+  assert.match(marketing, /assets\/demo-goa\.webm/);
+  assert.ok(existsSync(join(root, "assets", "demo-goa.webm")));
+  assert.ok(existsSync(join(root, "assets", "demo-poster.png")));
   assert.match(marketingJs, /intent=split&amount=/);
   assert.match(marketingJs, /track\("cta_click"/);
-  assert.match(marketingJs, /function animateHeroBalance/);
-  assert.match(marketingJs, /cycleHeroChips/);
+  assert.match(marketingJs, /showVideoFallback/);
+  assert.match(marketingJs, /is-scrolled/);
 });
 
 test("content pages use the same primary CTA", () => {

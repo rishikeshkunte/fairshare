@@ -153,4 +153,55 @@
       cycleHeroChips();
     }, 250);
   }
+
+  var heroVideo = document.getElementById("hero-video");
+  var videoToggle = document.getElementById("hero-video-toggle");
+  if (heroVideo) {
+    var videoFallback = document.getElementById("video-fallback");
+    var syncVideoButton = function () {
+      if (!videoToggle) return;
+      var paused = heroVideo.paused;
+      videoToggle.textContent = paused ? "Play" : "Pause";
+      videoToggle.setAttribute("aria-pressed", String(paused));
+      videoToggle.setAttribute("aria-label", paused ? "Play the product demo" : "Pause the product demo");
+    };
+    var showVideoFallback = function () {
+      heroVideo.hidden = true;
+      if (videoFallback) videoFallback.hidden = false;
+      if (videoToggle) videoToggle.hidden = true;
+    };
+    heroVideo.addEventListener("play", syncVideoButton);
+    heroVideo.addEventListener("pause", syncVideoButton);
+    heroVideo.addEventListener("error", showVideoFallback);
+    var source = heroVideo.querySelector("source");
+    if (source) source.addEventListener("error", showVideoFallback);
+    if (videoToggle) {
+      videoToggle.addEventListener("click", function () {
+        if (heroVideo.paused) {
+          var play = heroVideo.play();
+          if (play && play.catch) play.catch(function () {});
+        } else {
+          heroVideo.pause();
+        }
+        track("hero_video_toggle", { playing: !heroVideo.paused });
+      });
+    }
+    if (reduceMotion) {
+      heroVideo.removeAttribute("autoplay");
+      heroVideo.pause();
+    } else {
+      var autoplay = heroVideo.play();
+      if (autoplay && autoplay.catch) autoplay.catch(function () { syncVideoButton(); });
+    }
+    syncVideoButton();
+  }
+
+  var header = document.querySelector(".site-header");
+  if (header) {
+    var onHeaderScroll = function () {
+      header.classList.toggle("is-scrolled", window.scrollY > 60);
+    };
+    window.addEventListener("scroll", onHeaderScroll, { passive: true });
+    onHeaderScroll();
+  }
 })();

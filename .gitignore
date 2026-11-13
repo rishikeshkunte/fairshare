@@ -4,3 +4,5 @@ node_modules/
 .firebase/
 *.log
 repair-report.json
+
+assets/.recordings/

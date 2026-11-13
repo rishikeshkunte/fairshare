@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="site.css?v=156">
+  <link rel="stylesheet" href="site.css?v=158">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -42,7 +42,7 @@
   }
   </script>
 </head>
-<body class="has-sticky-cta">
+<body class="has-sticky-cta hero-dark">
   <header class="site-header">
     <div class="wrap">
       <a class="brand" href="./">
@@ -66,7 +66,7 @@
     <section class="hero">
       <div class="wrap hero-grid">
         <div>
-          <span class="eyebrow">Free · No ads · Installable</span>
+          <span class="eyebrow">Free · No ads · Gmail sign-in</span>
           <h1>Split expenses.<br><span>Keep friendships.</span></h1>
           <p class="hero-lede">Track shared bills, see exactly who owes whom, and settle up in seconds — whether it's a trip, a flat, or one dinner.</p>
           <div class="hero-actions">
@@ -85,39 +85,18 @@
           <div class="phone-glow" aria-hidden="true"></div>
           <div class="float-card float-a" aria-hidden="true">🦊 <b>Aryan</b> owes you <strong>₹1,240</strong></div>
           <div class="float-card float-b" aria-hidden="true">✓ Payment recorded</div>
-          <span class="phone-badge" aria-hidden="true"><i></i> Real app UI</span>
-          <div class="phone-wrap" id="phone-wrap" aria-hidden="true">
-            <div class="phone">
-              <div class="phone-screen">
-                <div class="phone-status"><span>9:41</span><span>◉ ◉ ◉</span></div>
-                <div class="mini-brand"><img src="icons/icon-192.png" alt=""> MyShare</div>
-                <div class="mini-balance">
-                  <div class="label">Your balance</div>
-                  <strong id="hero-balance">You are owed ₹2,480</strong>
-                  <div class="sub">Across 3 groups · settled in 2 taps</div>
-                </div>
-                <div class="mini-chips">
-                  <span class="mini-chip on">🏖️ Goa</span>
-                  <span class="mini-chip">🏠 Flat</span>
-                  <span class="mini-chip">🎉 Diwali</span>
-                </div>
-                <div class="mini-list">
-                  <div class="mini-row"><span class="emoji">🦊</span><span class="txt"><b>Aryan</b><small>owes you · Goa</small></span><span class="amount pos">+₹1,240</span></div>
-                  <div class="mini-row"><span class="emoji">🐼</span><span class="txt"><b>Poorva</b><small>you owe · Flat</small></span><span class="amount neg">−₹860</span></div>
-                  <div class="mini-row"><span class="emoji">🦁</span><span class="txt"><b>Shivam</b><small>owes you · Diwali</small></span><span class="amount pos">+₹2,100</span></div>
-                </div>
-                <div class="mini-split">
-                  <div class="head"><span>Dinner · ₹3,600</span><span>4 people</span></div>
-                  <div class="line"><span>🦊 Aryan</span><span>₹900</span></div>
-                  <div class="bar"><i style="width:25%"></i></div>
-                  <div class="line"><span>🐼 Poorva</span><span>₹900</span></div>
-                  <div class="bar"><i style="width:50%"></i></div>
-                  <div class="line"><span>🦁 Shivam</span><span>₹900</span></div>
-                  <div class="bar"><i style="width:75%"></i></div>
-                </div>
+          <span class="phone-badge" aria-hidden="true"><i></i> Real app · 14s</span>
+          <div class="phone-wrap" id="phone-wrap">
+            <div class="phone video-phone">
+              <div class="phone-screen video-screen">
+                <video id="hero-video" class="hero-video" autoplay muted loop playsinline preload="metadata" poster="assets/demo-poster.png?v=2" aria-label="14 second tour of the What's My Share? app">
+                  <source src="assets/demo-goa.webm?v=2" type="video/webm">
+                </video>
+                <img id="video-fallback" class="video-fallback" src="assets/demo-poster.png?v=2" alt="What's My Share? app home screen" hidden>
+                <button type="button" class="video-toggle" id="hero-video-toggle" aria-label="Pause the product demo" aria-pressed="false">Pause</button>
               </div>
             </div>
-            <div class="phone small">
+            <div class="phone small" aria-hidden="true">
               <div class="phone-screen">
                 <div class="mini-brand"><img src="icons/icon-192.png" alt=""> Settle up</div>
                 <div class="mini-split">
@@ -134,6 +113,7 @@
           </div>
         </div>
       </div>
+      <div class="hero-fade" aria-hidden="true"></div>
     </section>
 
     <section id="demo" class="demo-section">
@@ -419,7 +399,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/marketing.js?v=156" defer></script>
+  <script src="js/marketing.js?v=158" defer></script>
   <script>
     const params = new URLSearchParams(window.location.search);
     if (params.has("invite") || params.has("joinGroup")) {

@@ -6,6 +6,7 @@
     "test": "node --test",
     "test:rules": "firebase emulators:exec --only firestore --project demo-fairshare \"node --test tests/rules.test.js\"",
     "test:e2e": "firebase emulators:exec --only auth,firestore --project demo-fairshare \"node tests/e2e/run.js\"",
+    "demo:record": "firebase emulators:exec --only auth,firestore --project demo-fairshare \"node tests/demo/record.js\"",
     "repair:dry": "node ops/repair.mjs --project fairshare-app-ba160",
     "repair:apply": "node ops/repair.mjs --project fairshare-app-ba160 --apply",
     "migrate:profiles:dry": "node ops/migrate-profiles.mjs --project fairshare-app-ba160",
