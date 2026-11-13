@@ -1108,6 +1108,7 @@
     const membershipHydrated = new Set();
     const pendingMembershipClaims = new Map();
     let membershipClaimInFlight = false;
+    let membershipClaimTimer = 0;
     let missingGroupCheckInFlight = false;
     const normalizedWrittenByGroup = new Map();
     const normalizedHydrated = new Set();
@@ -1115,7 +1116,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v153";
+    const APP_BUILD = "v154";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -8574,6 +8575,7 @@
             // The member document proves membership, but the group document
             // still needs this account's UID before UID-only rules allow reads.
             pendingMembershipClaims.set(groupId, docSnap.id);
+            scheduleMembershipClaim();
             return;
           }
           listenToNormalizedGroup(groupId);
@@ -8621,6 +8623,19 @@
       } finally {
         missingGroupCheckInFlight = false;
       }
+    }
+
+    // Claiming writes from inside a listener is forbidden. A short deferred
+    // run lets a member added by email gain access while the invitee is idle,
+    // without waiting for sign-in, reconnect, visibility, or Sync now.
+    function scheduleMembershipClaim() {
+      if (!fx || !currentUser || membershipClaimTimer) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      membershipClaimTimer = window.setTimeout(() => {
+        membershipClaimTimer = 0;
+        if (!fx || !currentUser) return;
+        claimPendingMemberships().catch(err => console.warn("Membership claim note:", err?.code || err));
+      }, 1200);
     }
 
     // Adds the signed-in UID to groups whose member documents already carry
@@ -8772,6 +8787,11 @@
       normalizedHydrated.clear();
       normalizedWriteTimers.forEach(timer => clearTimeout(timer));
       normalizedWriteTimers.clear();
+      pendingMembershipClaims.clear();
+      if (membershipClaimTimer) {
+        clearTimeout(membershipClaimTimer);
+        membershipClaimTimer = 0;
+      }
     }
 
     function listenToCloudGroup(groupId) {

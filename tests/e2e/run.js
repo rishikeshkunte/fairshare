@@ -89,7 +89,9 @@ async function openAccount(browser, label) {
   await context.route("**/js/firebase.js", routeableFirebaseModule());
   const page = await context.newPage();
   page.on("console", (message) => {
-    if (message.type() === "error") console.log(`[${label}]`, message.text());
+    if (message.type() === "error" || message.type() === "warning") {
+      console.log(`[${label}]`, message.type(), message.text());
+    }
   });
   page.on("pageerror", (error) => console.log(`[${label}] pageerror`, error.message));
   await page.goto(APP_URL, { waitUntil: "domcontentloaded" });
@@ -106,16 +108,37 @@ async function openAccount(browser, label) {
   return { context, page };
 }
 
+async function waitForFirebaseApp(page) {
+  await page.waitForFunction(async (base) => {
+    try {
+      const appMod = await import(`${base}/firebase-app.js`);
+      appMod.getApp();
+      return true;
+    } catch {
+      return false;
+    }
+  }, FIREBASE_BASE, { timeout: 30000 });
+}
+
 async function signIn(page, email, password) {
-  await page.evaluate(async ({ email, password, base }) => {
-    const appMod = await import(`${base}/firebase-app.js`);
-    const authMod = await import(`${base}/firebase-auth.js`);
-    await authMod.signInWithEmailAndPassword(authMod.getAuth(appMod.getApp()), email, password);
-  }, { email, password, base: FIREBASE_BASE });
-  await page.waitForFunction(() => {
-    const shell = document.getElementById("app-shell");
-    return shell && !shell.hidden;
-  }, null, { timeout: 20000 });
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await waitForFirebaseApp(page);
+    try {
+      await page.evaluate(async ({ email, password, base }) => {
+        const appMod = await import(`${base}/firebase-app.js`);
+        const authMod = await import(`${base}/firebase-auth.js`);
+        await authMod.signInWithEmailAndPassword(authMod.getAuth(appMod.getApp()), email, password);
+      }, { email, password, base: FIREBASE_BASE });
+      await page.waitForFunction(() => {
+        const shell = document.getElementById("app-shell");
+        return shell && !shell.hidden;
+      }, null, { timeout: 20000 });
+      return;
+    } catch (error) {
+      if (attempt === 1 || !String(error?.message || "").includes("app/no-app")) throw error;
+      await page.waitForTimeout(500);
+    }
+  }
 }
 
 async function showGroups(page) {
@@ -295,7 +318,6 @@ async function run() {
       includeBobMemberDoc: true,
       includeExpense: true
     });
-    await bobSession.page.evaluate(() => window.syncNow());
     await waitForGroupChip(bobSession.page, claimGroupName, true);
     const claimed = await adminDb.doc(`groups/${claimGroupId}`).get();
     if (!Array.isArray(claimed.data().memberUids) || !claimed.data().memberUids.includes(bob.uid)) {

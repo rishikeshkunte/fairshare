@@ -943,3 +943,14 @@ test("revoked membership is retired, ignored by claims, and pruned locally", () 
   assert.match(prune, /return dropLocalGroup\(groupId, \{ tombstone: false \}\)/);
   assert.doesNotMatch(prune, /deletedGroups/);
 });
+
+test("membership discovery schedules a deferred claim outside the listener", () => {
+  const listenerStart = html.indexOf("function listenToMemberships");
+  const listener = html.slice(listenerStart, html.indexOf("function scheduleMembershipClaim", listenerStart));
+  assert.match(listener, /pendingMembershipClaims\.set\(groupId, docSnap\.id\);\s*scheduleMembershipClaim\(\);/);
+  const scheduler = html.slice(html.indexOf("function scheduleMembershipClaim"), html.indexOf("async function claimPendingMemberships"));
+  assert.match(scheduler, /window\.setTimeout/);
+  assert.match(scheduler, /claimPendingMemberships\(\)/);
+  assert.match(scheduler, /1200/);
+  assert.match(html, /pendingMembershipClaims\.clear\(\);[\s\S]*?clearTimeout\(membershipClaimTimer\)/);
+});
