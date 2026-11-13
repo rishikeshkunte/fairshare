@@ -349,6 +349,107 @@ test("Firestore emulator rules", { skip: skipReason }, async (t) => {
     })));
   });
 
+  await t.test("a removed member loses access and a fresh invite restores it", async () => {
+    const groupId = "grevoke";
+    const bobMemberId = "email_bob_outlook_com";
+    await env.clearFirestore();
+    await seed(["groups", groupId], {
+      id: groupId,
+      name: "Revocation group",
+      currency: "INR",
+      ownerUid: "alice",
+      ownerEmail: ALICE_RAW,
+      members: ["Alice", "Bob"],
+      memberUids: ["alice", "bob"],
+      normalizedVersion: 1,
+      transactions: [],
+      deletedTransactions: []
+    });
+    await seed(["groups", groupId, "members", "uid_alice"], {
+      displayName: "Alice",
+      emailCanonical: ALICE_KEY,
+      uid: "alice",
+      role: "owner",
+      status: "active"
+    });
+    await seed(["groups", groupId, "members", bobMemberId], {
+      displayName: "Bob",
+      emailCanonical: BOB_KEY,
+      uid: "bob",
+      role: "member",
+      status: "active"
+    });
+    await seed(["groups", groupId, "expenses", "expense_r1"], {
+      amountPaise: 1000,
+      payerMemberId: "uid_alice",
+      shares: { uid_alice: 500, [bobMemberId]: 500 },
+      category: "Other",
+      description: "Shared bill",
+      dateISO: "2026-11-13",
+      createdBy: ALICE_RAW
+    });
+    await assertSucceeds(getDoc(doc(bobDb, "groups", groupId)));
+    await assertSucceeds(getDocs(collection(bobDb, "groups", groupId, "expenses")));
+
+    // Alice retires Bob's member document and prunes his UID, matching the
+    // client removal sequence.
+    await assertSucceeds(setDoc(doc(aliceDb, "groups", groupId, "members", bobMemberId), stamped({
+      status: "removed",
+      emailCanonical: "",
+      removedAt: Timestamp.now()
+    }), { merge: true }));
+    await assertSucceeds(updateDoc(doc(aliceDb, "groups", groupId), stamped({
+      members: ["Alice"],
+      memberUids: ["alice"],
+      updatedAt: Timestamp.now(),
+      updatedBy: ALICE_RAW
+    })));
+
+    await assertFails(getDoc(doc(bobDb, "groups", groupId)));
+    await assertFails(getDocs(collection(bobDb, "groups", groupId, "expenses")));
+    const bobGroups = await assertSucceeds(getDocs(query(
+      collection(bobDb, "groups"),
+      where("memberUids", "array-contains", "bob")
+    )));
+    assert.equal(bobGroups.size, 0);
+    // A retired document with no email cannot be self-claimed.
+    await assertFails(updateDoc(doc(bobDb, "groups", groupId), stamped({
+      memberUids: ["alice", "bob"],
+      lastClaimMemberId: bobMemberId,
+      updatedAt: Timestamp.now(),
+      updatedBy: BOB_RAW
+    })));
+
+    // A fresh, valid invite lets Bob join again.
+    await seed(["invites", "reinvite_token_0123456789"], {
+      type: "group",
+      groupId,
+      groupName: "Revocation group",
+      createdByUid: "alice",
+      createdByEmail: ALICE_RAW,
+      createdByName: "Alice",
+      createdAt: Timestamp.now(),
+      expiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+      revoked: false,
+      uses: 0
+    });
+    await assertSucceeds(updateDoc(doc(bobDb, "groups", groupId), stamped({
+      memberUids: ["alice", "bob"],
+      members: ["Alice", "Bob"],
+      lastJoinToken: "reinvite_token_0123456789",
+      lastJoinAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      updatedBy: BOB_RAW
+    })));
+    await assertSucceeds(updateDoc(doc(bobDb, "invites", "reinvite_token_0123456789"), {
+      uses: 1,
+      lastUsedAt: Timestamp.now(),
+      lastUsedBy: BOB_RAW
+    }));
+    await assertSucceeds(getDoc(doc(bobDb, "groups", groupId)));
+    await assertSucceeds(getDocs(collection(bobDb, "groups", groupId, "expenses")));
+  });
+
   await t.test("group access accepts memberUids when the email list is absent", async () => {
     await env.clearFirestore();
     await seed(["groups", "guid"], {
