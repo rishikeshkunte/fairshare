@@ -290,8 +290,12 @@
     </div>
   </footer>
   <script>
-    if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) {
-      window.location.replace("/app/");
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("invite") || params.has("joinGroup")) {
+      const hash = window.location.hash || "#friends";
+      window.location.replace(`/app/${window.location.search}${hash}`);
+    } else if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) {
+      window.location.replace(`/app/${window.location.search}${window.location.hash}`);
     }
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
