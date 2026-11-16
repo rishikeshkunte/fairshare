@@ -253,6 +253,14 @@ async function seedGroup({ groupId, name, alice, bob, includeBobUid, includeBobM
       dateISO: "2026-11-13",
       createdBy: alice.email
     });
+    await adminDb.doc(`groups/${groupId}/settlements/settlement_seed`).set({
+      amountPaise: 200,
+      payerMemberId: bobMemberId,
+      receiverMemberId: `uid_${alice.uid}`,
+      dateISO: "2026-11-14",
+      note: "Seed settlement",
+      createdBy: bob.email
+    });
   }
   return { bobMemberId };
 }
@@ -335,6 +343,13 @@ async function run() {
       updatedAt: Date.now(),
       updatedBy: aliceEmail
     });
+    await adminDb.doc(`groups/${groupId}/members/${bobMemberId}`).set({
+      displayName: "Bob E2E",
+      emailCanonical: bob.email.toLowerCase(),
+      uid: bob.uid,
+      role: "member",
+      status: "active"
+    }, { merge: true });
     await waitForGroupChip(bobSession.page, groupName, true);
     console.log("PASS re-invite: Bob rediscovered the group without a tombstone");
 
@@ -544,6 +559,30 @@ async function run() {
       throw new Error(`filter clear failed: ${JSON.stringify(filterCleared)}`);
     }
     console.log("PASS phase 6 balance tiles: net bar, direction filter, and clear");
+
+    await aliceSession.page.evaluate(() => window.navigateTo("balances"));
+    await aliceSession.page.waitForSelector("#balances-history-card");
+    await aliceSession.page.waitForTimeout(350);
+    const historyState = await aliceSession.page.evaluate(() => ({
+      visible: !document.getElementById("balances-history-card").hidden,
+      rows: document.querySelectorAll("#balances-history-list .history-row").length,
+      expenses: document.querySelectorAll("#balances-history-list .tx-type.is-expense").length,
+      settlements: document.querySelectorAll("#balances-history-list .tx-type.is-settle").length
+    }));
+    if (!historyState.visible || historyState.rows < 2 || historyState.expenses < 1 || historyState.settlements < 1) {
+      throw new Error(`balances history missing records: ${JSON.stringify(historyState)}`);
+    }
+    await aliceSession.page.click('.balances-history-filters [data-arg="settlement"]');
+    await aliceSession.page.waitForTimeout(250);
+    const onlySettlements = await aliceSession.page.evaluate(() => ({
+      expenses: document.querySelectorAll("#balances-history-list .tx-type.is-expense").length,
+      settlements: document.querySelectorAll("#balances-history-list .tx-type.is-settle").length
+    }));
+    if (onlySettlements.expenses !== 0 || onlySettlements.settlements < 1) {
+      throw new Error(`balances history filter failed: ${JSON.stringify(onlySettlements)}`);
+    }
+    await aliceSession.page.click('.balances-history-filters [data-arg="all"]');
+    console.log("PASS phase 7 balances history: expenses and settlement payments are visible and filterable");
 
     const axePages = [
       ["friends", "friends"],

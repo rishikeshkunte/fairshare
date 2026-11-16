@@ -434,6 +434,22 @@
         <p id="settlement-scope-note" class="group-hint" style="margin:8px 0 0;" hidden></p>
         <div id="settlement-list" class="settlement-list"></div>
       </div>
+
+      <div class="card balances-history-card" id="balances-history-card">
+        <div class="card-header-row balances-history-head">
+          <div>
+            <span class="eyebrow">History</span>
+            <h2>All records</h2>
+            <p class="section-hint" id="balances-history-hint">Expenses and settlement payments in this view.</p>
+          </div>
+          <div class="balances-history-filters" role="group" aria-label="Filter records">
+            <button type="button" class="tab-btn active" data-call="setBalancesHistoryFilter" data-arg="all" aria-pressed="true">All</button>
+            <button type="button" class="tab-btn" data-call="setBalancesHistoryFilter" data-arg="expense" aria-pressed="false">Expenses</button>
+            <button type="button" class="tab-btn" data-call="setBalancesHistoryFilter" data-arg="settlement" aria-pressed="false">Settlements</button>
+          </div>
+        </div>
+        <div id="balances-history-list" class="balances-history-list"></div>
+      </div>
     </div>
 
     <div id="settle-overlay" class="balances-overlay" hidden>
@@ -1125,7 +1141,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v166";
+    const APP_BUILD = "v167";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2338,6 +2354,7 @@
     let analyticsScope = "active";
     let balancesScope = "all";
     let settlementVisibility = "mine";
+    let balancesHistoryFilter = "all";
 
     // History Filters
     let historyFilter = "all";
@@ -3878,6 +3895,7 @@
       if (balancesScope === "direct" || balancesScope.startsWith("group:")) {
         balancesScope = `group:${key}`;
         settlementVisibility = "mine";
+        balancesHistoryFilter = "all";
       }
       if (typeof cancelEditMode === "function") {
         try { cancelEditMode(); } catch (err) { console.warn("Cancel edit note:", err); }
@@ -5418,6 +5436,7 @@
     function setBalancesScope(value) {
       balancesScope = value || "all";
       settlementVisibility = "mine";
+      balancesHistoryFilter = "all";
       if (balancesScope.startsWith("group:")) {
         const id = groupKeyFor(balancesScope.slice(6));
         if (id) {
@@ -5723,6 +5742,7 @@
       if (balancesScopeLabel) balancesScopeLabel.textContent = data.label;
 
       renderDebtSimplification(data);
+      renderBalancesHistory(data);
 
       const scopeNote = document.getElementById("settlement-scope-note");
       if (scopeNote) {
@@ -5739,6 +5759,101 @@
         }
       }
     }
+
+    function balancesHistoryRecords(data) {
+      const records = [];
+      (data.groups || []).forEach(group => {
+        if (!group) return;
+        (group.transactions || []).forEach(tx => {
+          if (!tx || (tx.type !== "expense" && tx.type !== "settlement")) return;
+          records.push({
+            ...tx,
+            sourceGroup: group.name || "Group",
+            groupId: groupKeyFor(group.id) || group.id,
+            sourceCurrency: group.currency || data.currency
+          });
+        });
+      });
+      if (data.includeDirect) {
+        (currentUser ? (appState.directTransactions || []) : []).forEach(tx => {
+          if (!tx || (tx.type !== "expense" && tx.type !== "settlement")) return;
+          records.push({
+            ...tx,
+            sourceGroup: `1-on-1: ${tx.friend || "friend"}`,
+            sourceCurrency: data.currency
+          });
+        });
+      }
+      return records.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0));
+    }
+
+    function renderBalancesHistory(data) {
+      const card = document.getElementById("balances-history-card");
+      const list = document.getElementById("balances-history-list");
+      const hint = document.getElementById("balances-history-hint");
+      if (!card || !list) return;
+      const all = balancesHistoryRecords(data);
+      const isSettled = allOpenSettlementItems(data).length === 0;
+      const counts = { expense: 0, settlement: 0 };
+      all.forEach(tx => { if (counts[tx.type] !== undefined) counts[tx.type] += 1; });
+      document.querySelectorAll(".balances-history-filters [data-arg]").forEach(button => {
+        const active = button.dataset.arg === balancesHistoryFilter;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      if (hint) {
+        const expenseLabel = `${counts.expense} expense${counts.expense === 1 ? "" : "s"}`;
+        const settlementLabel = `${counts.settlement} settlement payment${counts.settlement === 1 ? "" : "s"}`;
+        hint.textContent = `${isSettled ? "All settled. " : ""}${expenseLabel} and ${settlementLabel} in this view.`;
+        hint.classList.toggle("is-settled", isSettled);
+      }
+      const shown = balancesHistoryFilter === "all"
+        ? all
+        : all.filter(tx => tx.type === balancesHistoryFilter);
+      if (!shown.length) {
+        list.innerHTML = `<div class="balances-history-empty">${
+          all.length
+            ? `No ${balancesHistoryFilter === "settlement" ? "settlement payments" : "expenses"} in this view.`
+            : "No expenses or settlement payments in this view yet."
+        }</div>`;
+        return;
+      }
+      let html = "";
+      let lastDate = "";
+      shown.forEach(tx => {
+        const dateKey = tx.dateISO || tx.date || "";
+        if (dateKey !== lastDate) {
+          lastDate = dateKey;
+          html += `<div class="date-heading">${escapeHtml(activityDateLabel(tx))}</div>`;
+        }
+        const isSettle = tx.type === "settlement";
+        const payer = transactionDisplayName(tx, tx.payer) || "?";
+        const receiver = transactionDisplayName(tx, tx.receiver) || "?";
+        const title = isSettle ? `${payer} paid ${receiver}` : (tx.desc || tx.category || "Expense");
+        const meta = [];
+        meta.push(`<span class="tx-type ${isSettle ? "is-settle" : "is-expense"}">${isSettle ? "Settlement" : "Expense"}</span>`);
+        if (tx.sourceGroup) meta.push(escapeHtml(tx.sourceGroup));
+        if (!isSettle) meta.push(`Paid by ${escapeHtml(payer)}`);
+        if (!isSettle && tx.category) meta.push(escapeHtml(tx.category));
+        html += `<button type="button" class="history-row" data-call="openDetailModal" data-arg="${escapeHtml(tx.id || "")}">
+          <span class="avatar avatar-tone-${avatarTone(payer)}" data-emoji-person="${escapeHtml(payer)}" data-emoji-label="${escapeHtml(payer)}" title="Change emoji">${emojiForPerson(payer)}</span>
+          <span class="history-row-main">
+            <strong>${escapeHtml(title)}</strong>
+            <span class="transaction-meta">${meta.join(" \u00b7 ")}</span>
+          </span>
+          <span class="history-row-side">
+            <span class="history-amount ${isSettle ? "is-settle" : ""}">${formatMoney(tx.amount, tx.sourceCurrency || data.currency)}</span>
+            <span class="tx-date">${escapeHtml(tx.date || "")}</span>
+          </span>
+        </button>`;
+      });
+      list.innerHTML = html;
+    }
+
+    window.setBalancesHistoryFilter = function(filter) {
+      balancesHistoryFilter = filter === "expense" || filter === "settlement" ? filter : "all";
+      renderBalancesHistory(balancesScopeData());
+    };
 
     function renderGroupExpenseSummary() {
       const card = document.getElementById("group-expenses-card");
@@ -7388,6 +7503,7 @@
       if (persist && previousUser) persistLocalState(previousUser);
       currentUser = null;
       homePeopleFilter = "all";
+      balancesHistoryFilter = "all";
       cloudSyncUid = null;
       toldGroupSyncError = false;
       [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeMembershipListener, unsubscribeFriendsRosterListener]
@@ -7421,6 +7537,7 @@
         if (switchedUser) {
           if (previousUser) persistLocalState(previousUser);
           homePeopleFilter = "all";
+          balancesHistoryFilter = "all";
           updateAuthUI(null);
           clearNormalizedListeners();
           currentUser = user;
