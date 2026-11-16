@@ -502,6 +502,49 @@ async function run() {
     if (!peopleHash.includes("friends")) throw new Error(`phase 4 people tabs failed: ${peopleHash}`);
     console.log("PASS phase 4 navigation: aria-current and people-tab arrow keys");
 
+    await aliceSession.page.evaluate(() => window.navigateTo("home"));
+    await aliceSession.page.waitForTimeout(400);
+    const mixState = await aliceSession.page.evaluate(() => ({
+      hidden: document.getElementById("home-standing-mix").hidden,
+      owedWidth: document.getElementById("home-mix-owed").style.width,
+      oweWidth: document.getElementById("home-mix-owe").style.width
+    }));
+    if (mixState.hidden || mixState.owedWidth !== "100%" || mixState.oweWidth !== "0%") {
+      throw new Error(`home net bar failed: ${JSON.stringify(mixState)}`);
+    }
+    await aliceSession.page.click("#hero-metric-owed");
+    await aliceSession.page.waitForTimeout(350);
+    const owedFilter = await aliceSession.page.evaluate(() => ({
+      pressed: document.getElementById("hero-metric-owed").getAttribute("aria-pressed"),
+      note: !document.getElementById("home-people-filter-note").hidden,
+      rows: [...document.querySelectorAll("#home-people-list .home-person-amount")].map((el) => el.className)
+    }));
+    if (owedFilter.pressed !== "true" || !owedFilter.note || !owedFilter.rows.length || owedFilter.rows.some((name) => !name.includes("is-owed"))) {
+      throw new Error(`owed filter failed: ${JSON.stringify(owedFilter)}`);
+    }
+    await aliceSession.page.click("#hero-metric-owe");
+    await aliceSession.page.waitForTimeout(350);
+    const oweFilter = await aliceSession.page.evaluate(() => ({
+      pressed: document.getElementById("hero-metric-owe").getAttribute("aria-pressed"),
+      note: !document.getElementById("home-people-filter-note").hidden,
+      rows: document.querySelectorAll("#home-people-list .home-person").length,
+      empty: document.querySelector("#home-people-list .home-people-empty")?.textContent || ""
+    }));
+    if (oweFilter.pressed !== "true" || !oweFilter.note || oweFilter.rows !== 0 || !oweFilter.empty) {
+      throw new Error(`owe filter failed: ${JSON.stringify(oweFilter)}`);
+    }
+    await aliceSession.page.click("#hero-metric-owe");
+    await aliceSession.page.waitForTimeout(350);
+    const filterCleared = await aliceSession.page.evaluate(() => ({
+      owed: document.getElementById("hero-metric-owed").getAttribute("aria-pressed"),
+      owe: document.getElementById("hero-metric-owe").getAttribute("aria-pressed"),
+      noteHidden: document.getElementById("home-people-filter-note").hidden
+    }));
+    if (filterCleared.owed !== "false" || filterCleared.owe !== "false" || !filterCleared.noteHidden) {
+      throw new Error(`filter clear failed: ${JSON.stringify(filterCleared)}`);
+    }
+    console.log("PASS phase 6 balance tiles: net bar, direction filter, and clear");
+
     const axePages = [
       ["friends", "friends"],
       ["home", "home-light"],

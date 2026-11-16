@@ -139,14 +139,18 @@
         <div id="home-standing-sub">All settled up. Nothing to pay or collect.</div>
 
         <div class="hero-metrics">
-          <div class="hero-metric">
+          <button type="button" class="hero-metric" id="hero-metric-owed" data-call="setHomePeopleFilter" data-arg="owed" aria-pressed="false" aria-controls="home-people-card">
             <span>Owed to you</span>
             <strong id="home-owed-val">₹0.00</strong>
-          </div>
-          <div class="hero-metric">
+          </button>
+          <button type="button" class="hero-metric" id="hero-metric-owe" data-call="setHomePeopleFilter" data-arg="owe" aria-pressed="false" aria-controls="home-people-card">
             <span>You owe</span>
             <strong id="home-owe-val">₹0.00</strong>
-          </div>
+          </button>
+        </div>
+        <div class="hero-mix" id="home-standing-mix" aria-hidden="true" hidden>
+          <span class="hero-mix-owed" id="home-mix-owed"></span>
+          <span class="hero-mix-owe" id="home-mix-owe"></span>
         </div>
 
         <div class="hero-actions">
@@ -206,6 +210,7 @@
         <div>
           <span class="eyebrow">People</span>
           <h2>Your balances</h2>
+          <div id="home-people-filter-note" class="home-people-filter-note" aria-live="polite" hidden></div>
         </div>
         <button type="button" class="btn btn-secondary" data-call="navigateTo" data-arg="balances">All balances</button>
       </div>
@@ -1121,7 +1126,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v164";
+    const APP_BUILD = "v165";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -1147,6 +1152,7 @@
     let currentExpenseScope = "group";
     let selectedDirectFriend = "";
     let selectedFriendDetailId = "";
+    let homePeopleFilter = "all";
     let managedGroupId = "";
     let historyFilterType = "all";
 
@@ -5701,6 +5707,18 @@
       }
       if (homeOwedVal) homeOwedVal.textContent = formatMoney(overallOwed, homeCur);
       if (homeOweVal) homeOweVal.textContent = formatMoney(overallOwe, homeCur);
+      const mix = document.getElementById("home-standing-mix");
+      if (mix) {
+        const mixTotal = overallOwed + overallOwe;
+        mix.hidden = mixTotal < 0.01;
+        if (mixTotal >= 0.01) {
+          const owedPct = Math.max(0, Math.min(100, Math.round((overallOwed / mixTotal) * 100)));
+          const mixOwed = document.getElementById("home-mix-owed");
+          const mixOwe = document.getElementById("home-mix-owe");
+          if (mixOwed) mixOwed.style.width = `${owedPct}%`;
+          if (mixOwe) mixOwe.style.width = `${100 - owedPct}%`;
+        }
+      }
 
       const balancesScopeLabel = document.getElementById("balances-group-scope");
       if (balancesScopeLabel) balancesScopeLabel.textContent = data.label;
@@ -6213,7 +6231,10 @@
         }
       });
 
-      return items.sort((a, b) => b.amount - a.amount).slice(0, 4);
+      const matching = homePeopleFilter === "all"
+        ? items
+        : items.filter(item => item.direction === homePeopleFilter);
+      return matching.sort((a, b) => b.amount - a.amount).slice(0, 4);
     }
 
     function renderHomeSummary() {
@@ -6222,13 +6243,24 @@
       const firstRun = document.getElementById("home-first-run");
       if (firstRun) firstRun.hidden = !(groups.length === 0 && !hasDirect);
 
+      updateHomeStandingFilterUI();
       const card = document.getElementById("home-people-card");
       const list = document.getElementById("home-people-list");
       if (!card || !list) return;
+      const filtering = homePeopleFilter !== "all";
       const items = homePeopleItems();
-      card.hidden = !items.length;
+      const note = document.getElementById("home-people-filter-note");
+      if (note) {
+        note.hidden = !filtering;
+        note.innerHTML = filtering
+          ? `<span>Showing ${homePeopleFilter === "owed" ? "people who owe you" : "people you owe"}</span><button type="button" class="link-btn" data-call="clearHomePeopleFilter">Clear</button>`
+          : "";
+      }
+      card.hidden = !items.length && !filtering;
       if (!items.length) {
-        list.innerHTML = "";
+        list.innerHTML = filtering
+          ? `<div class="home-people-empty">${homePeopleFilter === "owed" ? "No one owes you right now." : "You don't owe anyone right now."}</div>`
+          : "";
         return;
       }
       list.innerHTML = items.map(item => {
@@ -6243,6 +6275,35 @@
         </button>`;
       }).join("");
     }
+
+    function updateHomeStandingFilterUI() {
+      const owedTile = document.getElementById("hero-metric-owed");
+      const oweTile = document.getElementById("hero-metric-owe");
+      if (owedTile) {
+        owedTile.classList.toggle("is-active", homePeopleFilter === "owed");
+        owedTile.setAttribute("aria-pressed", String(homePeopleFilter === "owed"));
+      }
+      if (oweTile) {
+        oweTile.classList.toggle("is-active", homePeopleFilter === "owe");
+        oweTile.setAttribute("aria-pressed", String(homePeopleFilter === "owe"));
+      }
+    }
+
+    window.setHomePeopleFilter = function(direction) {
+      if (direction !== "owed" && direction !== "owe") return;
+      homePeopleFilter = homePeopleFilter === direction ? "all" : direction;
+      renderHomeSummary();
+      if (homePeopleFilter !== "all") {
+        const card = document.getElementById("home-people-card");
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        card?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      }
+    };
+
+    window.clearHomePeopleFilter = function() {
+      homePeopleFilter = "all";
+      renderHomeSummary();
+    };
 
 
     function showSettleForm(from = "", to = "", amount = 0) {
@@ -7327,6 +7388,7 @@
       const previousUser = currentUser;
       if (persist && previousUser) persistLocalState(previousUser);
       currentUser = null;
+      homePeopleFilter = "all";
       cloudSyncUid = null;
       toldGroupSyncError = false;
       [unsubIncomingRequests, unsubOutgoingRequests, unsubscribeGroupListener, unsubscribeDirectListener, unsubscribeUserGroupsListener, unsubscribeMembershipListener, unsubscribeFriendsRosterListener]
@@ -7359,6 +7421,7 @@
         const switchedUser = !previousUser || previousUser.uid !== user.uid;
         if (switchedUser) {
           if (previousUser) persistLocalState(previousUser);
+          homePeopleFilter = "all";
           updateAuthUI(null);
           clearNormalizedListeners();
           currentUser = user;

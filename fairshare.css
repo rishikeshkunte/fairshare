@@ -3007,3 +3007,75 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
 #home-standing-badge.is-owed::before { background: var(--hero-dot-positive); }
 #home-standing-badge.is-owe::before { background: var(--hero-dot-negative); }
 #home-standing-badge.is-settled::before { background: var(--hero-muted); }
+
+/* v165: the balance tiles become filters and the hero gains a net-position bar. */
+.home-hero .hero-metric {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.home-hero .hero-metric:nth-child(1) { --tile-accent: var(--hero-positive); }
+.home-hero .hero-metric:nth-child(2) { --tile-accent: var(--hero-negative); }
+.home-hero .hero-metric:hover {
+  border-color: color-mix(in srgb, var(--tile-accent) 45%, var(--hero-tile-border));
+}
+.home-hero .hero-metric:focus-visible {
+  outline: 2px solid var(--tile-accent);
+  outline-offset: 2px;
+  box-shadow: inset 0 1px 0 var(--hero-tile-sheen);
+}
+.home-hero .hero-metric.is-active {
+  border-color: var(--tile-accent);
+  box-shadow: inset 0 1px 0 var(--hero-tile-sheen), 0 0 0 2px color-mix(in srgb, var(--tile-accent) 38%, transparent);
+}
+.hero-mix {
+  display: flex;
+  gap: 3px;
+  height: 5px;
+  margin-top: 18px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--hero-line);
+}
+.hero-mix[hidden] { display: none; }
+.hero-mix-owed,
+.hero-mix-owe {
+  display: block;
+  height: 100%;
+  transition: width .3s var(--ease-out);
+}
+.hero-mix-owed { background: var(--hero-dot-positive); }
+.hero-mix-owe { background: var(--hero-dot-negative); }
+.home-people-filter-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.home-people-filter-note[hidden] { display: none; }
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.home-people-empty {
+  grid-column: 1 / -1;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
