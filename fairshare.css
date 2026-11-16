@@ -2069,3 +2069,73 @@ input:not([type="checkbox"]):not([type="radio"]):focus-visible, select:focus-vis
 .group-picker-row, .emoji-option { border-radius: var(--radius-3); }
 .emoji-cat { border-radius: var(--radius-full); }
 .balances-sheet-head { padding-bottom: var(--space-2); }
+
+/* Phase 3: screen-level polish */
+.home-hero {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 7%, var(--surface-solid)), var(--surface-solid) 58%);
+  border-radius: var(--radius-6);
+  padding: var(--space-6);
+  gap: var(--space-6);
+}
+#home-standing-badge {
+  border-radius: var(--radius-full);
+  font-size: var(--text-1);
+}
+.hero-metric {
+  border-radius: var(--radius-4);
+  background: var(--surface-solid);
+  border-color: var(--line);
+}
+.hero-metric span, .metric-label {
+  font-size: var(--text-1);
+  letter-spacing: .08em;
+}
+.home-hero .hero-actions .btn { border-radius: var(--radius-full); }
+.home-hero-side { padding-left: var(--space-5); }
+.home-person {
+  border-radius: var(--radius-4);
+  padding: 10px 12px;
+}
+.home-person:hover, .home-person:focus-visible { background: var(--box-bg); }
+.home-quick-card, .home-start-card, .you-link { border-radius: var(--radius-5); }
+.you-hero {
+  border-radius: var(--radius-6);
+  padding: var(--space-5) var(--space-6);
+}
+.you-link .you-count { color: var(--muted); }
+.group-tab, .group-tab-add { border-radius: var(--radius-4); }
+.group-expense-metric { border-radius: var(--radius-4); }
+.balances-scope-bar, .settlement-filter, .toggle-row { border-radius: var(--radius-4); }
+.metric-box { border-radius: var(--radius-4); }
+#settlement-list .settlement-card {
+  border-radius: var(--radius-4);
+  padding: 14px 16px;
+}
+.settlement-title { font-size: var(--text-6); }
+.member-spend-table th { padding: 10px 12px; }
+.member-spend-table td { padding: 12px; }
+.amount-stage {
+  border-radius: var(--radius-5);
+  background: var(--surface-solid);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+}
+.scope-toggle, .tab-group { border-radius: var(--radius-4); }
+.scope-toggle .btn, .tab-btn { border-radius: var(--radius-3); }
+.split-row { padding: var(--space-2) 0; }
+.transaction-item {
+  border-radius: var(--radius-4);
+  padding: 12px 14px;
+}
+.transaction-item:hover {
+  border-color: var(--accent-border);
+  background: var(--surface-solid);
+}
+.tx-type, .settle-badge, .cat-badge, .friend-group-badge, .auth-pill { border-radius: var(--radius-full); }
+.analytics-headline-card, .analytics-toolbar { border-radius: var(--radius-5); }
+.analytics-top-pill { border-radius: var(--radius-full); }
+.friend-row { padding: 12px 0; }
+.empty-state, .group-tabs-empty {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-5);
+  background: color-mix(in srgb, var(--box-bg) 55%, transparent);
+}

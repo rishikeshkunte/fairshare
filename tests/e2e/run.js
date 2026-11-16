@@ -441,6 +441,25 @@ async function run() {
     if (!activeTab || !activeTab.includes("People")) throw new Error(`phase 2 tab keyboard failed: ${activeTab}`);
     console.log("PASS phase 2 tabs: arrow-key navigation updates the active view");
 
+    await aliceSession.page.evaluate(() => window.navigateTo("home"));
+    await aliceSession.page.waitForTimeout(300);
+    const phase3Home = await aliceSession.page.evaluate(() => ({
+      radius: getComputedStyle(document.querySelector(".home-hero")).borderRadius,
+      background: getComputedStyle(document.querySelector(".home-hero")).backgroundImage,
+      metricRadius: getComputedStyle(document.querySelector(".hero-metric")).borderRadius
+    }));
+    if (phase3Home.radius !== "20px" || phase3Home.background.includes("radial-gradient") || phase3Home.metricRadius !== "12px") {
+      throw new Error(`phase 3 home polish failed: ${JSON.stringify(phase3Home)}`);
+    }
+    await aliceSession.page.evaluate(() => window.navigateTo("history"));
+    await aliceSession.page.waitForTimeout(300);
+    const transactionRadius = await aliceSession.page.evaluate(() => {
+      const item = document.querySelector(".transaction-item");
+      return item ? getComputedStyle(item).borderRadius : "";
+    });
+    if (transactionRadius !== "12px") throw new Error(`phase 3 activity polish failed: ${transactionRadius}`);
+    console.log("PASS phase 3 screens: Home and Activity use the new surface primitives");
+
     await aliceSession.context.close();
     await bobSession.context.close();
   } finally {
