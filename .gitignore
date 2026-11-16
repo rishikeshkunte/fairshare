@@ -6,3 +6,6 @@ node_modules/
 repair-report.json
 
 assets/.recordings/
+
+marketing-film/.hyperframes/
+marketing-film/renders/

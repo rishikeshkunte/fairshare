@@ -178,7 +178,7 @@ details {
 details summary { cursor: pointer; padding: 16px 0; font-weight: 650; list-style: none; display: flex; justify-content: space-between; gap: 14px; }
 details summary::-webkit-details-marker { display: none; }
 details summary::after { content: "+"; color: var(--forest); font-weight: 800; }
-details[open] summary::after { content: "â€“"; }
+details[open] summary::after { content: "–"; }
 details p { padding: 0 0 16px; color: rgba(15, 31, 24, .66); font-size: .9rem; }
 
 /* CTA */
