@@ -465,3 +465,5 @@ body.hero-dark .hero .wrap { position: relative; z-index: 3; }
 .video-phone { width: 340px; }
 @media (max-width: 980px) { .video-phone { width: min(320px, 82vw); } }
 @media (max-width: 720px) { .video-phone { width: min(300px, 80vw); } }
+
+.phone-wrap { transform: none; transition: none; will-change: auto; }

@@ -96,22 +96,7 @@
       });
     }
   }
-  var heroVisual = document.getElementById("hero-visual");
   var phoneWrap = document.getElementById("phone-wrap");
-  var phoneCard = phoneWrap ? phoneWrap.querySelector(".phone") : null;
-  if (heroVisual && phoneCard && !reduceMotion && window.matchMedia && window.matchMedia("(hover: hover)").matches) {
-    heroVisual.addEventListener("pointermove", function (event) {
-      var rect = heroVisual.getBoundingClientRect();
-      var px = (event.clientX - rect.left) / rect.width - 0.5;
-      var py = (event.clientY - rect.top) / rect.height - 0.5;
-      phoneWrap.style.setProperty("--ry", (px * 6).toFixed(2) + "deg");
-      phoneWrap.style.setProperty("--rx", (-py * 5).toFixed(2) + "deg");
-    });
-    heroVisual.addEventListener("pointerleave", function () {
-      phoneWrap.style.setProperty("--ry", "0deg");
-      phoneWrap.style.setProperty("--rx", "0deg");
-    });
-  }
 
   var heroBalance = document.getElementById("hero-balance");
   var heroChips = document.querySelectorAll(".mini-chip");

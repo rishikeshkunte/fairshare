@@ -248,20 +248,44 @@ async function run() {
       const shell = document.getElementById("app-shell");
       return shell && !shell.hidden;
     }, null, { timeout: 25000 });
+    await page.addStyleTag({ content: `
+      .demo-fade { animation: demoFade .55s cubic-bezier(.2, .8, .2, 1) both; }
+      @keyframes demoFade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+      #settle-overlay .balances-sheet.demo-sheet { animation: demoSheet .5s cubic-bezier(.2, .8, .2, 1) both; }
+      @keyframes demoSheet { from { opacity: 0; transform: translateY(28px) scale(.98); } to { opacity: 1; transform: none; } }
+    ` });
+    const showPage = async (hash) => {
+      await page.evaluate((target) => {
+        window.navigateTo(target);
+        const active = document.querySelector(".app-page.active");
+        if (active) {
+          active.classList.remove("demo-fade");
+          void active.offsetWidth;
+          active.classList.add("demo-fade");
+        }
+      }, hash);
+    };
     await page.waitForTimeout(2200);
 
-    await page.evaluate(() => window.navigateTo("groups"));
-    await page.waitForTimeout(1800);
-    await page.evaluate(() => window.navigateTo("balances"));
+    await showPage("groups");
     await page.waitForTimeout(2200);
-    await page.evaluate(() => window.quickSettlePrompt("Shivam", "Rhea", 60000));
-    await page.waitForTimeout(1600);
-    await page.click('#settle-form button[type="submit"]');
-    await page.waitForTimeout(2200);
-    await page.evaluate(() => window.navigateTo("history"));
-    await page.waitForTimeout(2000);
-    await page.evaluate(() => window.navigateTo("home"));
+    await showPage("balances");
     await page.waitForTimeout(2400);
+    await page.evaluate(() => window.quickSettlePrompt("Shivam", "Rhea", 60000));
+    await page.evaluate(() => {
+      const sheet = document.querySelector("#settle-overlay .balances-sheet");
+      if (!sheet) return;
+      sheet.classList.remove("demo-sheet");
+      void sheet.offsetWidth;
+      sheet.classList.add("demo-sheet");
+    });
+    await page.waitForTimeout(1800);
+    await page.click('#settle-form button[type="submit"]');
+    await page.waitForTimeout(2400);
+    await showPage("history");
+    await page.waitForTimeout(2400);
+    await showPage("home");
+    await page.waitForTimeout(2600);
 
     const video = page.video();
     const videoPath = await video.path();
@@ -269,15 +293,15 @@ async function run() {
     const finalPath = join(outDir, "demo-goa.webm");
     const ffmpeg = findFfmpeg();
     const trimmed = ffmpeg && spawnSync(ffmpeg, [
-      "-y", "-ss", "1.5", "-i", videoPath,
-      "-c:v", "libvpx-vp9", "-crf", "28", "-b:v", "0", finalPath
+      "-y", "-ss", "3.0", "-i", videoPath,
+      "-r", "30", "-c:v", "libvpx-vp9", "-crf", "28", "-b:v", "0", finalPath
     ], { stdio: "ignore" }).status === 0;
     if (!trimmed) await copyFile(videoPath, finalPath);
     const mp4Path = join(outDir, "demo-goa.mp4");
     if (ffmpegStatic && existsSync(ffmpegStatic)) {
       spawnSync(ffmpegStatic, [
         "-y", "-i", finalPath,
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-crf", "23", mp4Path
+        "-r", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-crf", "20", mp4Path
       ], { stdio: "ignore" });
     }
     console.log("video written", finalPath);
