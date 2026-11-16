@@ -250,9 +250,9 @@ export function enhanceOverlay(overlay, close) {
   update();
 }
 
-export function enhanceTabList(container) {
+export function enhanceTabList(container, selector = ".tab-btn") {
   if (!container || container.dataset.tabsReady === "true") return;
-  const tabs = Array.from(container.querySelectorAll(".tab-btn"));
+  const tabs = Array.from(container.querySelectorAll(selector));
   if (!tabs.length) return;
   container.dataset.tabsReady = "true";
   container.setAttribute("role", "tablist");

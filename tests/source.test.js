@@ -999,3 +999,13 @@ test("phase 2 overlays, tabs, and the theme radio group are accessible", () => {
   assert.match(ui, /aria-selected/);
   assert.match(ui, /aria-checked/);
 });
+
+test("phase 4 navigation and history tabs are accessible", () => {
+  assert.match(html, /class="skip-link"/);
+  assert.match(html, /id="app-main"/);
+  assert.match(html, /id="history-type-tabs"/);
+  assert.match(html, /btn\.setAttribute\("aria-current", "page"\)/);
+  assert.match(html, /enhanceTabList\(switcher, "\.people-tab"\)/);
+  assert.match(css, /\.skip-link/);
+  assert.match(css, /env\(safe-area-inset-bottom/);
+});

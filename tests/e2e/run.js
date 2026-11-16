@@ -460,6 +460,17 @@ async function run() {
     if (transactionRadius !== "12px") throw new Error(`phase 3 activity polish failed: ${transactionRadius}`);
     console.log("PASS phase 3 screens: Home and Activity use the new surface primitives");
 
+    await aliceSession.page.evaluate(() => window.navigateTo("groups"));
+    await aliceSession.page.waitForTimeout(300);
+    const navCurrent = await aliceSession.page.evaluate(() => document.querySelector('.desktop-nav .nav-tab-btn[data-page="groups"]')?.getAttribute("aria-current"));
+    if (navCurrent !== "page") throw new Error(`phase 4 nav aria-current missing: ${navCurrent}`);
+    await aliceSession.page.focus("#page-groups .people-tab.active");
+    await aliceSession.page.keyboard.press("ArrowRight");
+    await aliceSession.page.waitForTimeout(300);
+    const peopleHash = await aliceSession.page.evaluate(() => window.location.hash);
+    if (!peopleHash.includes("friends")) throw new Error(`phase 4 people tabs failed: ${peopleHash}`);
+    console.log("PASS phase 4 navigation: aria-current and people-tab arrow keys");
+
     await aliceSession.context.close();
     await bobSession.context.close();
   } finally {

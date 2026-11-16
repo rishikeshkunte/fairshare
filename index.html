@@ -42,6 +42,7 @@
   </div>
 
   <div class="app-shell" id="app-shell" hidden>
+  <a class="skip-link" href="#app-main">Skip to content</a>
   <aside class="command-dock">
   <!-- App Header -->
   <header class="app-header">
@@ -115,7 +116,7 @@
   </nav>
   </aside>
 
-  <main class="workspace">
+  <main class="workspace" id="app-main" tabindex="-1">
   <div id="offline-banner" class="offline-banner" hidden>📴 Offline — changes are saved on this device.</div>
   <div id="pwa-install-banner" class="pwa-banner" hidden>
     <span class="pwa-banner-emoji" aria-hidden="true">📲</span>
@@ -455,7 +456,7 @@
         </div>
       </div>
 
-      <div class="tab-group" style="max-width:320px; margin-bottom:12px;">
+      <div class="tab-group" id="history-type-tabs" role="tablist" aria-label="Activity type" style="max-width:320px; margin-bottom:12px;">
         <button type="button" class="tab-btn active" id="filter-all">All</button>
         <button type="button" class="tab-btn" id="filter-expenses">Expenses</button>
         <button type="button" class="tab-btn" id="filter-settlements">Settlements</button>
@@ -1118,7 +1119,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v158";
+    const APP_BUILD = "v159";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2367,10 +2368,16 @@
 
       const activeTab = NAV_PARENT[requestedPage] || NAV_PARENT[pageId] || pageId;
       document.querySelectorAll(".desktop-nav .nav-tab-btn").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.page === activeTab);
+        const current = btn.dataset.page === activeTab;
+        btn.classList.toggle("active", current);
+        if (current) btn.setAttribute("aria-current", "page");
+        else btn.removeAttribute("aria-current");
       });
       document.querySelectorAll(".mobile-bottom-nav .mobile-nav-item").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.page === activeTab);
+        const current = btn.dataset.page === activeTab;
+        btn.classList.toggle("active", current);
+        if (current) btn.setAttribute("aria-current", "page");
+        else btn.removeAttribute("aria-current");
       });
 
       window.location.hash = pageId;
@@ -9726,6 +9733,8 @@
     enhanceTabList(document.getElementById("analytics-view-tabs"));
     enhanceTabList(document.getElementById("analytics-scope-tabs"));
     enhanceTabList(document.getElementById("chart-style-tabs"));
+    enhanceTabList(document.getElementById("history-type-tabs"));
+    document.querySelectorAll(".people-switch").forEach((switcher) => enhanceTabList(switcher, ".people-tab"));
     enhanceRadioGroup(document.getElementById("theme-menu"));
   </script>
 </body>
