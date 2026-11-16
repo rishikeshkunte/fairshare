@@ -80,7 +80,10 @@
   }
 
   if (!reduceMotion && "IntersectionObserver" in window) {
-    var revealTargets = document.querySelectorAll(".card, .usecase, .demo-card, .step, .section-head, .proof-box");
+    var revealSelector = window.gsap
+      ? ".card, .usecase, .demo-card, .section-head, .proof-box"
+      : ".card, .usecase, .demo-card, .step, .section-head, .proof-box";
+    var revealTargets = document.querySelectorAll(revealSelector);
     if (revealTargets.length) {
       var observer = new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
@@ -98,45 +101,73 @@
   }
   var phoneWrap = document.getElementById("phone-wrap");
 
-  var heroBalance = document.getElementById("hero-balance");
-  var heroChips = document.querySelectorAll(".mini-chip");
-  var heroChipIndex = 0;
-  var heroChipTimer = 0;
-
-  function animateHeroBalance() {
-    if (!heroBalance) return;
-    var prefix = "You are owed \u20b9";
-    if (reduceMotion) {
-      heroBalance.textContent = prefix + "2,480";
-      return;
-    }
-    var start = performance.now();
-    function frame(now) {
-      var t = Math.min(1, (now - start) / 1500);
-      var eased = 1 - Math.pow(1 - t, 3);
-      var value = Math.round(2480 * eased);
-      heroBalance.textContent = prefix + value.toLocaleString("en-IN");
-      if (t < 1) requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-  }
-
-  function cycleHeroChips() {
-    if (!heroChips.length || reduceMotion) return;
-    clearInterval(heroChipTimer);
-    heroChipTimer = window.setInterval(function () {
-      heroChips[heroChipIndex].classList.remove("on");
-      heroChipIndex = (heroChipIndex + 1) % heroChips.length;
-      heroChips[heroChipIndex].classList.add("on");
-    }, 2600);
-  }
-
   if (phoneWrap) {
     window.setTimeout(function () {
       phoneWrap.classList.add("is-animated");
-      animateHeroBalance();
-      cycleHeroChips();
     }, 250);
+  }
+
+  if (window.gsap && window.ScrollTrigger) {
+    window.gsap.registerPlugin(window.ScrollTrigger);
+    var gsap = window.gsap;
+    var motion = gsap.matchMedia();
+    motion.add("(prefers-reduced-motion: no-preference)", function () {
+      gsap.from(".hero h1, .hero-lede, .hero-actions, .hero-trust, .hero-proof", {
+        opacity: 0,
+        y: 16,
+        duration: 0.8,
+        stagger: 0.08,
+        ease: "power3.out"
+      });
+      var steps = gsap.utils.toArray("#how .step");
+      if (steps.length) {
+        gsap.from(steps, {
+          opacity: 0,
+          y: 26,
+          duration: 0.8,
+          stagger: 0.12,
+          ease: "power3.out",
+          scrollTrigger: {
+            trigger: "#how",
+            start: "top 80%",
+            once: true
+          }
+        });
+      }
+    });
+  }
+
+  var lottieBox = document.getElementById("settle-lottie");
+  if (lottieBox && window.lottie) {
+    var settleAnimation = window.lottie.loadAnimation({
+      container: lottieBox,
+      renderer: "svg",
+      loop: false,
+      autoplay: false,
+      path: "assets/settle-check.json?v=1"
+    });
+    var settlePlayed = false;
+    settleAnimation.addEventListener("DOMLoaded", function () {
+      lottieBox.classList.add("is-loaded");
+      if (reduceMotion) {
+        settleAnimation.goToAndStop(settleAnimation.totalFrames - 1, true);
+        return;
+      }
+      if ("IntersectionObserver" in window) {
+        var settleObserver = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting && !settlePlayed) {
+              settlePlayed = true;
+              settleAnimation.play();
+              settleObserver.disconnect();
+            }
+          });
+        }, { threshold: 0.5 });
+        settleObserver.observe(lottieBox);
+      } else {
+        settleAnimation.play();
+      }
+    });
   }
 
   var heroVideo = document.getElementById("hero-video");

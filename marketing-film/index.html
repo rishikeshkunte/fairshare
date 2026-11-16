@@ -1,0 +1,294 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1280, height=720" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --forest: #0b1f18;
+        --forest-2: #153126;
+        --ivory: #f5f0e6;
+        --marigold: #e8a84c;
+        --sage: #8fa99b;
+        --positive: #2f8f63;
+        --display: "Instrument Sans", "Inter", system-ui, sans-serif;
+        --body: "Inter", system-ui, sans-serif;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1280px;
+        height: 720px;
+        overflow: hidden;
+        background: var(--forest);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        color: var(--ivory);
+        font-family: var(--body);
+        background:
+          linear-gradient(120deg, rgba(232, 168, 76, .10), transparent 42%),
+          linear-gradient(180deg, #081a13 0%, #0d231b 58%, #153126 100%);
+      }
+      #root::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(245, 240, 230, .035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(245, 240, 230, .035) 1px, transparent 1px);
+        background-size: 80px 80px;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, .7), transparent 72%);
+        pointer-events: none;
+      }
+      #root::after {
+        content: "";
+        position: absolute;
+        left: 96px;
+        top: 0;
+        width: 1px;
+        height: 100%;
+        background: linear-gradient(180deg, transparent, rgba(232, 168, 76, .35), transparent);
+        pointer-events: none;
+      }
+      .brand {
+        position: absolute;
+        left: 72px;
+        top: 52px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: var(--display);
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -.02em;
+        opacity: 0;
+      }
+      .brand img { width: 36px; height: 36px; border-radius: 10px; }
+      .brand span { color: rgba(245, 240, 230, .92); }
+      .title {
+        position: absolute;
+        left: 96px;
+        top: 205px;
+        font-family: var(--display);
+        font-size: 78px;
+        line-height: 1.02;
+        letter-spacing: -.05em;
+        font-weight: 600;
+      }
+      .title .line { display: block; }
+      .title .accent { color: var(--marigold); }
+      .callout {
+        position: absolute;
+        left: 96px;
+        top: 232px;
+        width: 540px;
+      }
+      .callout .kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: var(--marigold);
+      }
+      .callout .kicker::before {
+        content: "";
+        width: 22px;
+        height: 2px;
+        background: var(--marigold);
+      }
+      .callout h2 {
+        margin-top: 16px;
+        font-family: var(--display);
+        font-size: 62px;
+        line-height: 1.03;
+        letter-spacing: -.045em;
+        font-weight: 600;
+        color: var(--ivory);
+      }
+      .callout p {
+        margin-top: 14px;
+        font-size: 20px;
+        line-height: 1.45;
+        color: rgba(245, 240, 230, .66);
+      }
+      .phone {
+        position: absolute;
+        right: 96px;
+        top: 47px;
+        width: 300px;
+        height: 626px;
+        padding: 10px;
+        border-radius: 42px;
+        background: linear-gradient(160deg, #142a21, #0c1c16);
+        box-shadow: 0 50px 110px rgba(0, 0, 0, .48), inset 0 0 0 1px rgba(255, 255, 255, .08);
+      }
+      .phone-screen {
+        width: 100%;
+        height: 100%;
+        border-radius: 32px;
+        overflow: hidden;
+        background: #0b1511;
+      }
+      .phone video {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+      }
+      .phone-caption {
+        position: absolute;
+        right: 96px;
+        top: 684px;
+        width: 300px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: rgba(245, 240, 230, .38);
+      }
+      .cta {
+        position: absolute;
+        left: 96px;
+        top: 234px;
+        width: 540px;
+        opacity: 0;
+      }
+      .cta .logo {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        font-family: var(--display);
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .cta .logo img { width: 44px; height: 44px; border-radius: 12px; }
+      .cta h2 {
+        margin-top: 22px;
+        font-family: var(--display);
+        font-size: 62px;
+        line-height: 1.03;
+        letter-spacing: -.045em;
+        font-weight: 600;
+      }
+      .cta h2 span { color: var(--marigold); }
+      .cta .button {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 26px;
+        padding: 16px 24px;
+        border-radius: 999px;
+        background: var(--marigold);
+        color: #0b1f18;
+        font-family: var(--body);
+        font-size: 18px;
+        font-weight: 800;
+      }
+      .cta .note {
+        margin-top: 14px;
+        font-size: 13px;
+        color: rgba(245, 240, 230, .5);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="18" data-fps="60" data-width="1280" data-height="720">
+      <div class="brand" id="brand">
+        <img src="assets/icon.png" alt="" />
+        <span>What's My Share?</span>
+      </div>
+
+      <div class="title" id="title">
+        <span class="line">Split expenses.</span>
+        <span class="line accent">Keep friendships.</span>
+      </div>
+
+      <div class="callout" id="c1">
+        <span class="kicker">Add</span>
+        <h2>Log it in seconds.</h2>
+        <p>Dinner, cab, groceries â€” one calm entry and the math is done.</p>
+      </div>
+      <div class="callout" id="c2">
+        <span class="kicker">Split</span>
+        <h2>Split it your way.</h2>
+        <p>Equal, exact amounts, percentages, or shares. Live preview, no surprises.</p>
+      </div>
+      <div class="callout" id="c3">
+        <span class="kicker">Simplify</span>
+        <h2>Fewer payments.</h2>
+        <p>Three chained debts become one transfer, with the same balances.</p>
+      </div>
+      <div class="callout" id="c4">
+        <span class="kicker">Settle</span>
+        <h2>One clear next step.</h2>
+        <p>Record who paid whom. Every device sees the same balance.</p>
+      </div>
+      <div class="callout" id="c5">
+        <span class="kicker">Goa Trip</span>
+        <h2>Calm, shared, done.</h2>
+        <p>Four friends, three expenses, one ledger that just works.</p>
+      </div>
+
+      <div class="phone" id="phone">
+        <div class="phone-screen">
+          <video id="app" class="clip" data-start="1.8" data-duration="14.0" data-track-index="1" src="assets/demo-goa.mp4" muted playsinline></video>
+        </div>
+      </div>
+      <div class="phone-caption" id="phone-caption">
+        <span>Real app</span>
+        <span>60 fps</span>
+      </div>
+
+      <div class="cta" id="cta">
+        <div class="logo">What's My Share?</div>
+        <h2>Split it. <span>Settle it.</span> Done.</h2>
+        <div class="button">Start free with Gmail â†’</div>
+        <p class="note">Free in beta Â· No ads Â· Gmail sign-in</p>
+      </div>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+
+      gsap.set("#brand, #title, .callout, #cta", { autoAlpha: 0 });
+      gsap.set("#phone", { autoAlpha: 0, y: 30, scale: .96 });
+      gsap.set("#phone-caption", { autoAlpha: 0 });
+
+      tl.to("#brand", { autoAlpha: 1, y: 0, duration: .6, ease: "power3.out" }, 0.2);
+      tl.to("#title", { autoAlpha: 1, duration: .4 }, 0.3);
+      tl.fromTo("#title .line", { y: 26 }, { y: 0, duration: .75, stagger: .12, ease: "power3.out" }, 0.35);
+      tl.to("#phone", { autoAlpha: 1, y: 0, scale: 1, duration: 1.0, ease: "power3.out" }, 1.0);
+      tl.to("#phone-caption", { autoAlpha: 1, duration: .6 }, 1.7);
+      tl.to("#title", { autoAlpha: 0, y: -18, duration: .5, ease: "power2.in" }, 2.35);
+
+      const callouts = [
+        ["#c1", 3.0, 2.4],
+        ["#c2", 5.7, 2.4],
+        ["#c3", 8.4, 2.4],
+        ["#c4", 11.1, 2.4],
+        ["#c5", 13.8, 1.9]
+      ];
+      callouts.forEach(([selector, start, duration]) => {
+        tl.to(selector, { autoAlpha: 1, y: 0, duration: .5, ease: "power3.out" }, start);
+        tl.to(selector, { autoAlpha: 0, y: -14, duration: .4, ease: "power2.in" }, start + duration - 0.2);
+      });
+
+      tl.to("#cta", { autoAlpha: 1, y: 0, duration: .65, ease: "power3.out" }, 15.6);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
