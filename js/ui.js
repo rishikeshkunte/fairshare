@@ -60,6 +60,7 @@ let toastTimer = 0;
 export function toast(message, options = {}) {
   const root = ensureToast();
   root.replaceChildren();
+  root.setAttribute("aria-atomic", "true");
   const text = document.createElement("span");
   text.textContent = message;
   root.appendChild(text);
@@ -74,6 +75,16 @@ export function toast(message, options = {}) {
     });
     root.appendChild(button);
   }
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "toast-close";
+  close.setAttribute("aria-label", "Dismiss notification");
+  close.textContent = "\u00d7";
+  close.addEventListener("click", () => {
+    root.hidden = true;
+    clearTimeout(toastTimer);
+  });
+  root.appendChild(close);
   root.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { root.hidden = true; }, options.duration || (options.actionLabel ? 7000 : 3400));
@@ -89,11 +100,16 @@ export function askPrompt({ title = "What's My Share?", message, defaultValue = 
 
 function openDialog({ title, message, mode, defaultValue = "", placeholder = "", confirmLabel, danger = false }) {
   const backdrop = ensureDialog();
+  const content = backdrop.querySelector(".modal-content");
   const titleEl = $("dialog-title");
   const messageEl = $("dialog-message");
   const input = $("dialog-input");
   const ok = $("dialog-ok");
   const cancel = $("dialog-cancel");
+  const previousFocus = document.activeElement;
+  if (content) content.setAttribute("tabindex", "-1");
+  backdrop.setAttribute("aria-labelledby", "dialog-title");
+  backdrop.setAttribute("aria-describedby", "dialog-message");
   return new Promise((resolve) => {
     titleEl.textContent = title;
     messageEl.textContent = message || "";
@@ -106,19 +122,50 @@ function openDialog({ title, message, mode, defaultValue = "", placeholder = "",
     cancel.hidden = false;
     backdrop.hidden = false;
     backdrop.classList.add("active");
+    const focusable = () => Array.from(content ? content.querySelectorAll(
+      'button:not([disabled]):not([hidden]), input:not([disabled]):not([hidden]), select:not([disabled]):not([hidden]), textarea:not([disabled]):not([hidden]), a[href], [tabindex]:not([tabindex="-1"])'
+    ) : []).filter(element => !element.hidden);
     const finish = (value) => {
       backdrop.classList.remove("active");
       backdrop.hidden = true;
       ok.removeEventListener("click", onOk);
       cancel.removeEventListener("click", onCancel);
+      backdrop.removeEventListener("click", onBackdrop);
       document.removeEventListener("keydown", onKey);
       resolve(value);
+      if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
     };
     const onOk = () => finish(mode === "prompt" ? input.value : true);
     const onCancel = () => finish(mode === "prompt" ? null : false);
-    const onKey = (event) => { if (event.key === "Escape") onCancel(); };
+    const onBackdrop = (event) => {
+      if (event.target === backdrop) onCancel();
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) {
+        event.preventDefault();
+        content?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
     ok.addEventListener("click", onOk);
     cancel.addEventListener("click", onCancel);
+    backdrop.addEventListener("click", onBackdrop);
     document.addEventListener("keydown", onKey);
     if (mode === "prompt") input.focus();
     else ok.focus();

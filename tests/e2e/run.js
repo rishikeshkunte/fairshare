@@ -345,6 +345,67 @@ async function run() {
     console.log("PASS intent: demo values became a starter group and a prefilled expense");
     await carolSession.context.close();
 
+    await aliceSession.page.evaluate(() => window.navigateTo("account"));
+    const tokens = await aliceSession.page.evaluate(() => ({
+      button: getComputedStyle(document.getElementById("btn-google-auth")).borderRadius,
+      input: getComputedStyle(document.getElementById("amount")).minHeight,
+      card: getComputedStyle(document.querySelector(".card")).borderRadius,
+      text: getComputedStyle(document.documentElement).getPropertyValue("--text").trim()
+    }));
+    if (tokens.button !== "12px" || tokens.input !== "42px" || tokens.card !== "16px" || !tokens.text) {
+      throw new Error(`design tokens did not apply: ${JSON.stringify(tokens)}`);
+    }
+    console.log("PASS phase 1 tokens: buttons, inputs, cards use the token layer");
+
+    await aliceSession.page.click("#btn-theme-toggle");
+    await aliceSession.page.click('[data-theme-choice="dark"]');
+    const darkTheme = await aliceSession.page.evaluate(() => ({
+      theme: document.documentElement.getAttribute("data-theme"),
+      darkClass: document.documentElement.classList.contains("dark"),
+      sage12: getComputedStyle(document.documentElement).getPropertyValue("--sage-12").trim()
+    }));
+    if (darkTheme.theme !== "dark" || !darkTheme.darkClass || !darkTheme.sage12) {
+      throw new Error(`dark theme did not apply: ${JSON.stringify(darkTheme)}`);
+    }
+    await aliceSession.page.click("#btn-theme-toggle");
+    await aliceSession.page.click('[data-theme-choice="light"]');
+    console.log("PASS phase 1 themes: Radix scales switch with light/dark");
+
+    await aliceSession.page.focus("#btn-google-auth");
+    await aliceSession.page.click("#btn-google-auth");
+    await aliceSession.page.waitForSelector("#app-dialog:not([hidden])");
+    const dialog = await aliceSession.page.evaluate(() => ({
+      role: document.getElementById("app-dialog").getAttribute("role"),
+      modal: document.getElementById("app-dialog").getAttribute("aria-modal"),
+      labelledby: document.getElementById("app-dialog").getAttribute("aria-labelledby"),
+      activeInside: document.getElementById("app-dialog").contains(document.activeElement)
+    }));
+    if (dialog.role !== "dialog" || dialog.modal !== "true" || !dialog.labelledby || !dialog.activeInside) {
+      throw new Error(`dialog accessibility missing: ${JSON.stringify(dialog)}`);
+    }
+    for (let index = 0; index < 6; index += 1) await aliceSession.page.keyboard.press("Tab");
+    const trapped = await aliceSession.page.evaluate(() => document.getElementById("app-dialog").contains(document.activeElement));
+    if (!trapped) throw new Error("dialog did not trap keyboard focus");
+    await aliceSession.page.keyboard.press("Escape");
+    await aliceSession.page.waitForFunction(() => document.getElementById("app-dialog").hidden);
+    const restored = await aliceSession.page.evaluate(() => document.activeElement?.id);
+    if (restored !== "btn-google-auth") throw new Error(`dialog did not restore focus: ${restored}`);
+    console.log("PASS phase 1 dialog: focus trap, Escape, and focus restore");
+
+    await aliceSession.page.setViewportSize({ width: 390, height: 844 });
+    await aliceSession.page.evaluate(() => window.navigateTo("add-expense"));
+    await aliceSession.page.focus("#amount");
+    await aliceSession.page.fill("#amount", "123");
+    const mobileForm = await aliceSession.page.evaluate(() => ({
+      value: document.getElementById("amount").value,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+      visible: Boolean(document.getElementById("amount").offsetParent)
+    }));
+    if (mobileForm.value !== "123" || mobileForm.overflow > 1 || !mobileForm.visible) {
+      throw new Error(`mobile form check failed: ${JSON.stringify(mobileForm)}`);
+    }
+    console.log("PASS phase 1 mobile form: amount remains editable without overflow");
+
     await aliceSession.context.close();
     await bobSession.context.close();
   } finally {

@@ -13,6 +13,8 @@ const rules = readFileSync(join(root, "firestore.rules"), "utf8");
 const sync = readFileSync(join(root, "js", "sync.js"), "utf8");
 const firebase = readFileSync(join(root, "js", "firebase.js"), "utf8");
 const sw = readFileSync(join(root, "sw.js"), "utf8");
+const ui = readFileSync(join(root, "js", "ui.js"), "utf8");
+const radixColors = readFileSync(join(root, "js", "vendor", "radix-colors.css"), "utf8");
 
 test("inline application module parses as valid JavaScript", () => {
   const match = html.match(/<script\s+type="module">([\s\S]*?)<\/script>/i);
@@ -966,4 +968,21 @@ test("marketing split intent pre-fills the expense form after sign-in", () => {
   assert.match(html, /name: "My first split"/);
   assert.match(html, /amountInput\.value = paiseToInput\(intent\.amountPaise\)/);
   assert.match(html, /readSplitIntent\(\);\s*checkInviteInURL\(\);/);
+});
+
+test("phase 1 design tokens and accessible dialogs are wired", () => {
+  assert.match(html, /js\/vendor\/radix-colors\.css/);
+  assert.match(html, /classList\.toggle\("dark", theme !== "light"\)/);
+  assert.match(css, /--space-1: 4px/);
+  assert.match(css, /--radius-full: 999px/);
+  assert.match(css, /--sage-12/);
+  assert.match(css, /input:not\(\[type="checkbox"\]\)/);
+  assert.match(radixColors, /--sage-12/);
+  assert.match(radixColors, /--grass-12/);
+  assert.match(radixColors, /--tomato-12/);
+  assert.match(ui, /aria-labelledby/);
+  assert.match(ui, /event\.key !== "Tab"/);
+  assert.match(ui, /previousFocus\.focus/);
+  assert.match(ui, /toast-close/);
+  assert.match(sw, /radix-colors\.css/);
 });
