@@ -2941,3 +2941,69 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
   border-color: var(--hero-line);
   background: transparent;
 }
+
+/* v164: keep the pine hero and the semantic colours by separating them.
+   The two balances sit on cream inset tiles, so green/red never sit on green.
+   The net figure stays cream; the status pill is neutral with a coloured dot. */
+.home-hero {
+  --hero-tile-bg: #F8F5EC;
+  --hero-tile-border: rgba(15, 36, 28, .10);
+  --hero-tile-label: #5C655E;
+  --hero-positive: #1B7A42;
+  --hero-negative: #C0392B;
+  --hero-dot-positive: #7FE0A8;
+  --hero-dot-negative: #FF9E90;
+  --hero-tile-sheen: rgba(255, 255, 255, .6);
+}
+[data-theme="dark"] .home-hero {
+  --hero-tile-bg: rgba(255, 255, 255, .06);
+  --hero-tile-border: rgba(255, 255, 255, .12);
+  --hero-tile-label: rgba(237, 240, 250, .72);
+  --hero-positive: #4ADE80;
+  --hero-negative: #FB7185;
+  --hero-dot-positive: #4ADE80;
+  --hero-dot-negative: #FB7185;
+  --hero-tile-sheen: rgba(255, 255, 255, .05);
+}
+[data-theme="black"] .home-hero {
+  --hero-tile-bg: #0B0B0B;
+  --hero-tile-border: rgba(255, 255, 255, .14);
+  --hero-tile-label: rgba(250, 250, 250, .70);
+  --hero-positive: #4ADE80;
+  --hero-negative: #FB7185;
+  --hero-dot-positive: #4ADE80;
+  --hero-dot-negative: #FB7185;
+  --hero-tile-sheen: rgba(255, 255, 255, .03);
+}
+.home-hero .hero-metric:nth-child(1),
+.home-hero .hero-metric:nth-child(2) {
+  background: var(--hero-tile-bg);
+  border-color: var(--hero-tile-border);
+  box-shadow: inset 0 1px 0 var(--hero-tile-sheen);
+}
+.home-hero .hero-metric span { color: var(--hero-tile-label); }
+.home-hero .hero-metric span::before { background: var(--hero-positive); }
+.home-hero .hero-metric:nth-child(2) span::before { background: var(--hero-negative); }
+#home-standing-text.is-owed,
+#home-standing-text.is-owe { color: var(--hero-text); }
+#home-standing-badge,
+#home-standing-badge.is-owed,
+#home-standing-badge.is-owe,
+#home-standing-badge.is-settled {
+  color: var(--hero-text);
+  border-color: var(--hero-line);
+  background: transparent;
+}
+#home-standing-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--hero-muted);
+}
+#home-standing-badge.is-owed::before { background: var(--hero-dot-positive); }
+#home-standing-badge.is-owe::before { background: var(--hero-dot-negative); }
+#home-standing-badge.is-settled::before { background: var(--hero-muted); }
