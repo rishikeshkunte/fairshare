@@ -133,10 +133,10 @@
       <div class="home-hero-main">
         <div class="hero-topline">
           <span class="eyebrow">Your balance</span>
-          <span id="home-standing-badge">Live</span>
+          <span id="home-standing-badge">Settled</span>
         </div>
-        <div id="home-standing-text">All settled up!</div>
-        <div id="home-standing-sub">You neither owe nor are owed money.</div>
+        <div id="home-standing-text">₹0.00</div>
+        <div id="home-standing-sub">All settled up. Nothing to pay or collect.</div>
 
         <div class="hero-metrics">
           <div class="hero-metric">
@@ -162,7 +162,9 @@
           <button type="button" class="btn btn-secondary" data-call="shareSummary">📤 Share summary</button>
         </div>
       </div>
+    </div>
 
+    <div class="card home-side-card">
       <div class="home-hero-side">
         <span class="eyebrow">Active group</span>
         <h2 id="home-group-name">No groups yet</h2>
@@ -222,7 +224,7 @@
       <div class="form-group amount-stage">
         <label for="amount" style="font-size:0.8rem; font-weight:700;">How much was it?</label>
         <div style="display:flex; align-items:center; gap:6px;">
-          <span class="currency-label" style="font-size:2.2rem; font-weight:800; font-family:var(--mono);">₹</span>
+          <span class="currency-label" style="font-size:2.2rem; font-weight: 700; font-family:var(--mono);">₹</span>
           <input type="number" id="amount" step="0.01" min="0.01" placeholder="0.00" required inputmode="decimal">
         </div>
       </div>
@@ -1119,7 +1121,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v161";
+    const APP_BUILD = "v162";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2226,6 +2228,7 @@
     // Home Page Elements
     const homeStandingText = document.getElementById("home-standing-text");
     const homeStandingSub = document.getElementById("home-standing-sub");
+    const homeStandingBadge = document.getElementById("home-standing-badge");
     const homeOwedVal = document.getElementById("home-owed-val");
     const homeOweVal = document.getElementById("home-owe-val");
     const homeGroupName = document.getElementById("home-group-name");
@@ -5676,18 +5679,22 @@
 
       const netStanding = overallOwed - overallOwe;
       if (homeStandingText) {
+        homeStandingText.classList.remove("is-settled", "is-owed", "is-owe");
         if (Math.abs(netStanding) < 0.01) {
-          homeStandingText.textContent = "All settled up!";
-          homeStandingText.style.color = "var(--text)";
-          if (homeStandingSub) homeStandingSub.textContent = "You neither owe nor are owed money.";
+          homeStandingText.textContent = formatMoney(0, homeCur);
+          homeStandingText.classList.add("is-settled");
+          if (homeStandingSub) homeStandingSub.textContent = "All settled up. Nothing to pay or collect.";
+          if (homeStandingBadge) homeStandingBadge.textContent = "Settled";
         } else if (netStanding > 0) {
-          homeStandingText.textContent = `You are owed ${formatMoney(netStanding, homeCur)}`;
-          homeStandingText.style.color = "var(--positive)";
-          if (homeStandingSub) homeStandingSub.textContent = "Overall positive balance across all friends & groups.";
+          homeStandingText.textContent = formatMoney(netStanding, homeCur);
+          homeStandingText.classList.add("is-owed");
+          if (homeStandingSub) homeStandingSub.textContent = "Owed to you across groups and 1-on-1.";
+          if (homeStandingBadge) homeStandingBadge.textContent = "You are owed";
         } else {
-          homeStandingText.textContent = `You owe ${formatMoney(Math.abs(netStanding), homeCur)}`;
-          homeStandingText.style.color = "var(--negative)";
-          if (homeStandingSub) homeStandingSub.textContent = "Overall balance to pay across all friends & groups.";
+          homeStandingText.textContent = formatMoney(Math.abs(netStanding), homeCur);
+          homeStandingText.classList.add("is-owe");
+          if (homeStandingSub) homeStandingSub.textContent = "You owe across groups and 1-on-1.";
+          if (homeStandingBadge) homeStandingBadge.textContent = "You owe";
         }
       }
       if (homeOwedVal) homeOwedVal.textContent = formatMoney(overallOwed, homeCur);
@@ -7026,7 +7033,7 @@
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
             <div>
               <h3 style="margin:0 0 4px 0; font-size:1.25rem;">${escapeHtml(tx.desc)}</h3>
-              <span style="font-size:0.85rem; color:var(--muted);">${escapeHtml(tx.date)} • ${escapeHtml(scopeLabel)} • ${CATEGORY_ICONS[tx.category] || "📦"} ${escapeHtml(tx.category || "Other")}</span>
+              <span style="font-size:0.85rem; color:var(--muted);">${escapeHtml(tx.date)} • ${escapeHtml(scopeLabel)} • ${categoryEmoji(tx.category)} ${escapeHtml(tx.category || "Other")}</span>
               ${tx.notes ? `<div style="font-size:0.84rem; margin-top:6px;">${escapeHtml(tx.notes)}</div>` : ""}
             </div>
             <span style="font-size:1.3rem; font-weight:700; color:var(--primary); font-family:var(--mono);">${formatMoney(tx.amount, cur)}</span>

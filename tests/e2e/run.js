@@ -57,6 +57,7 @@ async function runAxe(page, label) {
     if (violation.details.length) console.log(`    ${violation.details.join(" || ")}`);
   });
   if (result.error) console.log(`  axe error: ${result.error}`);
+  if (violations.length || result.error) process.exitCode = 1;
   return violations;
 }
 
@@ -549,6 +550,12 @@ async function run() {
     await aliceSession.page.evaluate(() => window.navigateTo("add-expense"));
     await aliceSession.page.waitForTimeout(350);
     await runAxe(aliceSession.page, "add-expense-mobile");
+
+    await aliceSession.page.evaluate(() => window.navigateTo("home"));
+    await aliceSession.page.waitForTimeout(350);
+    const homeMobileOverflow = await aliceSession.page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    if (homeMobileOverflow > 1) throw new Error(`mobile home overflow: ${homeMobileOverflow}px`);
+    await runAxe(aliceSession.page, "home-mobile");
 
     await aliceSession.context.close();
     await bobSession.context.close();
