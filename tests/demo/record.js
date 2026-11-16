@@ -1,10 +1,11 @@
-﻿import http from "node:http";
+import http from "node:http";
 import { copyFile, readFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import ffmpegStatic from "ffmpeg-static";
 import { initializeApp, deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
@@ -146,7 +147,7 @@ async function seedDemo(user) {
   await adminDb.doc(`groups/${groupId}`).set({
     id: groupId,
     name: groupName,
-    currency: "â‚¹",
+    currency: "\u20b9",
     ownerUid: user.uid,
     ownerEmail: demoEmail,
     members,
@@ -190,8 +191,8 @@ async function seedDemo(user) {
   }
   await adminDb.doc(`user_profiles/${user.uid}`).set({
     emojiChoices: {
-      people: { rhea: "ðŸ˜Ž", aryan: "ðŸ¦Š", poorva: "ðŸ¼", shivam: "ðŸ¦" },
-      groups: { [groupId]: "ðŸ–ï¸" }
+      people: { rhea: "\u{1F60E}", aryan: "\u{1F98A}", poorva: "\u{1F43C}", shivam: "\u{1F981}" },
+      groups: { [groupId]: "\u{1F3D6}\uFE0F" }
     },
     updatedAt: Date.now()
   }, { merge: true });
@@ -272,7 +273,15 @@ async function run() {
       "-c:v", "libvpx-vp9", "-crf", "28", "-b:v", "0", finalPath
     ], { stdio: "ignore" }).status === 0;
     if (!trimmed) await copyFile(videoPath, finalPath);
+    const mp4Path = join(outDir, "demo-goa.mp4");
+    if (ffmpegStatic && existsSync(ffmpegStatic)) {
+      spawnSync(ffmpegStatic, [
+        "-y", "-i", finalPath,
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-crf", "23", mp4Path
+      ], { stdio: "ignore" });
+    }
     console.log("video written", finalPath);
+    console.log("mp4 written", mp4Path);
     console.log("poster written", join(outDir, "demo-poster.png"));
   } finally {
     await browser.close();

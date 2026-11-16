@@ -449,3 +449,15 @@ body.hero-dark .hero .wrap { position: relative; z-index: 3; }
 }
 
 .hero-video[hidden], .video-fallback[hidden] { display: none; }
+
+/* Keep the real hero video clear of the secondary phone and cards */
+.phone.small { width: 190px; right: -200px; bottom: 50px; }
+.settle-chip { left: -56px; right: auto; top: auto; bottom: 120px; }
+.float-a { left: -52px; top: 60px; }
+.float-b { left: -44px; right: auto; bottom: 30px; }
+.phone-badge { top: -34px; left: 0; }
+@media (max-width: 1200px) {
+  .phone.small, .float-card { display: none; }
+}
+
+.phone-badge { top: -40px; left: 50%; transform: translateX(-50%); }

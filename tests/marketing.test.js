@@ -39,6 +39,7 @@ test("marketing home has the conversion demos and a single primary CTA", () => {
   assert.match(marketing, /video-fallback/);
   assert.match(marketing, /assets\/demo-goa\.webm/);
   assert.ok(existsSync(join(root, "assets", "demo-goa.webm")));
+  assert.ok(existsSync(join(root, "assets", "demo-goa.mp4")));
   assert.ok(existsSync(join(root, "assets", "demo-poster.png")));
   assert.match(marketingJs, /intent=split&amount=/);
   assert.match(marketingJs, /track\("cta_click"/);

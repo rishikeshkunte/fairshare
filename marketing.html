@@ -17,7 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="site.css?v=158">
+  <link rel="stylesheet" href="site.css?v=160">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -83,33 +83,18 @@
 
         <div class="hero-visual" id="hero-visual">
           <div class="phone-glow" aria-hidden="true"></div>
-          <div class="float-card float-a" aria-hidden="true">🦊 <b>Aryan</b> owes you <strong>₹1,240</strong></div>
-          <div class="float-card float-b" aria-hidden="true">✓ Payment recorded</div>
           <span class="phone-badge" aria-hidden="true"><i></i> Real app · 14s</span>
           <div class="phone-wrap" id="phone-wrap">
             <div class="phone video-phone">
               <div class="phone-screen video-screen">
-                <video id="hero-video" class="hero-video" autoplay muted loop playsinline preload="metadata" poster="assets/demo-poster.png?v=2" aria-label="14 second tour of the What's My Share? app">
-                  <source src="assets/demo-goa.webm?v=2" type="video/webm">
+                <video id="hero-video" class="hero-video" autoplay muted loop playsinline preload="metadata" poster="assets/demo-poster.png?v=3" aria-label="14 second tour of the What's My Share? app">
+                  <source src="assets/demo-goa.mp4?v=4" type="video/mp4">
+                  <source src="assets/demo-goa.webm?v=4" type="video/webm">
                 </video>
-                <img id="video-fallback" class="video-fallback" src="assets/demo-poster.png?v=2" alt="What's My Share? app home screen" hidden>
+                <img id="video-fallback" class="video-fallback" src="assets/demo-poster.png?v=3" alt="What's My Share? app home screen" hidden>
                 <button type="button" class="video-toggle" id="hero-video-toggle" aria-label="Pause the product demo" aria-pressed="false">Pause</button>
               </div>
             </div>
-            <div class="phone small" aria-hidden="true">
-              <div class="phone-screen">
-                <div class="mini-brand"><img src="icons/icon-192.png" alt=""> Settle up</div>
-                <div class="mini-split">
-                  <div class="head"><span>Settle up</span><span>Group · Goa</span></div>
-                  <div class="line"><span>🦊 Aryan</span><span>→</span><span>🐼 Poorva</span></div>
-                  <div class="amount pos" style="text-align:right">₹1,240</div>
-                  <div class="line" style="margin-top:6px"><span>Payment recorded</span><span>✓</span></div>
-                </div>
-                <div class="mini-row"><span class="emoji">😎</span><span class="txt"><b>You</b><small>emoji avatars</small></span></div>
-                <div class="mini-row"><span class="emoji">🙉</span><span class="txt"><b>Shivam</b><small>emoji avatars</small></span></div>
-              </div>
-            </div>
-            <div class="settle-chip" aria-hidden="true">✓ Settled in 2 taps</div>
           </div>
         </div>
       </div>
@@ -399,7 +384,7 @@
       </div>
     </div>
   </footer>
-  <script src="js/marketing.js?v=158" defer></script>
+  <script src="js/marketing.js?v=160" defer></script>
   <script>
     const params = new URLSearchParams(window.location.search);
     if (params.has("invite") || params.has("joinGroup")) {
