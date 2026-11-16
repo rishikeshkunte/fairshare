@@ -1,6 +1,6 @@
 import http from "node:http";
-import { copyFile, readFile } from "node:fs/promises";
-import { existsSync, readdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -235,11 +235,15 @@ async function run() {
     const storageState = await prepContext.storageState({ indexedDB: true });
     await prepContext.close();
 
+    const framesDir = join(videoDir, `frames-${Date.now()}`);
+    const renderDir = join(videoDir, `render-${Date.now()}`);
+    mkdirSync(framesDir, { recursive: true });
+    mkdirSync(renderDir, { recursive: true });
+
     const recordContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
       serviceWorkers: "block",
-      storageState,
-      recordVideo: { dir: videoDir, size: { width: 390, height: 844 } }
+      storageState
     });
     await recordContext.route("**/js/firebase.js", routeFirebase);
     const page = await recordContext.newPage();
@@ -249,28 +253,61 @@ async function run() {
       return shell && !shell.hidden;
     }, null, { timeout: 25000 });
     await page.addStyleTag({ content: `
-      .demo-fade { animation: demoFade .55s cubic-bezier(.2, .8, .2, 1) both; }
-      @keyframes demoFade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-      #settle-overlay .balances-sheet.demo-sheet { animation: demoSheet .5s cubic-bezier(.2, .8, .2, 1) both; }
+      .demo-fade { animation: demoFade .6s cubic-bezier(.2, .8, .2, 1) both; }
+      @keyframes demoFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+      .demo-out { animation: demoOut .34s ease both; }
+      @keyframes demoOut { to { opacity: 0; transform: translateY(-8px); } }
+      #settle-overlay .balances-sheet.demo-sheet { animation: demoSheet .55s cubic-bezier(.2, .8, .2, 1) both; }
       @keyframes demoSheet { from { opacity: 0; transform: translateY(28px) scale(.98); } to { opacity: 1; transform: none; } }
     ` });
     const showPage = async (hash) => {
+      await page.evaluate(() => {
+        const active = document.querySelector(".app-page.active");
+        if (!active) return;
+        active.classList.remove("demo-fade");
+        active.classList.add("demo-out");
+      });
+      await page.waitForTimeout(340);
       await page.evaluate((target) => {
         window.navigateTo(target);
         const active = document.querySelector(".app-page.active");
-        if (active) {
-          active.classList.remove("demo-fade");
-          void active.offsetWidth;
-          active.classList.add("demo-fade");
-        }
+        if (!active) return;
+        active.classList.remove("demo-out");
+        active.classList.remove("demo-fade");
+        void active.offsetWidth;
+        active.classList.add("demo-fade");
       }, hash);
+      await page.waitForTimeout(650);
     };
-    await page.waitForTimeout(2200);
+
+    await page.waitForTimeout(2000);
+    const cdp = await recordContext.newCDPSession(page);
+    const frames = [];
+    let frameIndex = 0;
+    cdp.on("Page.screencastFrame", (event) => {
+      const file = join(framesDir, `f_${String(frameIndex).padStart(6, "0")}.jpg`);
+      frameIndex += 1;
+      writeFileSync(file, Buffer.from(event.data, "base64"));
+      frames.push({
+        file,
+        ts: Number(event.metadata && event.metadata.timestamp) || Date.now() / 1000
+      });
+      cdp.send("Page.screencastFrameAck", { sessionId: event.sessionId }).catch(() => {});
+    });
+    await cdp.send("Page.enable");
+    await cdp.send("Page.startScreencast", {
+      format: "jpeg",
+      quality: 90,
+      maxWidth: 390,
+      maxHeight: 844,
+      everyNthFrame: 1
+    });
+    await page.waitForTimeout(300);
 
     await showPage("groups");
-    await page.waitForTimeout(2200);
+    await page.waitForTimeout(2000);
     await showPage("balances");
-    await page.waitForTimeout(2400);
+    await page.waitForTimeout(2200);
     await page.evaluate(() => window.quickSettlePrompt("Shivam", "Rhea", 60000));
     await page.evaluate(() => {
       const sheet = document.querySelector("#settle-overlay .balances-sheet");
@@ -281,30 +318,43 @@ async function run() {
     });
     await page.waitForTimeout(1800);
     await page.click('#settle-form button[type="submit"]');
-    await page.waitForTimeout(2400);
+    await page.waitForTimeout(2200);
     await showPage("history");
-    await page.waitForTimeout(2400);
+    await page.waitForTimeout(2200);
     await showPage("home");
-    await page.waitForTimeout(2600);
-
-    const video = page.video();
-    const videoPath = await video.path();
+    await page.waitForTimeout(2400);
+    await page.waitForTimeout(300);
+    await cdp.send("Page.stopScreencast").catch(() => {});
+    await page.waitForTimeout(300);
     await recordContext.close();
-    const finalPath = join(outDir, "demo-goa.webm");
-    const ffmpeg = findFfmpeg();
-    const trimmed = ffmpeg && spawnSync(ffmpeg, [
-      "-y", "-ss", "3.0", "-i", videoPath,
-      "-r", "30", "-c:v", "libvpx-vp9", "-crf", "28", "-b:v", "0", finalPath
-    ], { stdio: "ignore" }).status === 0;
-    if (!trimmed) await copyFile(videoPath, finalPath);
-    const mp4Path = join(outDir, "demo-goa.mp4");
-    if (ffmpegStatic && existsSync(ffmpegStatic)) {
-      spawnSync(ffmpegStatic, [
-        "-y", "-i", finalPath,
-        "-r", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-crf", "20", mp4Path
-      ], { stdio: "ignore" });
+
+    if (frames.length < 2) throw new Error("Screencast captured no frames");
+    const start = frames[0].ts;
+    const end = frames[frames.length - 1].ts + 2.5;
+    const totalFrames = Math.max(2, Math.ceil((end - start) * 60));
+    let cursor = 0;
+    for (let index = 0; index < totalFrames; index += 1) {
+      const at = start + index / 60;
+      while (cursor + 1 < frames.length && frames[cursor + 1].ts <= at) cursor += 1;
+      copyFileSync(frames[cursor].file, join(renderDir, `out_${String(index).padStart(6, "0")}.jpg`));
     }
-    console.log("video written", finalPath);
+
+    const ffmpeg = ffmpegStatic || findFfmpeg();
+    if (!ffmpeg) throw new Error("ffmpeg is required to encode the demo video");
+    const input = ["-framerate", "60", "-i", join(renderDir, "out_%06d.jpg")];
+    const webmPath = join(outDir, "demo-goa.webm");
+    const mp4Path = join(outDir, "demo-goa.mp4");
+    const webm = spawnSync(ffmpeg, [
+      "-y", ...input, "-c:v", "libvpx-vp9", "-crf", "30", "-b:v", "0", webmPath
+    ], { stdio: "ignore" });
+    if (webm.status !== 0) throw new Error("WebM encode failed");
+    const mp4 = spawnSync(ffmpeg, [
+      "-y", ...input, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", "-movflags", "+faststart", mp4Path
+    ], { stdio: "ignore" });
+    if (mp4.status !== 0) throw new Error("MP4 encode failed");
+    rmSync(framesDir, { recursive: true, force: true });
+    rmSync(renderDir, { recursive: true, force: true });
+    console.log("video written", webmPath);
     console.log("mp4 written", mp4Path);
     console.log("poster written", join(outDir, "demo-poster.png"));
   } finally {
