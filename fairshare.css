@@ -2056,3 +2056,16 @@ input:not([type="checkbox"]):not([type="radio"]):focus-visible, select:focus-vis
 }
 .toast-close:hover { opacity: 1; }
 .modal-content, .balances-sheet { border-radius: var(--radius-6); }
+
+/* Phase 2: consistent sheet, modal, and popover surfaces */
+.balances-sheet, .modal-content, .theme-menu, .share-menu, .expense-fab-menu {
+  background: var(--surface-solid);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+}
+.balances-sheet, .modal-content { border-radius: var(--radius-6); }
+.theme-menu, .share-menu, .expense-fab-menu { border-radius: var(--radius-5); }
+.balances-sheet, .modal-content { overscroll-behavior: contain; }
+.group-picker-row, .emoji-option { border-radius: var(--radius-3); }
+.emoji-cat { border-radius: var(--radius-full); }
+.balances-sheet-head { padding-bottom: var(--space-2); }

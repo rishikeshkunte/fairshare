@@ -1054,7 +1054,7 @@
 
   <script type="module">
     import { formatMoney, formatSignedMoney, rupeesToPaise, paiseToInput, allocateEqual, allocateWeighted, migrateMoney, stripReceiptBytes, newId } from "./js/money.js";
-    import { toast, askConfirm, askPrompt } from "./js/ui.js";
+    import { toast, askConfirm, askPrompt, enhanceOverlay, enhanceTabList, enhanceRadioGroup } from "./js/ui.js";
     import { loadFirebase, watchAuth, signInGoogle, signOutGoogle, serverTimestamp, watchQuery, watchDoc, setMerge, cloudIntent, setCloudIntent } from "./js/firebase.js";
     import { applyRemotePair, buildPairWritePayload, canonEmail, deletedForFriend, pairIdFor, preserveLocalReceipts, remotePairNeedsPush, transactionsForFriend } from "./js/sync.js";
     import { repairGroupNames } from "./js/groupnames.js";
@@ -1118,7 +1118,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v156";
+    const APP_BUILD = "v157";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -9716,6 +9716,17 @@
     navigateTo(initialPage);
     readSplitIntent();
     checkInviteInURL();
+    enhanceOverlay(document.getElementById("settle-overlay"), closeBalancesOverlays);
+    enhanceOverlay(document.getElementById("group-picker-overlay"), closeBalancesOverlays);
+    enhanceOverlay(document.getElementById("emoji-picker-overlay"), closeBalancesOverlays);
+    enhanceOverlay(document.getElementById("csv-import-modal"), () => window.closeCsvImport());
+    enhanceOverlay(document.getElementById("new-group-modal"), () => window.closeNewGroupModal());
+    enhanceOverlay(document.getElementById("detail-modal"), () => window.closeDetailModal());
+    enhanceOverlay(document.getElementById("group-invite-modal"), () => window.declineInvite());
+    enhanceTabList(document.getElementById("analytics-view-tabs"));
+    enhanceTabList(document.getElementById("analytics-scope-tabs"));
+    enhanceTabList(document.getElementById("chart-style-tabs"));
+    enhanceRadioGroup(document.getElementById("theme-menu"));
   </script>
 </body>
 </html>

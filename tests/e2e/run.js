@@ -406,6 +406,41 @@ async function run() {
     }
     console.log("PASS phase 1 mobile form: amount remains editable without overflow");
 
+    await aliceSession.page.setViewportSize({ width: 1280, height: 900 });
+    await aliceSession.page.evaluate(() => window.navigateTo("groups"));
+    await aliceSession.page.waitForTimeout(500);
+    await aliceSession.page.focus("#btn-new-group-inline");
+    await aliceSession.page.click("#btn-new-group-inline");
+    await aliceSession.page.waitForFunction(() => document.getElementById("new-group-modal").classList.contains("active"));
+    const overlayA11y = await aliceSession.page.evaluate(() => {
+      const overlay = document.getElementById("new-group-modal");
+      return {
+        role: overlay.getAttribute("role"),
+        modal: overlay.getAttribute("aria-modal"),
+        inside: overlay.contains(document.activeElement)
+      };
+    });
+    if (overlayA11y.role !== "dialog" || overlayA11y.modal !== "true" || !overlayA11y.inside) {
+      throw new Error(`phase 2 overlay accessibility missing: ${JSON.stringify(overlayA11y)}`);
+    }
+    for (let index = 0; index < 6; index += 1) await aliceSession.page.keyboard.press("Tab");
+    const overlayTrapped = await aliceSession.page.evaluate(() => document.getElementById("new-group-modal").contains(document.activeElement));
+    if (!overlayTrapped) throw new Error("phase 2 overlay did not trap keyboard focus");
+    await aliceSession.page.keyboard.press("Escape");
+    await aliceSession.page.waitForFunction(() => !document.getElementById("new-group-modal").classList.contains("active"));
+    const overlayFocus = await aliceSession.page.evaluate(() => document.activeElement?.id);
+    if (overlayFocus !== "btn-new-group-inline") throw new Error(`phase 2 overlay did not restore focus: ${overlayFocus}`);
+    console.log("PASS phase 2 overlay: focus trap, Escape, and focus restore");
+
+    await aliceSession.page.evaluate(() => window.navigateTo("analytics"));
+    await aliceSession.page.waitForTimeout(500);
+    await aliceSession.page.focus("#analytics-view-tabs .tab-btn.active");
+    await aliceSession.page.keyboard.press("ArrowRight");
+    await aliceSession.page.waitForTimeout(300);
+    const activeTab = await aliceSession.page.evaluate(() => document.querySelector("#analytics-view-tabs .tab-btn.active")?.textContent.trim());
+    if (!activeTab || !activeTab.includes("People")) throw new Error(`phase 2 tab keyboard failed: ${activeTab}`);
+    console.log("PASS phase 2 tabs: arrow-key navigation updates the active view");
+
     await aliceSession.context.close();
     await bobSession.context.close();
   } finally {

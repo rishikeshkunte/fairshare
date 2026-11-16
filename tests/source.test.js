@@ -986,3 +986,16 @@ test("phase 1 design tokens and accessible dialogs are wired", () => {
   assert.match(ui, /toast-close/);
   assert.match(sw, /radix-colors\.css/);
 });
+
+test("phase 2 overlays, tabs, and the theme radio group are accessible", () => {
+  assert.match(ui, /export function enhanceOverlay/);
+  assert.match(ui, /export function enhanceTabList/);
+  assert.match(ui, /export function enhanceRadioGroup/);
+  assert.match(html, /enhanceOverlay\(document\.getElementById\("settle-overlay"\)/);
+  assert.match(html, /enhanceOverlay\(document\.getElementById\("csv-import-modal"\)/);
+  assert.match(html, /enhanceTabList\(document\.getElementById\("analytics-view-tabs"\)\)/);
+  assert.match(html, /enhanceRadioGroup\(document\.getElementById\("theme-menu"\)\)/);
+  assert.match(ui, /MutationObserver/);
+  assert.match(ui, /aria-selected/);
+  assert.match(ui, /aria-checked/);
+});
