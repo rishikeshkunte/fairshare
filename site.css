@@ -461,3 +461,7 @@ body.hero-dark .hero .wrap { position: relative; z-index: 3; }
 }
 
 .phone-badge { top: -40px; left: 50%; transform: translateX(-50%); }
+
+.video-phone { width: 340px; }
+@media (max-width: 980px) { .video-phone { width: min(320px, 82vw); } }
+@media (max-width: 720px) { .video-phone { width: min(300px, 80vw); } }
