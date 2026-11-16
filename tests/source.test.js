@@ -1009,3 +1009,11 @@ test("phase 4 navigation and history tabs are accessible", () => {
   assert.match(css, /\.skip-link/);
   assert.match(css, /env\(safe-area-inset-bottom/);
 });
+
+test("accessibility review fixes list semantics and labelled controls", () => {
+  assert.match(html, /<div id="settlement-list"/);
+  assert.match(html, /<div id="transaction-list"/);
+  assert.match(html, /aria-label="Search activity"/);
+  assert.match(html, /aria-label="Filter activity by member"/);
+  assert.match(css, /\[data-theme="dark"\] \{\s*--primary: #3f5ae8/);
+});

@@ -1,5 +1,6 @@
 import http from "node:http";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -15,6 +16,7 @@ const APP_URL = "http://127.0.0.1:4173/app/";
 const FIREBASE_VERSION = "10.12.5";
 const FIREBASE_BASE = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}`;
 const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const axeSource = readFileSync(join(root, "node_modules", "axe-core", "axe.min.js"), "utf8");
 
 const adminApp = initializeApp({ projectId: "demo-fairshare" });
 const adminAuth = getAuth(adminApp);
@@ -29,6 +31,34 @@ const types = {
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon"
 };
+
+async function runAxe(page, label) {
+  await page.addScriptTag({ content: axeSource });
+  const result = await page.evaluate(async () => {
+    try {
+      return await window.axe.run(document, {
+        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] }
+      });
+    } catch (error) {
+      return { violations: [], error: String(error) };
+    }
+  });
+  const violations = (result.violations || []).map((violation) => ({
+    id: violation.id,
+    impact: violation.impact,
+    nodes: violation.nodes.length,
+    help: violation.help,
+    targets: violation.nodes.slice(0, 3).map((node) => node.target.join(" ")),
+    details: violation.nodes.slice(0, 3).map((node) => String(node.failureSummary || "").replace(/\s+/g, " "))
+  }));
+  console.log(`AXE ${label}: ${violations.length} violation(s)`);
+  violations.forEach((violation) => {
+    console.log(`  [${violation.impact}] ${violation.id} x${violation.nodes}: ${violation.help} :: ${violation.targets.join(" | ")}`);
+    if (violation.details.length) console.log(`    ${violation.details.join(" || ")}`);
+  });
+  if (result.error) console.log(`  axe error: ${result.error}`);
+  return violations;
+}
 
 function startStaticServer() {
   const server = http.createServer(async (req, res) => {
@@ -470,6 +500,55 @@ async function run() {
     const peopleHash = await aliceSession.page.evaluate(() => window.location.hash);
     if (!peopleHash.includes("friends")) throw new Error(`phase 4 people tabs failed: ${peopleHash}`);
     console.log("PASS phase 4 navigation: aria-current and people-tab arrow keys");
+
+    const axePages = [
+      ["friends", "friends"],
+      ["home", "home-light"],
+      ["groups", "groups"],
+      ["balances", "balances"],
+      ["add-expense", "add-expense"],
+      ["history", "activity"],
+      ["analytics", "insights"],
+      ["account", "you"]
+    ];
+    for (const [pageId, label] of axePages) {
+      await aliceSession.page.evaluate((id) => window.navigateTo(id), pageId);
+      await aliceSession.page.waitForTimeout(350);
+      await runAxe(aliceSession.page, label);
+    }
+
+    await aliceSession.page.evaluate(() => window.navigateTo("groups"));
+    await aliceSession.page.waitForTimeout(250);
+    await aliceSession.page.click("#btn-new-group-inline");
+    await aliceSession.page.waitForFunction(() => document.getElementById("new-group-modal").classList.contains("active"));
+    await runAxe(aliceSession.page, "new-group-dialog");
+    await aliceSession.page.keyboard.press("Escape");
+
+    await aliceSession.page.evaluate(() => {
+      window.navigateTo("home");
+      window.quickSettlePrompt("Shivam", "Rhea", 60000);
+    });
+    await aliceSession.page.waitForTimeout(350);
+    await runAxe(aliceSession.page, "settle-overlay");
+    await aliceSession.page.keyboard.press("Escape");
+
+    await aliceSession.page.click("#btn-theme-toggle");
+    await aliceSession.page.click('[data-theme-choice="dark"]');
+    await aliceSession.page.evaluate(() => window.navigateTo("home"));
+    await aliceSession.page.waitForTimeout(350);
+    await runAxe(aliceSession.page, "home-dark");
+    await aliceSession.page.click("#btn-theme-toggle");
+    await aliceSession.page.click('[data-theme-choice="black"]');
+    await aliceSession.page.evaluate(() => window.navigateTo("home"));
+    await aliceSession.page.waitForTimeout(350);
+    await runAxe(aliceSession.page, "home-black");
+    await aliceSession.page.click("#btn-theme-toggle");
+    await aliceSession.page.click('[data-theme-choice="light"]');
+
+    await aliceSession.page.setViewportSize({ width: 390, height: 844 });
+    await aliceSession.page.evaluate(() => window.navigateTo("add-expense"));
+    await aliceSession.page.waitForTimeout(350);
+    await runAxe(aliceSession.page, "add-expense-mobile");
 
     await aliceSession.context.close();
     await bobSession.context.close();

@@ -2176,3 +2176,15 @@ input:not([type="checkbox"]):not([type="radio"]):focus-visible, select:focus-vis
 .friend-row { padding: var(--space-3) 0; }
 .friend-row:hover { background: var(--hover-item); border-radius: var(--radius-4); }
 .filter-search-container { gap: var(--space-2); }
+
+[data-theme="dark"], [data-theme="black"] { --on-primary: #102018; }
+[data-theme="dark"] .btn-settle, [data-theme="black"] .btn-settle { color: #102018; }
+
+[data-theme="dark"] {
+  --primary: #3f5ae8;
+  --primary-hover: #3149c9;
+  --on-primary: #ffffff;
+}
+[data-theme="black"] {
+  --on-primary: #102018;
+}

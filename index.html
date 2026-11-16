@@ -426,7 +426,7 @@
         </div>
         <p class="group-hint" style="margin:8px 0 0;">The shortest way to settle up. Tap Settle to record the payment in the right group or 1-on-1 ledger.</p>
         <p id="settlement-scope-note" class="group-hint" style="margin:8px 0 0;" hidden></p>
-        <ul id="settlement-list" class="settlement-list"></ul>
+        <div id="settlement-list" class="settlement-list"></div>
       </div>
     </div>
 
@@ -469,10 +469,10 @@
           </select>
         </div>
         <div class="search-input-wrapper" style="flex:2;">
-          <input type="text" id="search-query" placeholder="Search description, category, or notes...">
+          <input type="text" id="search-query" aria-label="Search activity" placeholder="Search description, category, or notes...">
         </div>
         <div class="member-filter-wrapper" style="flex:1;">
-          <select id="filter-member-select">
+          <select id="filter-member-select" aria-label="Filter activity by member">
             <option value="all">All members</option>
           </select>
         </div>
@@ -482,7 +482,7 @@
         <p class="empty-state-title">Nothing here yet</p>
         <p class="empty-state-description">Your expenses and settlements will appear here as you add them.</p>
       </div>
-      <ul id="transaction-list" class="transaction-list"></ul>
+      <div id="transaction-list" class="transaction-list"></div>
       <div id="deleted-transactions-panel" style="display:none; margin-top:18px;">
         <h3 style="margin:0 0 8px;">Recently deleted</h3>
         <p style="font-size:0.8rem; color:var(--muted); margin-top:0;">Deleted records are kept here so you can review and restore them.</p>
@@ -1119,7 +1119,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v159";
+    const APP_BUILD = "v160";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;

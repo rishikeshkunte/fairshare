@@ -16,6 +16,7 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^6.0.0",
     "@radix-ui/colors": "^3.0.0",
+    "axe-core": "^4.14.0",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
     "firebase": "^13.1.0",
