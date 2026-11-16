@@ -1121,7 +1121,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v162";
+    const APP_BUILD = "v163";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -5679,20 +5679,22 @@
 
       const netStanding = overallOwed - overallOwe;
       if (homeStandingText) {
-        homeStandingText.classList.remove("is-settled", "is-owed", "is-owe");
-        if (Math.abs(netStanding) < 0.01) {
+        const standingState = Math.abs(netStanding) < 0.01 ? "is-settled" : netStanding > 0 ? "is-owed" : "is-owe";
+        [homeStandingText, homeStandingBadge].forEach((el) => {
+          if (!el) return;
+          el.classList.remove("is-settled", "is-owed", "is-owe");
+          el.classList.add(standingState);
+        });
+        if (standingState === "is-settled") {
           homeStandingText.textContent = formatMoney(0, homeCur);
-          homeStandingText.classList.add("is-settled");
           if (homeStandingSub) homeStandingSub.textContent = "All settled up. Nothing to pay or collect.";
           if (homeStandingBadge) homeStandingBadge.textContent = "Settled";
-        } else if (netStanding > 0) {
+        } else if (standingState === "is-owed") {
           homeStandingText.textContent = formatMoney(netStanding, homeCur);
-          homeStandingText.classList.add("is-owed");
           if (homeStandingSub) homeStandingSub.textContent = "Owed to you across groups and 1-on-1.";
           if (homeStandingBadge) homeStandingBadge.textContent = "You are owed";
         } else {
           homeStandingText.textContent = formatMoney(Math.abs(netStanding), homeCur);
-          homeStandingText.classList.add("is-owe");
           if (homeStandingSub) homeStandingSub.textContent = "You owe across groups and 1-on-1.";
           if (homeStandingBadge) homeStandingBadge.textContent = "You owe";
         }

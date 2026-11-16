@@ -2880,3 +2880,64 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
 [data-theme="dark"] .mobile-nav-item.active { color: #FFFFFF !important; }
 [data-theme="dark"] .nav-tab-btn.active,
 [data-theme="black"] .nav-tab-btn.active { color: var(--dock-active-text) !important; }
+
+/* Semantic balance colour: green owed to you, red you owe, neutral when settled.
+   The labels and status text carry the meaning too, so colour is never the only cue. */
+.home-hero {
+  --hero-positive: #8FE0AE;
+  --hero-negative: #FFB4A6;
+}
+[data-theme="dark"] .home-hero,
+[data-theme="black"] .home-hero {
+  --hero-positive: #4ADE80;
+  --hero-negative: #FB7185;
+}
+.home-hero .hero-metrics { gap: 10px; }
+.home-hero .hero-metric {
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+}
+.home-hero .hero-metric:first-child {
+  padding-left: 14px;
+  border-left: 1px solid transparent;
+}
+.home-hero .hero-metric:nth-child(1) {
+  background: color-mix(in srgb, var(--hero-positive) 8%, transparent);
+  border-color: color-mix(in srgb, var(--hero-positive) 24%, transparent);
+}
+.home-hero .hero-metric:nth-child(2) {
+  background: color-mix(in srgb, var(--hero-negative) 8%, transparent);
+  border-color: color-mix(in srgb, var(--hero-negative) 24%, transparent);
+}
+.home-hero .hero-metric span { display: flex; align-items: center; gap: 6px; }
+.home-hero .hero-metric span::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--hero-positive);
+}
+.home-hero .hero-metric:nth-child(2) span::before { background: var(--hero-negative); }
+#home-owed-val,
+#home-owe-val { font-size: 1.4rem; }
+#home-owed-val { color: var(--hero-positive); }
+#home-owe-val { color: var(--hero-negative); }
+#home-standing-text.is-owed { color: var(--hero-positive); }
+#home-standing-text.is-owe { color: var(--hero-negative); }
+#home-standing-text.is-settled { color: var(--hero-text); }
+#home-standing-badge.is-owed {
+  color: var(--hero-positive);
+  border-color: color-mix(in srgb, var(--hero-positive) 45%, transparent);
+  background: color-mix(in srgb, var(--hero-positive) 12%, transparent);
+}
+#home-standing-badge.is-owe {
+  color: var(--hero-negative);
+  border-color: color-mix(in srgb, var(--hero-negative) 45%, transparent);
+  background: color-mix(in srgb, var(--hero-negative) 12%, transparent);
+}
+#home-standing-badge.is-settled {
+  color: var(--hero-muted);
+  border-color: var(--hero-line);
+  background: transparent;
+}
