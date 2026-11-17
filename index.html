@@ -1142,7 +1142,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v172";
+    const APP_BUILD = "v173";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -6652,18 +6652,22 @@
 
       if (chartType === "bar") {
         if (chartVisual) {
-          chartVisual.innerHTML = `<div class="chart-bars" role="img" aria-label="Spending bar chart">${entries.map(([label, val], index) => {
-            const color = tone(index);
-            const pct = (val / total) * 100;
-            const width = Math.max(2, (val / max) * 100);
-            return `<div class="chart-bar-row">
-              <div class="chart-bar-meta">
-                <span class="chart-bar-label"><span class="legend-color" style="background:${color};"></span>${categoryEmoji(label)} ${escapeHtml(label)}</span>
-                <span class="chart-bar-value">${formatMoney(val, cur)} &middot; ${pct.toFixed(1)}%</span>
-              </div>
-              <div class="bar-track"><div class="bar-fill" style="background:${color}; width:${width.toFixed(1)}%;"></div></div>
-            </div>`;
-          }).join("")}</div>`;
+          chartVisual.innerHTML = `<div class="vbar-chart" style="--vbar-count:${entries.length}">
+            <div class="vbar-columns" role="list" aria-label="Spending by category">
+              ${entries.map(([label, val], index) => {
+                const color = tone(index);
+                const pct = (val / total) * 100;
+                const height = Math.max(3, (val / max) * 100);
+                return `<div class="vbar-col" role="listitem" aria-label="${escapeHtml(label)}: ${formatMoney(val, cur)}, ${pct.toFixed(1)}%">
+                  <span class="vbar-value" aria-hidden="true">${pct.toFixed(1)}%</span>
+                  <div class="vbar-track" aria-hidden="true"><span class="vbar-fill" style="height:${height.toFixed(1)}%; background:${color};"></span></div>
+                </div>`;
+              }).join("")}
+            </div>
+            <div class="vbar-labels" aria-hidden="true">
+              ${entries.map(([label]) => `<div class="vbar-label"><span>${categoryEmoji(label)}</span><strong>${escapeHtml(label)}</strong></div>`).join("")}
+            </div>
+          </div>`;
         }
         return;
       }

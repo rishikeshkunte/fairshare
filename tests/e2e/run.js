@@ -588,7 +588,7 @@ async function run() {
     await aliceSession.page.click('[data-analytics-view="category"]');
     await aliceSession.page.waitForTimeout(350);
     const barChart = await aliceSession.page.evaluate(() => ({
-      bars: document.querySelectorAll("#chart-visual .chart-bar-row").length,
+      bars: document.querySelectorAll("#chart-visual .vbar-col").length,
       style: document.getElementById("chart-area").dataset.chart
     }));
     if (barChart.style !== "bar" || !barChart.bars) throw new Error(`default bar chart missing: ${JSON.stringify(barChart)}`);
