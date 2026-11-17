@@ -540,10 +540,7 @@
       <p id="analytics-scope-note" class="section-hint" hidden></p>
       <div class="card-header-row">
         <h2 id="analytics-chart-title">Spending by category</h2>
-        <div class="tab-group chart-switch" id="chart-style-tabs" style="margin-bottom:0; width:140px;">
-          <button type="button" class="tab-btn active" id="btn-chart-pie">Pie</button>
-          <button type="button" class="tab-btn" id="btn-chart-bar">Bar</button>
-        </div>
+        <span class="analytics-chart-hint">Ranked by spend</span>
       </div>
       <div id="chart-empty" class="empty-state">
         <p>No category spending yet.</p>
@@ -1141,7 +1138,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v170";
+    const APP_BUILD = "v171";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -1176,11 +1173,6 @@
       "Entertainment": "E", "Utilities": "U", "Other": "O"
     };
 
-    const CATEGORY_COLORS = {
-      "Food": "var(--cat-food)", "Transport": "var(--cat-transport)", "Stay": "var(--cat-stay)",
-      "Groceries": "var(--cat-groceries)", "Entertainment": "var(--cat-entertainment)",
-      "Utilities": "var(--cat-utilities)", "Other": "var(--cat-other)"
-    };
     const CATEGORY_EMOJI = {
       "Food": "🍽️", "Transport": "🚕", "Stay": "🏨", "Groceries": "🛒",
       "Entertainment": "🎬", "Utilities": "💡", "Other": "📦"
@@ -1188,11 +1180,6 @@
     function categoryEmoji(label) {
       return CATEGORY_EMOJI[label] || CATEGORY_EMOJI.Other;
     }
-    const CHART_SERIES_COLORS = [
-      "var(--cat-food)", "var(--cat-transport)", "var(--cat-stay)", "var(--cat-groceries)",
-      "var(--cat-entertainment)", "var(--cat-utilities)", "var(--cat-other)"
-    ];
-
     const KEYWORD_RULES = [
       { category: "Food", keywords: ["food", "dinner", "lunch", "breakfast", "chai", "coffee", "cafe", "swiggy", "zomato", "burger", "pizza", "biryani", "drinks", "pub", "beer"] },
       { category: "Transport", keywords: ["uber", "ola", "cab", "taxi", "auto", "rickshaw", "petrol", "diesel", "fuel", "flight", "train", "metro", "bus", "parking", "toll"] },
@@ -2343,13 +2330,10 @@
     const deletedTransactionsList = document.getElementById("deleted-transactions-list");
 
     // Charts
-    const btnChartPie = document.getElementById("btn-chart-pie");
-    const btnChartBar = document.getElementById("btn-chart-bar");
     const chartArea = document.getElementById("chart-area");
     const chartEmpty = document.getElementById("chart-empty");
     const chartVisual = document.getElementById("chart-visual");
     const chartLegend = document.getElementById("chart-legend");
-    let chartType = "pie";
     let analyticsView = "category";
     let analyticsScope = "active";
     let balancesScope = "all";
@@ -6515,7 +6499,6 @@
       const total = rows.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
       const title = document.getElementById("analytics-chart-title");
       const note = document.getElementById("analytics-scope-note");
-      const styleTabs = document.getElementById("chart-style-tabs");
       const dash = document.getElementById("dash-analytics-desc");
       const headline = document.getElementById("analytics-headline");
       const summary = document.getElementById("analytics-summary");
@@ -6566,7 +6549,6 @@
           ? "Who spent what"
           : (analyticsView === "trend" ? "Monthly trend" : "Spending by category");
       }
-      if (styleTabs) styleTabs.hidden = analyticsView !== "category";
       if (note) {
         if (analyticsScope === "all") {
           note.hidden = false;
@@ -6597,12 +6579,11 @@
       if (chartArea) {
         chartArea.style.display = "block";
         chartArea.dataset.view = analyticsView;
-        chartArea.dataset.chart = chartType;
       }
       if (chartVisual) {
-        chartVisual.style.display = analyticsView === "category" ? "flex" : "block";
-        chartVisual.style.justifyContent = "center";
-        chartVisual.style.alignItems = "center";
+        chartVisual.style.display = "block";
+        chartVisual.style.justifyContent = "";
+        chartVisual.style.alignItems = "";
       }
       if (chartLegend) chartLegend.innerHTML = "";
       if (analyticsView === "people") renderPeopleChart(rows, cur);
@@ -6616,9 +6597,7 @@
         const key = t.category || "Other";
         catTotals[key] = (catTotals[key] || 0) + (Number(t.amount) || 0);
       });
-
       const total = Object.values(catTotals).reduce((a, b) => a + b, 0);
-
       if (total <= 0) {
         if (chartEmpty) chartEmpty.style.display = "block";
         if (chartArea) chartArea.style.display = "none";
@@ -6626,64 +6605,28 @@
         if (chartLegend) chartLegend.innerHTML = "";
         return;
       }
-
       if (chartEmpty) chartEmpty.style.display = "none";
       if (chartArea) chartArea.style.display = "block";
-
       const entries = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-      const colorFor = (key, index) => CATEGORY_COLORS[key] || CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
-      if (chartArea) chartArea.dataset.chart = chartType;
+      const max = entries[0][1] || 1;
       const dashAnalytics = document.getElementById("dash-analytics-desc");
       if (dashAnalytics) dashAnalytics.textContent = entries[0] ? `${entries[0][0]} is largest share` : "No spending yet";
-
-      if (chartType === "bar") {
-        if (chartLegend) chartLegend.innerHTML = "";
-        if (chartVisual) {
-          chartVisual.innerHTML = `<div class="chart-bars" role="img" aria-label="Spending bar chart">${entries.map(([label, val], index) => {
-            const color = colorFor(label, index);
-            const pct = ((val / total) * 100).toFixed(1);
-            return `
-              <div class="chart-bar-row">
-                <div class="chart-bar-meta">
-                  <span class="chart-bar-label"><span class="legend-color" style="background:${color};"></span>${categoryEmoji(label)} ${escapeHtml(label)}</span>
-                  <span class="chart-bar-value">${formatMoney(val, cur)} · ${pct}%</span>
-                </div>
-                <div class="bar-track"><div class="bar-fill" style="background:${color}; width:${pct}%;"></div></div>
-              </div>`;
-          }).join("")}</div>`;
-        }
-        return;
-      }
-
-      let grad = [];
-      let curAngle = 0;
-      entries.forEach(([label, val], index) => {
-        const color = colorFor(label, index);
-        const sweep = (val / total) * 360;
-        const end = index === entries.length - 1 ? 360 : curAngle + sweep;
-        grad.push(`${color} ${curAngle}deg ${end}deg`);
-        curAngle = end;
-      });
+      if (chartLegend) chartLegend.innerHTML = "";
       if (chartVisual) {
-        const background = entries.length === 1
-          ? colorFor(entries[0][0], 0)
-          : `conic-gradient(${grad.join(", ")})`;
-        chartVisual.innerHTML = `<div class="chart-donut" style="background:${background};" role="img" aria-label="Spending pie chart"></div>`;
-      }
-
-      if (chartLegend) {
-        chartLegend.innerHTML = "";
-        entries.forEach(([label, val], index) => {
-          const color = colorFor(label, index);
-          const pct = ((val / total) * 100).toFixed(1);
-          const div = document.createElement("div");
-          div.className = "legend-item";
-          div.innerHTML = `
-            <span class="legend-label"><span class="legend-color" style="background:${color};"></span>${categoryEmoji(label)} ${escapeHtml(label)}</span>
-            <span class="legend-value">${formatMoney(val, cur)} (${pct}%)</span>
-          `;
-          chartLegend.appendChild(div);
-        });
+        chartVisual.innerHTML = `<div class="category-bands" role="list" aria-label="Spending by category">${entries.map(([label, val], index) => {
+          const isTop = index === 0;
+          const pct = (val / total) * 100;
+          const width = Math.max(2, (val / max) * 100);
+          const opacity = Math.max(0.34, 0.92 - index * 0.1).toFixed(2);
+          return `<div class="category-band${isTop ? " is-top" : ""}" role="listitem" style="--band-opacity:${opacity}">
+            <div class="category-band-head">
+              <span class="category-band-emoji" aria-hidden="true">${categoryEmoji(label)}</span>
+              <span class="category-band-name">${escapeHtml(label)}${isTop ? "<small>Top category</small>" : ""}</span>
+              <span class="category-band-value">${formatMoney(val, cur)}<small>${pct.toFixed(1)}%</small></span>
+            </div>
+            <div class="category-band-track"><span class="category-band-fill" style="width:${width.toFixed(1)}%"></span></div>
+          </div>`;
+        }).join("")}</div>`;
       }
     }
 
@@ -6848,24 +6791,6 @@
       }
       if (chartLegend) chartLegend.innerHTML = "";
       if (dash) dash.textContent = `${formatMoney(current, cur)} this month`;
-    }
-
-    if (btnChartPie) {
-      btnChartPie.addEventListener("click", () => {
-        btnChartPie.classList.add("active");
-        btnChartBar.classList.remove("active");
-        chartType = "pie";
-        renderAnalytics();
-      });
-    }
-
-    if (btnChartBar) {
-      btnChartBar.addEventListener("click", () => {
-        btnChartBar.classList.add("active");
-        btnChartPie.classList.remove("active");
-        chartType = "bar";
-        renderAnalytics();
-      });
     }
 
     document.querySelectorAll("[data-analytics-view]").forEach(button => {
@@ -9710,7 +9635,6 @@
     enhanceOverlay(document.getElementById("group-invite-modal"), () => window.declineInvite());
     enhanceTabList(document.getElementById("analytics-view-tabs"));
     enhanceTabList(document.getElementById("analytics-scope-tabs"));
-    enhanceTabList(document.getElementById("chart-style-tabs"));
     enhanceTabList(document.getElementById("history-type-tabs"));
     document.querySelectorAll(".people-switch").forEach((switcher) => enhanceTabList(switcher, ".people-tab"));
     enhanceRadioGroup(document.getElementById("theme-menu"));
