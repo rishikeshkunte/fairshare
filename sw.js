@@ -1,5 +1,5 @@
 // Bump CACHE when shipped assets change so old caches are deleted on activate.
-const CACHE = "fairshare-v167";
+const CACHE = "fairshare-v168";
 const ASSETS = [
   "./",
   "./index.html",
