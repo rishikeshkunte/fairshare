@@ -3390,3 +3390,41 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
   --cat-utilities: #7FB0BE;
   --cat-other: #9A9A96;
 }
+
+/* Phase 11: bold categorical chart palette in every theme.
+   Radix solid steps: orange food, blue transport, pink stay, green groceries,
+   violet entertainment, cyan utilities, slate other. */
+:root,
+[data-theme="light"] {
+  --cat-food: #F76B15;
+  --cat-transport: #0090FF;
+  --cat-stay: #D6409F;
+  --cat-groceries: #30A46C;
+  --cat-entertainment: #6E56CF;
+  --cat-utilities: #00A2C7;
+  --cat-other: #8B8D98;
+}
+[data-theme="dark"] {
+  --cat-food: #FF801F;
+  --cat-transport: #3B9EFF;
+  --cat-stay: #DE51A8;
+  --cat-groceries: #33B074;
+  --cat-entertainment: #7D66D9;
+  --cat-utilities: #23AFD0;
+  --cat-other: #777B84;
+}
+[data-theme="black"] {
+  --cat-food: #FF8A2B;
+  --cat-transport: #4DA6FF;
+  --cat-stay: #E965B4;
+  --cat-groceries: #3DBE7E;
+  --cat-entertainment: #8A75E0;
+  --cat-utilities: #2BBBDD;
+  --cat-other: #8A8F98;
+}
+.legend-color { border-radius: 999px; }
+.bar-fill { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22); }
+.chart-donut {
+  box-shadow: inset 0 0 0 28px var(--surface-solid),
+    0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent);
+}
