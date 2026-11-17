@@ -540,7 +540,11 @@
       <p id="analytics-scope-note" class="section-hint" hidden></p>
       <div class="card-header-row">
         <h2 id="analytics-chart-title">Spending by category</h2>
-        <span class="analytics-chart-hint">Ranked by spend</span>
+        <div class="tab-group chart-switch" id="chart-style-tabs" role="group" aria-label="Chart style" style="margin-bottom:0;">
+          <button type="button" class="tab-btn active" data-chart-style="bar" aria-pressed="true">Bars</button>
+          <button type="button" class="tab-btn" data-chart-style="pie" aria-pressed="false">Pie</button>
+          <button type="button" class="tab-btn" data-chart-style="list" aria-pressed="false">List</button>
+        </div>
       </div>
       <div id="chart-empty" class="empty-state">
         <p>No category spending yet.</p>
@@ -1138,7 +1142,7 @@
     // Quota saver is permanent; drop any legacy preference.
     try { localStorage.removeItem("fairshare_quota_saver"); } catch { /* ignore */ }
     let toldGroupSyncError = false;
-    const APP_BUILD = "v171";
+    const APP_BUILD = "v172";
     const BUILD_NUMBER = Number(String(APP_BUILD).replace(/[^0-9]/g, "")) || 0;
     window.FAIRSHARE_BUILD = APP_BUILD;
     window.WHATSMYSHARE_BUILD = APP_BUILD;
@@ -2335,6 +2339,7 @@
     const chartVisual = document.getElementById("chart-visual");
     const chartLegend = document.getElementById("chart-legend");
     let analyticsView = "category";
+    let chartType = "bar";
     let analyticsScope = "active";
     let balancesScope = "all";
     let settlementVisibility = "mine";
@@ -6498,6 +6503,7 @@
       const rows = analyticsExpenses();
       const total = rows.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
       const title = document.getElementById("analytics-chart-title");
+      const styleTabs = document.getElementById("chart-style-tabs");
       const note = document.getElementById("analytics-scope-note");
       const dash = document.getElementById("dash-analytics-desc");
       const headline = document.getElementById("analytics-headline");
@@ -6549,6 +6555,12 @@
           ? "Who spent what"
           : (analyticsView === "trend" ? "Monthly trend" : "Spending by category");
       }
+      if (styleTabs) styleTabs.hidden = analyticsView !== "category";
+      document.querySelectorAll("[data-chart-style]").forEach(button => {
+        const active = button.dataset.chartStyle === chartType;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+      });
       if (note) {
         if (analyticsScope === "all") {
           note.hidden = false;
@@ -6579,11 +6591,13 @@
       if (chartArea) {
         chartArea.style.display = "block";
         chartArea.dataset.view = analyticsView;
+        chartArea.dataset.chart = analyticsView === "category" ? chartType : "";
       }
       if (chartVisual) {
-        chartVisual.style.display = "block";
-        chartVisual.style.justifyContent = "";
-        chartVisual.style.alignItems = "";
+        const pieMode = analyticsView === "category" && chartType === "pie";
+        chartVisual.style.display = pieMode ? "flex" : "block";
+        chartVisual.style.justifyContent = pieMode ? "center" : "";
+        chartVisual.style.alignItems = pieMode ? "center" : "";
       }
       if (chartLegend) chartLegend.innerHTML = "";
       if (analyticsView === "people") renderPeopleChart(rows, cur);
@@ -6611,22 +6625,77 @@
       const max = entries[0][1] || 1;
       const dashAnalytics = document.getElementById("dash-analytics-desc");
       if (dashAnalytics) dashAnalytics.textContent = entries[0] ? `${entries[0][0]} is largest share` : "No spending yet";
+      const tone = (index) => index === 0
+        ? "var(--marigold)"
+        : `color-mix(in srgb, var(--primary) ${Math.max(38, 88 - index * 10)}%, var(--surface-solid))`;
       if (chartLegend) chartLegend.innerHTML = "";
+
+      if (chartType === "list") {
+        if (chartVisual) {
+          chartVisual.innerHTML = `<div class="category-bands" role="list" aria-label="Spending by category">${entries.map(([label, val], index) => {
+            const isTop = index === 0;
+            const pct = (val / total) * 100;
+            const width = Math.max(2, (val / max) * 100);
+            const opacity = Math.max(0.34, 0.92 - index * 0.1).toFixed(2);
+            return `<div class="category-band${isTop ? " is-top" : ""}" role="listitem" style="--band-opacity:${opacity}">
+              <div class="category-band-head">
+                <span class="category-band-emoji" aria-hidden="true">${categoryEmoji(label)}</span>
+                <span class="category-band-name">${escapeHtml(label)}${isTop ? "<small>Top category</small>" : ""}</span>
+                <span class="category-band-value">${formatMoney(val, cur)}<small>${pct.toFixed(1)}%</small></span>
+              </div>
+              <div class="category-band-track"><span class="category-band-fill" style="width:${width.toFixed(1)}%"></span></div>
+            </div>`;
+          }).join("")}</div>`;
+        }
+        return;
+      }
+
+      if (chartType === "bar") {
+        if (chartVisual) {
+          chartVisual.innerHTML = `<div class="chart-bars" role="img" aria-label="Spending bar chart">${entries.map(([label, val], index) => {
+            const color = tone(index);
+            const pct = (val / total) * 100;
+            const width = Math.max(2, (val / max) * 100);
+            return `<div class="chart-bar-row">
+              <div class="chart-bar-meta">
+                <span class="chart-bar-label"><span class="legend-color" style="background:${color};"></span>${categoryEmoji(label)} ${escapeHtml(label)}</span>
+                <span class="chart-bar-value">${formatMoney(val, cur)} &middot; ${pct.toFixed(1)}%</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="background:${color}; width:${width.toFixed(1)}%;"></div></div>
+            </div>`;
+          }).join("")}</div>`;
+        }
+        return;
+      }
+
+      let grad = [];
+      let curAngle = 0;
+      entries.forEach(([label, val], index) => {
+        const color = tone(index);
+        const sweep = (val / total) * 360;
+        const end = index === entries.length - 1 ? 360 : curAngle + sweep;
+        const gap = index === entries.length - 1 ? 0 : Math.min(1.2, sweep / 5);
+        grad.push(`${color} ${curAngle}deg ${Math.max(curAngle, end - gap)}deg`);
+        if (gap > 0) grad.push(`var(--surface-solid) ${Math.max(curAngle, end - gap)}deg ${end}deg`);
+        curAngle = end;
+      });
+      const topPct = Math.round((entries[0][1] / total) * 100);
       if (chartVisual) {
-        chartVisual.innerHTML = `<div class="category-bands" role="list" aria-label="Spending by category">${entries.map(([label, val], index) => {
-          const isTop = index === 0;
-          const pct = (val / total) * 100;
-          const width = Math.max(2, (val / max) * 100);
-          const opacity = Math.max(0.34, 0.92 - index * 0.1).toFixed(2);
-          return `<div class="category-band${isTop ? " is-top" : ""}" role="listitem" style="--band-opacity:${opacity}">
-            <div class="category-band-head">
-              <span class="category-band-emoji" aria-hidden="true">${categoryEmoji(label)}</span>
-              <span class="category-band-name">${escapeHtml(label)}${isTop ? "<small>Top category</small>" : ""}</span>
-              <span class="category-band-value">${formatMoney(val, cur)}<small>${pct.toFixed(1)}%</small></span>
-            </div>
-            <div class="category-band-track"><span class="category-band-fill" style="width:${width.toFixed(1)}%"></span></div>
+        const background = entries.length === 1 ? tone(0) : `conic-gradient(${grad.join(", ")})`;
+        chartVisual.innerHTML = `<div class="chart-donut-wrap">
+          <div class="chart-donut" style="background:${background};" role="img" aria-label="Spending pie chart"></div>
+          <div class="chart-donut-center" aria-hidden="true"><strong>${topPct}%</strong><span>${escapeHtml(entries[0][0])}</span></div>
+        </div>`;
+      }
+      if (chartLegend) {
+        chartLegend.innerHTML = entries.map(([label, val], index) => {
+          const color = tone(index);
+          const pct = ((val / total) * 100).toFixed(1);
+          return `<div class="legend-item">
+            <span class="legend-label"><span class="legend-color" style="background:${color};"></span>${categoryEmoji(label)} ${escapeHtml(label)}</span>
+            <span class="legend-value">${formatMoney(val, cur)} (${pct}%)</span>
           </div>`;
-        }).join("")}</div>`;
+        }).join("");
       }
     }
 
@@ -6809,6 +6878,18 @@
         document.querySelectorAll("[data-analytics-scope]").forEach(item =>
           item.classList.toggle("active", item === button)
         );
+        renderAnalytics();
+      });
+    });
+
+    document.querySelectorAll("[data-chart-style]").forEach(button => {
+      button.addEventListener("click", () => {
+        chartType = button.dataset.chartStyle || "bar";
+        document.querySelectorAll("[data-chart-style]").forEach(item => {
+          const active = item === button;
+          item.classList.toggle("active", active);
+          item.setAttribute("aria-pressed", String(active));
+        });
         renderAnalytics();
       });
     });

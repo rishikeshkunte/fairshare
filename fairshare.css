@@ -3539,3 +3539,58 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
   .category-band-value { font-size: var(--fs-sm); }
   .category-band.is-top .category-band-value { font-size: var(--fs-lg); }
 }
+
+/* Phase 13: Pie and Bars return, using the brand-tonal palette; List remains. */
+#chart-area[data-view="category"][data-chart="pie"] .chart-wrapper { grid-template-columns: 220px minmax(0, 1fr); }
+#chart-area[data-view="category"][data-chart="pie"] #chart-legend { display: flex; }
+#chart-area[data-view="category"][data-chart="bar"] .chart-wrapper,
+#chart-area[data-view="category"][data-chart="list"] .chart-wrapper { grid-template-columns: minmax(0, 1fr); }
+#chart-area[data-view="category"][data-chart="bar"] #chart-legend,
+#chart-area[data-view="category"][data-chart="list"] #chart-legend { display: none; }
+.chart-donut-wrap {
+  position: relative;
+  width: 190px;
+  height: 190px;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+.chart-donut-wrap .chart-donut { width: 100%; height: 100%; }
+.chart-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 34px;
+  text-align: center;
+  pointer-events: none;
+}
+.chart-donut-center strong {
+  font-family: var(--display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+}
+.chart-donut-center span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+@media (max-width: 980px) {
+  #chart-area[data-view="category"][data-chart="pie"] .chart-wrapper { grid-template-columns: minmax(0, 1fr); }
+  .chart-donut-wrap { width: 160px; height: 160px; }
+  .chart-donut-center { padding: 0 28px; }
+}
+@media (max-width: 600px) {
+  .chart-switch { width: 100%; }
+  .chart-switch .tab-btn { flex: 1; }
+}

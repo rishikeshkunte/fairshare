@@ -584,6 +584,35 @@ async function run() {
     await aliceSession.page.click('.balances-history-filters [data-arg="all"]');
     console.log("PASS phase 7 balances history: expenses and settlement payments are visible and filterable");
 
+    await aliceSession.page.evaluate(() => window.navigateTo("analytics"));
+    await aliceSession.page.click('[data-analytics-view="category"]');
+    await aliceSession.page.waitForTimeout(350);
+    const barChart = await aliceSession.page.evaluate(() => ({
+      bars: document.querySelectorAll("#chart-visual .chart-bar-row").length,
+      style: document.getElementById("chart-area").dataset.chart
+    }));
+    if (barChart.style !== "bar" || !barChart.bars) throw new Error(`default bar chart missing: ${JSON.stringify(barChart)}`);
+    await aliceSession.page.click('[data-chart-style="pie"]');
+    await aliceSession.page.waitForTimeout(300);
+    const pieChart = await aliceSession.page.evaluate(() => ({
+      donut: Boolean(document.querySelector("#chart-visual .chart-donut-wrap .chart-donut")),
+      center: Boolean(document.querySelector("#chart-visual .chart-donut-center")),
+      legend: document.querySelectorAll("#chart-legend .legend-item").length,
+      style: document.getElementById("chart-area").dataset.chart
+    }));
+    if (pieChart.style !== "pie" || !pieChart.donut || !pieChart.center || !pieChart.legend) {
+      throw new Error(`pie chart missing: ${JSON.stringify(pieChart)}`);
+    }
+    await aliceSession.page.click('[data-chart-style="list"]');
+    await aliceSession.page.waitForTimeout(300);
+    const listChart = await aliceSession.page.evaluate(() => ({
+      bands: document.querySelectorAll("#chart-visual .category-band").length,
+      style: document.getElementById("chart-area").dataset.chart
+    }));
+    if (listChart.style !== "list" || !listChart.bands) throw new Error(`list view missing: ${JSON.stringify(listChart)}`);
+    await aliceSession.page.click('[data-chart-style="bar"]');
+    console.log("PASS phase 8 category views: bar, pie, and list render");
+
     const axePages = [
       ["friends", "friends"],
       ["home", "home-light"],
