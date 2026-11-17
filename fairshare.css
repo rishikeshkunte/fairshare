@@ -3368,3 +3368,25 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
 [data-theme="black"] .history-row:hover {
   background: var(--hover-item);
 }
+
+/* Phase 10: one coherent category palette for Indigo and Black.
+   Amber food, blue transport, rose stay, sage groceries, lavender entertainment,
+   teal utilities, slate other. Tuned for dark surfaces, not default chart colours. */
+[data-theme="dark"] {
+  --cat-food: #E6A15E;
+  --cat-transport: #7A8CF0;
+  --cat-stay: #D08CA6;
+  --cat-groceries: #7BCBA8;
+  --cat-entertainment: #B292E0;
+  --cat-utilities: #6FB3C9;
+  --cat-other: #8E9AB8;
+}
+[data-theme="black"] {
+  --cat-food: #E6A15E;
+  --cat-transport: #91A3CE;
+  --cat-stay: #CE90A2;
+  --cat-groceries: #8FC7A9;
+  --cat-entertainment: #B79BCF;
+  --cat-utilities: #7FB0BE;
+  --cat-other: #9A9A96;
+}
